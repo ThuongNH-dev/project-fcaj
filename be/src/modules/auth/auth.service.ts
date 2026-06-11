@@ -1,9 +1,14 @@
 import bcrypt from "bcryptjs";
-import type { Collection } from "mongodb";
+import type { Collection, ObjectId } from "mongodb";
 import { connectToMongo } from "../../db/mongo.js";
-import type { PublicUser, RegisterUserInput } from "./auth.types.js";
+import type {
+  LoginUserInput,
+  PublicUser,
+  RegisterUserInput,
+} from "./auth.types.js";
 
 interface UserDocument {
+  _id?: ObjectId;
   firstName: string;
   lastName: string;
   email: string;
@@ -19,6 +24,25 @@ interface UserDocument {
 async function getUsersCollection(): Promise<Collection<UserDocument>> {
   const db = await connectToMongo();
   return db.collection<UserDocument>("users");
+}
+
+function toPublicUser(user: UserDocument): PublicUser {
+  if (!user._id) {
+    throw new Error("User document is missing an id.");
+  }
+
+  return {
+    id: user._id.toString(),
+    firstName: user.firstName,
+    lastName: user.lastName,
+    email: user.email,
+    bio: user.bio,
+    avatarUrl: user.avatarUrl,
+    defaultCurrency: user.defaultCurrency,
+    role: user.role,
+    createdAt: user.createdAt.toISOString(),
+    updatedAt: user.updatedAt.toISOString(),
+  };
 }
 
 export async function registerUser(
@@ -57,16 +81,35 @@ export async function registerUser(
     updatedAt,
   });
 
-  return {
-    id: result.insertedId.toString(),
+  return toPublicUser({
+    _id: result.insertedId,
     firstName: normalizedFirstName,
     lastName: normalizedLastName,
     email: normalizedEmail,
+    passwordHash,
     bio: normalizedBio,
     avatarUrl: normalizedAvatarUrl,
     defaultCurrency: normalizedDefaultCurrency,
     role: normalizedRole,
-    createdAt: createdAt.toISOString(),
-    updatedAt: updatedAt.toISOString(),
-  };
+    createdAt,
+    updatedAt,
+  });
+}
+
+export async function loginUser(input: LoginUserInput): Promise<PublicUser> {
+  const users = await getUsersCollection();
+  const normalizedEmail = input.email.trim().toLowerCase();
+  const user = await users.findOne({ email: normalizedEmail });
+
+  if (!user) {
+    throw new Error("Invalid email or password.");
+  }
+
+  const isPasswordValid = await bcrypt.compare(input.password, user.passwordHash);
+
+  if (!isPasswordValid) {
+    throw new Error("Invalid email or password.");
+  }
+
+  return toPublicUser(user);
 }

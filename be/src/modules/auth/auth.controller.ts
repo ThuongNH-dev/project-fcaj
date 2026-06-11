@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { registerUser } from "./auth.service.js";
+import { loginUser, registerUser } from "./auth.service.js";
 
 export async function registerUserHandler(req: Request, res: Response) {
   const {
@@ -59,6 +59,43 @@ export async function registerUserHandler(req: Request, res: Response) {
 
     const statusCode =
       message === "An account with this email already exists." ? 409 : 503;
+
+    return res.status(statusCode).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function loginUserHandler(req: Request, res: Response) {
+  const { email, password } = req.body as {
+    email?: string;
+    password?: string;
+  };
+
+  if (!email?.trim() || !password) {
+    return res.status(400).json({
+      ok: false,
+      message: "Email and password are required.",
+    });
+  }
+
+  try {
+    const user = await loginUser({
+      email,
+      password,
+    });
+
+    return res.status(200).json({
+      ok: true,
+      message: "Login successful.",
+      user,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to login user.";
+
+    const statusCode = message === "Invalid email or password." ? 401 : 503;
 
     return res.status(statusCode).json({
       ok: false,

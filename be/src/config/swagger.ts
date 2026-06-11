@@ -117,6 +117,49 @@ swaggerSpec.paths = {
       },
     },
   },
+  "/api/auth/login": {
+    post: {
+      summary: "Login a user",
+      tags: ["Auth"],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["email", "password"],
+              properties: {
+                email: {
+                  type: "string",
+                  format: "email",
+                  example: "thuong@example.com",
+                },
+                password: {
+                  type: "string",
+                  format: "password",
+                  example: "secret123",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Login successful",
+        },
+        400: {
+          description: "Missing email or password",
+        },
+        401: {
+          description: "Invalid credentials",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
 };
 
 export default swaggerSpec;

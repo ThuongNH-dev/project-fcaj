@@ -13,9 +13,12 @@ import { AdminPage } from "./components/AdminPage";
 import { ExpensesPage } from "./components/ExpensesPage";
 import { ReceiptsPage } from "./components/ReceiptsPage";
 import { SettingsPage } from "./components/SettingsPage";
+import { getStoredUser } from "./api/auth";
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState("landing");
+  const [currentPage, setCurrentPage] = useState(() =>
+    getStoredUser() ? "dashboard" : "landing",
+  );
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const handleNavigate = (page: string) => {

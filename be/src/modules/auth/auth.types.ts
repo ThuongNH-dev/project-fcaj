@@ -11,6 +11,11 @@ export interface RegisterUserInput {
   role?: UserRole;
 }
 
+export interface LoginUserInput {
+  email: string;
+  password: string;
+}
+
 export interface PublicUser {
   id: string;
   firstName: string;
@@ -22,4 +27,10 @@ export interface PublicUser {
   role: UserRole;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AuthResponse {
+  ok: boolean;
+  message: string;
+  user?: PublicUser;
 }

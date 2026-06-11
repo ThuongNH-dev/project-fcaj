@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Mail, Lock, Eye, EyeOff, Leaf, ArrowRight } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
-import { registerUser } from "../lib/api";
+import { loginUser, registerUser, setStoredUser } from "../api/auth";
 
 interface LoginPageProps {
   onNavigate: (page: string) => void;
@@ -35,7 +35,38 @@ export function LoginPage({ onNavigate, initialMode = "login" }: LoginPageProps)
     setSuccessMessage("");
 
     if (!isRegister) {
-      onNavigate("dashboard");
+      if (!form.email.trim()) {
+        setErrorMessage("Email is required.");
+        return;
+      }
+
+      if (!form.password) {
+        setErrorMessage("Password is required.");
+        return;
+      }
+
+      try {
+        setIsSubmitting(true);
+
+        const response = await loginUser({
+          email: form.email.trim(),
+          password: form.password,
+        });
+
+        if (response.user) {
+          setStoredUser(response.user);
+        }
+
+        setSuccessMessage(response.message);
+        onNavigate("dashboard");
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error ? error.message : "Unable to sign in.",
+        );
+      } finally {
+        setIsSubmitting(false);
+      }
+
       return;
     }
 
