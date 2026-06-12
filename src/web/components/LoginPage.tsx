@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import { Mail, Lock, Eye, EyeOff, Leaf, ArrowRight } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import {
+  getStoredUser,
   loginUser,
   registerUser,
   setStoredToken,
@@ -9,11 +11,10 @@ import {
 } from "../api/auth";
 
 interface LoginPageProps {
-  onNavigate: (page: string) => void;
   initialMode?: "login" | "register";
 }
 
-export function LoginPage({ onNavigate, initialMode = "login" }: LoginPageProps) {
+export function LoginPage({ initialMode = "login" }: LoginPageProps) {
   const [isRegister, setIsRegister] = useState(initialMode === "register");
   const [showPass, setShowPass] = useState(false);
   const [form, setForm] = useState({
@@ -27,12 +28,19 @@ export function LoginPage({ onNavigate, initialMode = "login" }: LoginPageProps)
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const { t } = useLanguage();
+  const navigate = useNavigate();
 
   useEffect(() => {
     setIsRegister(initialMode === "register");
     setErrorMessage("");
     setSuccessMessage("");
   }, [initialMode]);
+
+  useEffect(() => {
+    if (getStoredUser()) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,7 +75,7 @@ export function LoginPage({ onNavigate, initialMode = "login" }: LoginPageProps)
         }
 
         setSuccessMessage(response.message);
-        onNavigate("dashboard");
+        navigate("/dashboard");
       } catch (error) {
         setErrorMessage(
           error instanceof Error ? error.message : "Unable to sign in.",
@@ -119,7 +127,7 @@ export function LoginPage({ onNavigate, initialMode = "login" }: LoginPageProps)
         password: "",
         confirm: "",
       });
-      setIsRegister(false);
+      navigate("/login");
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Unable to create account.",
@@ -262,7 +270,11 @@ export function LoginPage({ onNavigate, initialMode = "login" }: LoginPageProps)
 
           <p className="text-center text-sm text-[#6B7280] mt-6">
             {isRegister ? `${t.alreadyHaveAccount} ` : `${t.dontHaveAccount} `}
-            <button onClick={() => setIsRegister(!isRegister)} className="text-[#16A34A] hover:underline" style={{ fontWeight: 600 }}>
+            <button
+              onClick={() => navigate(isRegister ? "/login" : "/register")}
+              className="text-[#16A34A] hover:underline"
+              style={{ fontWeight: 600 }}
+            >
               {isRegister ? t.signIn : t.signupFree}
             </button>
           </p>

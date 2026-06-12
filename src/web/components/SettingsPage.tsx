@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import {
   User,
   Bell,
@@ -24,11 +25,7 @@ import {
   updateCurrentUser,
 } from "../api/users";
 
-interface SettingsPageProps {
-  onNavigate: (page: string) => void;
-}
-
-export function SettingsPage({ onNavigate }: SettingsPageProps) {
+export function SettingsPage() {
   const isLocalhost =
     typeof window !== "undefined" &&
     ["localhost", "127.0.0.1"].includes(window.location.hostname);
@@ -52,6 +49,7 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
     confirmNewPassword: "",
   });
   const { t } = useLanguage();
+  const navigate = useNavigate();
 
   const [notifs, setNotifs] = useState({
     expenseAdded: false,
@@ -140,7 +138,7 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
 
   const handleSignOut = () => {
     clearStoredUser();
-    onNavigate("landing");
+    navigate("/login");
   };
 
   const handlePasswordChange = async () => {

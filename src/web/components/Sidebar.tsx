@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import {
   LayoutDashboard, Users, Receipt, TrendingUp, FileText, Shield,
   Settings, Leaf, ChevronRight, Menu, X, LogOut
@@ -7,27 +8,27 @@ import { useLanguage } from "../context/LanguageContext";
 import { clearStoredUser, getStoredUser, getUserInitials } from "../api/auth";
 
 interface SidebarProps {
-  currentPage: string;
-  onNavigate: (page: string) => void;
+  currentPath: string;
 }
 
 
-export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
+export function Sidebar({ currentPath }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { lang, setLang, t } = useLanguage();
   const user = getStoredUser();
+  const navigate = useNavigate();
 
   const navItems = [
-    { icon: LayoutDashboard, label: t.dashboard, page: "dashboard" },
-    { icon: Users, label: t.groups, page: "groups" },
-    { icon: Receipt, label: t.expenses, page: "expenses" },
-    { icon: TrendingUp, label: t.settlements, page: "settlement" },
-    { icon: FileText, label: t.receipts, page: "receipts" },
+    { icon: LayoutDashboard, label: t.dashboard, path: "/dashboard" },
+    { icon: Users, label: t.groups, path: "/groups" },
+    { icon: Receipt, label: t.expenses, path: "/expenses" },
+    { icon: TrendingUp, label: t.settlements, path: "/settlement" },
+    { icon: FileText, label: t.receipts, path: "/receipts" },
     ...(user?.role === "admin"
-      ? [{ icon: Shield, label: t.admin, page: "admin" }]
+      ? [{ icon: Shield, label: t.admin, path: "/admin" }]
       : []),
-    { icon: Settings, label: t.settings, page: "settings" },
+    { icon: Settings, label: t.settings, path: "/profile" },
   ];
 
   const displayName = user ? `${user.firstName} ${user.lastName}` : "Guest";
@@ -35,7 +36,7 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
   const userInitials = user ? getUserInitials(user) : "GU";
   const handleSignOut = () => {
     clearStoredUser();
-    onNavigate("landing");
+    navigate("/login");
   };
 
   const SidebarContent = () => (
@@ -81,12 +82,14 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
 
       {/* Nav items */}
       <nav className="flex-1 px-3 py-4 flex flex-col gap-0.5 overflow-y-auto">
-        {navItems.map(({ icon: Icon, label, page }) => {
-          const active = currentPage === page;
+        {navItems.map(({ icon: Icon, label, path }) => {
+          const active =
+            currentPath === path ||
+            (path === "/groups" && currentPath.startsWith("/groups/"));
           return (
             <button
-              key={page}
-              onClick={() => { onNavigate(page); setMobileOpen(false); }}
+              key={path}
+              onClick={() => { navigate(path); setMobileOpen(false); }}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all group w-full ${
                 active
                   ? "bg-[#F0FAF5] text-[#16A34A]"

@@ -398,6 +398,180 @@ swaggerSpec.paths = {
         },
       },
     },
+    patch: {
+      summary: "Update a group owned by the current logged-in user",
+      tags: ["Groups"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "groupId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+        },
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["name", "icon", "color"],
+              properties: {
+                name: {
+                  type: "string",
+                  example: "Summer Trip 2026",
+                },
+                icon: {
+                  type: "string",
+                  example: "🎉",
+                },
+                color: {
+                  type: "string",
+                  example: "#16A34A",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Group updated successfully",
+        },
+        400: {
+          description: "Missing or invalid group payload",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User or group not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+    delete: {
+      summary: "Delete a group owned by the current logged-in user",
+      tags: ["Groups"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "groupId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+        },
+      ],
+      responses: {
+        200: {
+          description: "Group deleted successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User or group not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
+  "/api/groups/{groupId}/members": {
+    post: {
+      summary: "Add a member to a group owned by the current logged-in user",
+      tags: ["Groups"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "groupId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+        },
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["email"],
+              properties: {
+                email: {
+                  type: "string",
+                  format: "email",
+                  example: "alex@gmail.com",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Member added successfully",
+        },
+        400: {
+          description: "Missing or invalid member payload",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User or group not found",
+        },
+      },
+    },
+  },
+  "/api/groups/{groupId}/members/{memberId}": {
+    delete: {
+      summary: "Remove a member from a group owned by the current logged-in user",
+      tags: ["Groups"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "groupId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+        },
+        {
+          in: "path",
+          name: "memberId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+        },
+      ],
+      responses: {
+        200: {
+          description: "Member removed successfully",
+        },
+        400: {
+          description: "Invalid member removal request",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User or group not found",
+        },
+      },
+    },
   },
 };
 

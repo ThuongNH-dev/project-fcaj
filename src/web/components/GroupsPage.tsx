@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { useNavigate } from "react-router";
 import { ChevronRight, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import { CreateGroupModal } from "./CreateGroupModal";
 import { useLanguage } from "../context/LanguageContext";
@@ -7,12 +8,7 @@ import { deleteGroup, getGroups, type Group } from "../api/groups";
 import { getStoredUser } from "../api/auth";
 import { useFeedback } from "./ui/FeedbackProvider";
 
-interface GroupsPageProps {
-  onNavigate: (page: string) => void;
-  onSelectGroup: (groupId: string) => void;
-}
-
-export function GroupsPage({ onNavigate, onSelectGroup }: GroupsPageProps) {
+export function GroupsPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -23,6 +19,7 @@ export function GroupsPage({ onNavigate, onSelectGroup }: GroupsPageProps) {
   const [errorMessage, setErrorMessage] = useState("");
   const { t } = useLanguage();
   const { confirm, showToast } = useFeedback();
+  const navigate = useNavigate();
 
   const filters = [
     { key: "all", label: t.all },
@@ -232,8 +229,7 @@ export function GroupsPage({ onNavigate, onSelectGroup }: GroupsPageProps) {
                 <button
                   key={group.id}
                   onClick={() => {
-                    onSelectGroup(group.id);
-                    onNavigate("group-detail");
+                    navigate(`/groups/${group.id}`);
                   }}
                   className="bg-white rounded-2xl p-5 border border-[#E5E7EB] hover:shadow-md hover:-translate-y-0.5 transition-all text-left group"
                 >

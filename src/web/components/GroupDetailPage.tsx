@@ -1,17 +1,12 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useNavigate, useParams } from "react-router";
 import { ArrowLeft, Plus, Users, DollarSign, TrendingUp, Receipt, Trash2, UserPlus } from "lucide-react";
 import { AddExpenseModal, NewExpense } from "./AddExpenseModal";
 import { useLanguage } from "../context/LanguageContext";
 import { addGroupMember, getGroup, removeGroupMember, type Group } from "../api/groups";
 import { getStoredUser } from "../api/auth";
 import { useFeedback } from "./ui/FeedbackProvider";
-
-interface GroupDetailPageProps {
-  onNavigate: (page: string) => void;
-  onOpenModal: () => void;
-  groupId: string | null;
-}
 
 interface Expense {
   id: number;
@@ -36,11 +31,7 @@ const statusStyles: Record<string, string> = {
   Pending: "bg-[#FEF3C7] text-[#92400e]",
 };
 
-export function GroupDetailPage({
-  onNavigate,
-  onOpenModal,
-  groupId,
-}: GroupDetailPageProps) {
+export function GroupDetailPage() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -53,6 +44,8 @@ export function GroupDetailPage({
   const { t } = useLanguage();
   const { confirm, showToast } = useFeedback();
   const currentUser = getStoredUser();
+  const navigate = useNavigate();
+  const { groupId = null } = useParams();
 
   useEffect(() => {
     async function loadGroup() {
@@ -181,7 +174,7 @@ export function GroupDetailPage({
         {/* Back + header */}
         <div className="mb-6">
           <button
-            onClick={() => onNavigate("groups")}
+            onClick={() => navigate("/groups")}
             className="flex items-center gap-1.5 text-sm text-[#6B7280] hover:text-[#111827] mb-4 transition-colors"
             style={{ fontWeight: 500 }}
           >
@@ -414,7 +407,7 @@ export function GroupDetailPage({
                 <p className="text-[#9CA3AF] text-xs">{t.noDebts}</p>
               </div>
               <button
-                onClick={() => onNavigate("settlement")}
+                onClick={() => navigate("/settlement")}
                 className="w-full mt-2 bg-[#16A34A] text-white py-2.5 rounded-xl text-sm hover:bg-[#15803d] transition-colors"
                 style={{ fontWeight: 600 }}
               >

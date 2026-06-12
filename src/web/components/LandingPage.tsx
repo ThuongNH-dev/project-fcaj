@@ -1,14 +1,15 @@
 import { useEffect } from "react";
+import { useNavigate } from "react-router";
 import { ArrowRight, Users, Calculator, TrendingUp, Upload, Check, Star, Github, Twitter, Leaf, ChevronRight, Zap, Globe } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 
 interface LandingPageProps {
-  onNavigate: (page: string) => void;
   section?: string;
 }
 
-export function LandingPage({ onNavigate, section }: LandingPageProps) {
+export function LandingPage({ section }: LandingPageProps) {
   const { t } = useLanguage();
+  const navigate = useNavigate();
   useEffect(() => {
     if (section && section !== "landing") {
       const el = document.getElementById(section);
@@ -62,7 +63,7 @@ export function LandingPage({ onNavigate, section }: LandingPageProps) {
             </p>
             <div className="flex items-center gap-4 flex-wrap">
               <button
-                onClick={() => onNavigate("register")}
+                onClick={() => navigate("/register")}
                 className="flex items-center gap-2 bg-[#16A34A] text-white px-7 py-3.5 rounded-2xl hover:bg-[#15803d] transition-all shadow-md hover:shadow-lg"
                 style={{ fontWeight: 600, fontSize: "1rem" }}
               >
@@ -70,7 +71,7 @@ export function LandingPage({ onNavigate, section }: LandingPageProps) {
                 <ArrowRight className="w-4 h-4" />
               </button>
               <button
-                onClick={() => onNavigate("dashboard")}
+                onClick={() => navigate("/dashboard")}
                 className="flex items-center gap-2 bg-white text-[#374151] px-7 py-3.5 rounded-2xl border border-[#E5E7EB] hover:border-[#7EDDBA] hover:bg-[#F0FAF5] transition-all"
                 style={{ fontWeight: 500, fontSize: "1rem" }}
               >
@@ -246,7 +247,7 @@ export function LandingPage({ onNavigate, section }: LandingPageProps) {
                 ))}
               </ul>
               <button
-                onClick={() => onNavigate("login")}
+                onClick={() => navigate("/login")}
                 className={`w-full py-3 rounded-xl text-sm transition-all ${
                   primary
                     ? "bg-white text-[#16A34A] hover:bg-[#F0FAF5]"
@@ -267,7 +268,7 @@ export function LandingPage({ onNavigate, section }: LandingPageProps) {
           <h2 className="text-white mb-4" style={{ fontSize: "2rem", fontWeight: 800 }}>{t.readyToSplit}</h2>
           <p className="text-[#A7F3D0] mb-8" style={{ lineHeight: 1.7 }}>{t.joinUsers}</p>
           <button
-            onClick={() => onNavigate("register")}
+            onClick={() => navigate("/register")}
             className="bg-white text-[#16A34A] px-8 py-4 rounded-2xl hover:bg-[#F0FAF5] transition-all shadow-lg"
             style={{ fontWeight: 700, fontSize: "1rem" }}
           >
