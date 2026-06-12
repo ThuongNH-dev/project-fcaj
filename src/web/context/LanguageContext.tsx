@@ -85,6 +85,10 @@ export const translations = {
 
     // Create Group Modal
     createGroup: "Create Group", createGroupDesc: "Set up a new shared expense group",
+    editGroup: "Edit Group", editGroupDesc: "Update your group details",
+    deleteGroup: "Delete Group", deleteGroupConfirm: "Delete group",
+    readyToUpdate: "Ready to update",
+    deleting: "Deleting...", updating: "Updating...",
     groupName: "Group name", groupNamePlaceholder: "e.g. Bali Trip 2026",
     groupIcon: "Group icon", color: "Color",
     inviteMembers: "Invite members (optional)", addAnother: "Add another",
@@ -97,6 +101,9 @@ export const translations = {
     memberBalances: "Member Balances", whoOwesWhom: "Who Owes Whom",
     noDebts: "No debts to show", goToSettlements: "Go to Settlements →",
     noMembersYet: "No members added yet", noReceiptsYet: "No receipts attached yet.",
+    manageMembers: "Manage members", addMemberByEmail: "Add member by email",
+    addMember: "Add", addingMember: "Adding...",
+    removeMember: "Remove member", removeMemberConfirm: "Remove member",
     yourShare: "Your Share", youPaid: "You Paid",
     expense: "Expense", category: "Category", paidBy: "Paid By",
     amount: "Amount", date: "Date", status: "Status",
@@ -263,6 +270,10 @@ export const translations = {
 
     // Create Group Modal
     createGroup: "Tạo nhóm", createGroupDesc: "Thiết lập nhóm chi phí chung mới",
+    editGroup: "Sửa nhóm", editGroupDesc: "Cập nhật thông tin nhóm",
+    deleteGroup: "Xóa nhóm", deleteGroupConfirm: "Xóa nhóm",
+    readyToUpdate: "Sẵn sàng cập nhật",
+    deleting: "Đang xóa...", updating: "Đang cập nhật...",
     groupName: "Tên nhóm", groupNamePlaceholder: "vd: Chuyến đi Bali 2026",
     groupIcon: "Biểu tượng nhóm", color: "Màu sắc",
     inviteMembers: "Mời thành viên (tùy chọn)", addAnother: "Thêm người khác",
@@ -275,6 +286,9 @@ export const translations = {
     memberBalances: "Số dư thành viên", whoOwesWhom: "Ai nợ ai",
     noDebts: "Không có khoản nợ", goToSettlements: "Đến Thanh toán →",
     noMembersYet: "Chưa có thành viên", noReceiptsYet: "Chưa có hóa đơn đính kèm.",
+    manageMembers: "Quản lý thành viên", addMemberByEmail: "Thêm thành viên bằng email",
+    addMember: "Thêm thành viên", addingMember: "Đang thêm...",
+    removeMember: "Xóa thành viên", removeMemberConfirm: "Xóa thành viên",
     yourShare: "Phần của bạn", youPaid: "Bạn đã trả",
     expense: "Chi phí", category: "Danh mục", paidBy: "Người trả",
     amount: "Số tiền", date: "Ngày", status: "Trạng thái",

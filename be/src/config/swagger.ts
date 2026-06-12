@@ -1,0 +1,578 @@
+import swaggerJSDoc from "swagger-jsdoc";
+
+const definition = {
+  openapi: "3.0.3",
+  info: {
+    title: "Project FCAJ Backend API",
+    version: "1.0.0",
+    description: "Swagger documentation for the backend API.",
+  },
+  components: {
+    securitySchemes: {
+      bearerAuth: {
+        type: "http",
+        scheme: "bearer",
+        bearerFormat: "JWT",
+      },
+    },
+  },
+  servers: [
+    {
+      url: "/",
+      description: "Current server origin",
+    },
+  ],
+};
+
+const swaggerSpec = swaggerJSDoc({
+  definition,
+  apis: [],
+});
+
+swaggerSpec.paths = {
+  "/health": {
+    get: {
+      summary: "Check backend and MongoDB status",
+      tags: ["System"],
+      responses: {
+        200: {
+          description: "Backend and MongoDB are connected",
+        },
+        503: {
+          description: "Backend is running but MongoDB is unavailable",
+        },
+      },
+    },
+  },
+  "/api/test": {
+    get: {
+      summary: "Test MongoDB read/write connectivity",
+      tags: ["System"],
+      responses: {
+        200: {
+          description: "MongoDB test document written and returned",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
+  "/api/auth/register": {
+    post: {
+      summary: "Register a new user",
+      tags: ["Auth"],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["firstName", "lastName", "email", "password"],
+              properties: {
+                firstName: {
+                  type: "string",
+                  example: "Thuong",
+                },
+                lastName: {
+                  type: "string",
+                  example: "Nguyen",
+                },
+                email: {
+                  type: "string",
+                  format: "email",
+                  example: "thuong@example.com",
+                },
+                password: {
+                  type: "string",
+                  format: "password",
+                  example: "secret123",
+                },
+                bio: {
+                  type: "string",
+                  example: "Trip organizer and finance lead.",
+                },
+                avatarUrl: {
+                  type: "string",
+                  example: "https://example.com/avatar.png",
+                },
+                defaultCurrency: {
+                  type: "string",
+                  example: "USD",
+                },
+                role: {
+                  type: "string",
+                  enum: ["admin", "user"],
+                  example: "user",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        201: {
+          description: "Account created successfully",
+        },
+        400: {
+          description: "Invalid request payload",
+        },
+        409: {
+          description: "Email already exists",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
+  "/api/auth/login": {
+    post: {
+      summary: "Login a user",
+      tags: ["Auth"],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["email", "password"],
+              properties: {
+                email: {
+                  type: "string",
+                  format: "email",
+                  example: "thuong@example.com",
+                },
+                password: {
+                  type: "string",
+                  format: "password",
+                  example: "secret123",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Login successful",
+        },
+        400: {
+          description: "Missing email or password",
+        },
+        401: {
+          description: "Invalid credentials",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
+  "/api/users/me": {
+    get: {
+      summary: "Get the current logged-in user's profile",
+      tags: ["Users"],
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: "User profile fetched successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+    patch: {
+      summary: "Update the current logged-in user's profile",
+      tags: ["Users"],
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                firstName: {
+                  type: "string",
+                  example: "Thuong",
+                },
+                lastName: {
+                  type: "string",
+                  example: "Nguyen",
+                },
+                bio: {
+                  type: "string",
+                  example: "Trip organizer and finance lead.",
+                },
+                avatarUrl: {
+                  type: "string",
+                  example: "https://example.com/avatar.png",
+                },
+                defaultCurrency: {
+                  type: "string",
+                  enum: ["USD", "VND"],
+                  example: "VND",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "User profile updated successfully",
+        },
+        400: {
+          description: "Invalid update payload",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
+  "/api/users/me/password": {
+    patch: {
+      summary: "Change the current logged-in user's password",
+      tags: ["Users"],
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["currentPassword", "newPassword"],
+              properties: {
+                currentPassword: {
+                  type: "string",
+                  format: "password",
+                  example: "secret123",
+                },
+                newPassword: {
+                  type: "string",
+                  format: "password",
+                  example: "newsecret123",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Password updated successfully",
+        },
+        400: {
+          description: "Missing or invalid password payload",
+        },
+        401: {
+          description: "Missing or invalid bearer token, or current password is incorrect",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
+  "/api/groups": {
+    get: {
+      summary: "Get groups for the current logged-in user",
+      tags: ["Groups"],
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: "Groups fetched successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+    post: {
+      summary: "Create a new group",
+      tags: ["Groups"],
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["name", "icon", "color"],
+              properties: {
+                name: {
+                  type: "string",
+                  example: "Summer Trip",
+                },
+                icon: {
+                  type: "string",
+                  example: "Plane",
+                },
+                color: {
+                  type: "string",
+                  example: "#16A34A",
+                },
+                members: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                    format: "email",
+                  },
+                  example: ["alex@gmail.com", "mia@gmail.com"],
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        201: {
+          description: "Group created successfully",
+        },
+        400: {
+          description: "Missing or invalid group payload",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
+  "/api/groups/{groupId}": {
+    get: {
+      summary: "Get a single group for the current logged-in user",
+      tags: ["Groups"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "groupId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+        },
+      ],
+      responses: {
+        200: {
+          description: "Group fetched successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User or group not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+    patch: {
+      summary: "Update a group owned by the current logged-in user",
+      tags: ["Groups"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "groupId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+        },
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["name", "icon", "color"],
+              properties: {
+                name: {
+                  type: "string",
+                  example: "Summer Trip 2026",
+                },
+                icon: {
+                  type: "string",
+                  example: "🎉",
+                },
+                color: {
+                  type: "string",
+                  example: "#16A34A",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Group updated successfully",
+        },
+        400: {
+          description: "Missing or invalid group payload",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User or group not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+    delete: {
+      summary: "Delete a group owned by the current logged-in user",
+      tags: ["Groups"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "groupId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+        },
+      ],
+      responses: {
+        200: {
+          description: "Group deleted successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User or group not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
+  "/api/groups/{groupId}/members": {
+    post: {
+      summary: "Add a member to a group owned by the current logged-in user",
+      tags: ["Groups"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "groupId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+        },
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["email"],
+              properties: {
+                email: {
+                  type: "string",
+                  format: "email",
+                  example: "alex@gmail.com",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Member added successfully",
+        },
+        400: {
+          description: "Missing or invalid member payload",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User or group not found",
+        },
+      },
+    },
+  },
+  "/api/groups/{groupId}/members/{memberId}": {
+    delete: {
+      summary: "Remove a member from a group owned by the current logged-in user",
+      tags: ["Groups"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "groupId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+        },
+        {
+          in: "path",
+          name: "memberId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+        },
+      ],
+      responses: {
+        200: {
+          description: "Member removed successfully",
+        },
+        400: {
+          description: "Invalid member removal request",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User or group not found",
+        },
+      },
+    },
+  },
+};
+
+export default swaggerSpec;

@@ -1,19 +1,141 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import { Mail, Lock, Eye, EyeOff, Leaf, ArrowRight } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
+import {
+  getStoredUser,
+  loginUser,
+  registerUser,
+  setStoredToken,
+  setStoredUser,
+} from "../api/auth";
 
 interface LoginPageProps {
-  onNavigate: (page: string) => void;
   initialMode?: "login" | "register";
 }
 
-export function LoginPage({ onNavigate, initialMode = "login" }: LoginPageProps) {
+export function LoginPage({ initialMode = "login" }: LoginPageProps) {
   const [isRegister, setIsRegister] = useState(initialMode === "register");
   const [showPass, setShowPass] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "" });
+  const [form, setForm] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    password: "",
+    confirm: "",
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const { t } = useLanguage();
+  const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); onNavigate("dashboard"); };
+  useEffect(() => {
+    setIsRegister(initialMode === "register");
+    setErrorMessage("");
+    setSuccessMessage("");
+  }, [initialMode]);
+
+  useEffect(() => {
+    if (getStoredUser()) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [navigate]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    if (!isRegister) {
+      if (!form.email.trim()) {
+        setErrorMessage("Email is required.");
+        return;
+      }
+
+      if (!form.password) {
+        setErrorMessage("Password is required.");
+        return;
+      }
+
+      try {
+        setIsSubmitting(true);
+
+        const response = await loginUser({
+          email: form.email.trim(),
+          password: form.password,
+        });
+
+        if (response.user) {
+          setStoredUser(response.user);
+        }
+
+        if (response.token) {
+          setStoredToken(response.token);
+        }
+
+        setSuccessMessage(response.message);
+        navigate("/dashboard");
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error ? error.message : "Unable to sign in.",
+        );
+      } finally {
+        setIsSubmitting(false);
+      }
+
+      return;
+    }
+
+    if (!form.firstName.trim() || !form.lastName.trim()) {
+      setErrorMessage("First name and last name are required.");
+      return;
+    }
+
+    if (!form.email.trim()) {
+      setErrorMessage("Email is required.");
+      return;
+    }
+
+    if (form.password.length < 6) {
+      setErrorMessage("Password must be at least 6 characters.");
+      return;
+    }
+
+    if (form.password !== form.confirm) {
+      setErrorMessage("Passwords do not match.");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      const response = await registerUser({
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        defaultCurrency: "USD",
+        role: "user",
+      });
+
+      setSuccessMessage(response.message);
+      setForm({
+        firstName: "",
+        lastName: "",
+        email: "",
+        password: "",
+        confirm: "",
+      });
+      navigate("/login");
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Unable to create account.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#F6FBF8] flex">
@@ -85,10 +207,27 @@ export function LoginPage({ onNavigate, initialMode = "login" }: LoginPageProps)
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {isRegister && (
-              <div>
-                <label className="block text-sm text-[#374151] mb-1.5" style={{ fontWeight: 500 }}>{t.fullName}</label>
-                <input type="text" placeholder="Jamie Davis" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full bg-white border border-[#E5E7EB] rounded-xl px-4 py-3 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent" />
+              <>
+                <div>
+                  <label className="block text-sm text-[#374151] mb-1.5" style={{ fontWeight: 500 }}>First name</label>
+                  <input type="text" placeholder="Jamie" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+                    className="w-full bg-white border border-[#E5E7EB] rounded-xl px-4 py-3 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent" />
+                </div>
+                <div>
+                  <label className="block text-sm text-[#374151] mb-1.5" style={{ fontWeight: 500 }}>Last name</label>
+                  <input type="text" placeholder="Davis" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+                    className="w-full bg-white border border-[#E5E7EB] rounded-xl px-4 py-3 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent" />
+                </div>
+              </>
+            )}
+            {errorMessage && (
+              <div className="rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C]">
+                {errorMessage}
+              </div>
+            )}
+            {successMessage && (
+              <div className="rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 text-sm text-[#166534]">
+                {successMessage}
               </div>
             )}
             <div>
@@ -123,15 +262,19 @@ export function LoginPage({ onNavigate, initialMode = "login" }: LoginPageProps)
                 </div>
               </div>
             )}
-            <button type="submit" className="w-full bg-[#16A34A] text-white py-3.5 rounded-2xl hover:bg-[#15803d] transition-all flex items-center justify-center gap-2 shadow-sm mt-2" style={{ fontWeight: 600 }}>
-              {isRegister ? t.createAccountBtn : t.signIn}
+            <button type="submit" disabled={isSubmitting} className="w-full bg-[#16A34A] text-white py-3.5 rounded-2xl hover:bg-[#15803d] transition-all flex items-center justify-center gap-2 shadow-sm mt-2 disabled:cursor-not-allowed disabled:opacity-70" style={{ fontWeight: 600 }}>
+              {isSubmitting ? "Please wait..." : isRegister ? t.createAccountBtn : t.signIn}
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
 
           <p className="text-center text-sm text-[#6B7280] mt-6">
             {isRegister ? `${t.alreadyHaveAccount} ` : `${t.dontHaveAccount} `}
-            <button onClick={() => setIsRegister(!isRegister)} className="text-[#16A34A] hover:underline" style={{ fontWeight: 600 }}>
+            <button
+              onClick={() => navigate(isRegister ? "/login" : "/register")}
+              className="text-[#16A34A] hover:underline"
+              style={{ fontWeight: 600 }}
+            >
               {isRegister ? t.signIn : t.signupFree}
             </button>
           </p>

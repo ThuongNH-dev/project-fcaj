@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router";
 import { LanguageProvider } from "./context/LanguageContext";
 import { Navbar } from "./components/Navbar";
 import { Sidebar } from "./components/Sidebar";
@@ -7,85 +7,77 @@ import { LoginPage } from "./components/LoginPage";
 import { Dashboard } from "./components/Dashboard";
 import { GroupsPage } from "./components/GroupsPage";
 import { GroupDetailPage } from "./components/GroupDetailPage";
-import { AddExpenseModal } from "./components/AddExpenseModal";
 import { SettlementPage } from "./components/SettlementPage";
 import { AdminPage } from "./components/AdminPage";
 import { ExpensesPage } from "./components/ExpensesPage";
 import { ReceiptsPage } from "./components/ReceiptsPage";
 import { SettingsPage } from "./components/SettingsPage";
+import { FeedbackProvider } from "./components/ui/FeedbackProvider";
+import { getStoredUser } from "./api/auth";
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState("landing");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  const handleNavigate = (page: string) => {
-    setCurrentPage(page);
-  };
-
-  const showSidebar =
-    currentPage === "dashboard" ||
-    currentPage === "groups" ||
-    currentPage === "group-detail" ||
-    currentPage === "settlement" ||
-    currentPage === "admin" ||
-    currentPage === "settings" ||
-    currentPage === "expenses" ||
-    currentPage === "receipts";
-
-  const renderPage = () => {
-    switch (currentPage) {
-      case "landing":
-      case "features":
-      case "pricing":
-      case "about":
-        return <LandingPage onNavigate={handleNavigate} section={currentPage} />;
-      case "login":
-        return <LoginPage onNavigate={handleNavigate} initialMode="login" />;
-      case "register":
-        return <LoginPage onNavigate={handleNavigate} initialMode="register" />;
-      case "dashboard":
-        return <Dashboard />;
-      case "groups":
-        return <GroupsPage onNavigate={handleNavigate} />;
-      case "group-detail":
-        return (
-          <GroupDetailPage
-            onNavigate={handleNavigate}
-            onOpenModal={() => setIsModalOpen(true)}
-          />
-        );
-      case "settlement":
-        return <SettlementPage />;
-      case "admin":
-        return <AdminPage />;
-      case "expenses":
-        return <ExpensesPage />;
-      case "receipts":
-        return <ReceiptsPage />;
-      case "settings":
-        return <SettingsPage onNavigate={handleNavigate} />;
-      default:
-        return <LandingPage onNavigate={handleNavigate} />;
-    }
-  };
-
   return (
     <LanguageProvider>
-    <div className="min-h-screen bg-[#F6FBF8]">
-      {!showSidebar && (
-        <Navbar onNavigate={handleNavigate} currentPage={currentPage} />
-      )}
-      {showSidebar && (
-        <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
-      )}
-      <div className={showSidebar ? "flex-1" : ""}>
-        {renderPage()}
-      </div>
-      <AddExpenseModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-      />
-    </div>
+      <FeedbackProvider>
+        <Routes>
+          <Route path="/" element={<PublicLayout />}>
+            <Route index element={<LandingPage section="landing" />} />
+            <Route path="features" element={<LandingPage section="features" />} />
+            <Route path="pricing" element={<LandingPage section="pricing" />} />
+            <Route path="about" element={<LandingPage section="about" />} />
+            <Route path="login" element={<LoginPage initialMode="login" />} />
+            <Route path="register" element={<LoginPage initialMode="register" />} />
+          </Route>
+
+          <Route element={<PrivateLayout />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/groups" element={<GroupsPage />} />
+            <Route path="/groups/:groupId" element={<GroupDetailPage />} />
+            <Route path="/expenses" element={<ExpensesPage />} />
+            <Route path="/settlement" element={<SettlementPage />} />
+            <Route path="/receipts" element={<ReceiptsPage />} />
+            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/profile" element={<Navigate to="/settings" replace />} />
+          </Route>
+
+          <Route
+            path="*"
+            element={
+              <Navigate
+                to={getStoredUser() ? "/dashboard" : "/login"}
+                replace
+              />
+            }
+          />
+        </Routes>
+      </FeedbackProvider>
     </LanguageProvider>
+  );
+}
+
+function PublicLayout() {
+  const location = useLocation();
+
+  return (
+    <div className="min-h-screen bg-[#F6FBF8]">
+      <Navbar currentPath={location.pathname} />
+      <Outlet />
+    </div>
+  );
+}
+
+function PrivateLayout() {
+  const location = useLocation();
+
+  if (!getStoredUser()) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+
+  return (
+    <div className="min-h-screen bg-[#F6FBF8]">
+      <Sidebar currentPath={location.pathname} />
+      <Outlet />
+    </div>
   );
 }

@@ -1,10 +1,17 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { TrendingUp, TrendingDown, Users, DollarSign, Bell, Search, Plus, ArrowUpRight } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
+import { getStoredUser, getUserInitials } from "../api/auth";
 
 export function Dashboard() {
   const [search, setSearch] = useState("");
   const { t } = useLanguage();
+  const user = useMemo(() => getStoredUser(), []);
+  const userName = user ? `${user.firstName} ${user.lastName}` : "Guest";
+  const userInitials = user ? getUserInitials(user) : "GU";
+  const welcomeMessage = user
+    ? `Signed in as ${userName} (${user.role})`
+    : t.welcomeMsg;
 
   const summaryCards = [
     { label: t.totalExpenses, value: "$0.00", icon: DollarSign, bg: "bg-[#F0FAF5]", iconBg: "bg-[#7EDDBA]", iconColor: "text-[#065f46]" },
@@ -19,7 +26,7 @@ export function Dashboard() {
         <div className="flex items-center justify-between mb-8 gap-4">
           <div>
             <h1 className="text-[#111827]" style={{ fontSize: "1.5rem", fontWeight: 800 }}>{t.dashboard}</h1>
-            <p className="text-[#6B7280] text-sm mt-0.5">{t.welcomeMsg}</p>
+            <p className="text-[#6B7280] text-sm mt-0.5">{welcomeMessage}</p>
           </div>
           <div className="flex items-center gap-3">
             <div className="relative hidden sm:block">
@@ -35,7 +42,13 @@ export function Dashboard() {
             <button className="relative w-9 h-9 bg-white rounded-xl border border-[#E5E7EB] flex items-center justify-center hover:bg-[#F0FAF5] transition-colors">
               <Bell className="w-4 h-4 text-[#6B7280]" />
             </button>
-            <div className="w-9 h-9 rounded-xl bg-[#7EDDBA] flex items-center justify-center text-[#065f46] text-xs" style={{ fontWeight: 700 }}>Me</div>
+            <div
+              className="w-9 h-9 rounded-xl bg-[#7EDDBA] flex items-center justify-center text-[#065f46] text-xs"
+              style={{ fontWeight: 700 }}
+              title={userName}
+            >
+              {userInitials}
+            </div>
           </div>
         </div>
 
@@ -89,6 +102,28 @@ export function Dashboard() {
           </div>
 
           <div className="lg:col-span-2 flex flex-col gap-6">
+            {user && (
+              <div className="bg-white rounded-2xl p-5 border border-[#E5E7EB]">
+                <h3 className="text-[#111827] mb-4" style={{ fontWeight: 700 }}>
+                  Account
+                </h3>
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-[#7EDDBA] flex items-center justify-center text-[#065f46]" style={{ fontWeight: 700 }}>
+                    {userInitials}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[#111827]" style={{ fontWeight: 700 }}>
+                      {userName}
+                    </p>
+                    <p className="text-sm text-[#6B7280]">{user.email}</p>
+                    <p className="text-xs text-[#9CA3AF] mt-1">
+                      Role: {user.role} · Currency: {user.defaultCurrency}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="bg-white rounded-2xl p-5 border border-[#E5E7EB]">
               <h3 className="text-[#111827] mb-4" style={{ fontWeight: 700 }}>{t.quickDebts}</h3>
               <div className="flex flex-col items-center justify-center py-8 text-center">
