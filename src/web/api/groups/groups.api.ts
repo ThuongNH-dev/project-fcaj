@@ -1,5 +1,6 @@
 import { deleteJson, getJson, patchJson, postJson } from "../client";
 import type {
+  AddGroupMemberPayload,
   CreateGroupPayload,
   CreateGroupResponse,
   DeleteGroupResponse,
@@ -26,4 +27,15 @@ export function updateGroup(groupId: string, payload: UpdateGroupPayload) {
 
 export function deleteGroup(groupId: string) {
   return deleteJson<DeleteGroupResponse>(`/api/groups/${groupId}`);
+}
+
+export function addGroupMember(groupId: string, payload: AddGroupMemberPayload) {
+  return postJson<AddGroupMemberPayload, GroupResponse>(
+    `/api/groups/${groupId}/members`,
+    payload,
+  );
+}
+
+export function removeGroupMember(groupId: string, memberId: string) {
+  return deleteJson<GroupResponse>(`/api/groups/${groupId}/members/${memberId}`);
 }

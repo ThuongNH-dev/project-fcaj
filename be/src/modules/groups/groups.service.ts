@@ -3,10 +3,12 @@ import { ObjectId as MongoObjectId } from "mongodb";
 import { connectToMongo } from "../../db/mongo.js";
 import { getUsersCollection } from "../auth/auth.service.js";
 import type {
+  AddGroupMemberInput,
   CreateGroupInput,
   GroupMember,
   PublicGroupMember,
   PublicGroup,
+  RemoveGroupMemberInput,
   UpdateGroupInput,
 } from "./groups.types.js";
 
@@ -39,7 +41,7 @@ async function toPublicGroupWithMembers(group: GroupDocument): Promise<PublicGro
   const memberIds = group.members
     .map((member) => member.userId)
     .filter((memberId) => MongoObjectId.isValid(memberId));
-  const usersById = new Map<string, string>();
+  const usersById = new Map<string, { name: string; email: string }>();
 
   if (memberIds.length > 0) {
     const memberUsers = await users
@@ -54,14 +56,19 @@ async function toPublicGroupWithMembers(group: GroupDocument): Promise<PublicGro
       if (user._id) {
         usersById.set(
           user._id.toString(),
-          `${user.firstName} ${user.lastName}`.trim(),
+          {
+            name: `${user.firstName} ${user.lastName}`.trim(),
+            email: user.email,
+          },
         );
       }
     });
   }
 
   const publicMembers: PublicGroupMember[] = group.members.map((member) => ({
-    name: usersById.get(member.userId) ?? "Unknown user",
+    id: member.userId,
+    name: usersById.get(member.userId)?.name ?? "Unknown user",
+    email: usersById.get(member.userId)?.email ?? "",
     role: member.role,
   }));
 
@@ -216,4 +223,109 @@ export async function deleteGroup(groupId: string, userId: string): Promise<bool
   });
 
   return result.deletedCount > 0;
+}
+
+export async function addGroupMember(input: AddGroupMemberInput): Promise<PublicGroup | null> {
+  if (!MongoObjectId.isValid(input.groupId)) {
+    return null;
+  }
+
+  const users = await getUsersCollection();
+  const groups = await getGroupsCollection();
+  const groupObjectId = new MongoObjectId(input.groupId);
+  const normalizedEmail = input.email.trim().toLowerCase();
+
+  if (!normalizedEmail) {
+    throw new Error("Member email is required.");
+  }
+
+  const group = await groups.findOne({
+    _id: groupObjectId,
+    createdBy: input.userId,
+  });
+
+  if (!group) {
+    return null;
+  }
+
+  const userToAdd = await users.findOne({ email: normalizedEmail });
+
+  if (!userToAdd?._id) {
+    throw new Error("Member email does not exist.");
+  }
+
+  const memberId = userToAdd._id.toString();
+
+  if (group.members.some((member) => member.userId === memberId)) {
+    throw new Error("This user is already a member of the group.");
+  }
+
+  const updatedMembers: GroupMember[] = [
+    ...group.members,
+    {
+      userId: memberId,
+      role: "member",
+    },
+  ];
+
+  await groups.updateOne(
+    { _id: groupObjectId, createdBy: input.userId },
+    {
+      $set: {
+        members: updatedMembers,
+        updatedAt: new Date(),
+      },
+    },
+  );
+
+  return toPublicGroupWithMembers({
+    ...group,
+    members: updatedMembers,
+    updatedAt: new Date(),
+  });
+}
+
+export async function removeGroupMember(input: RemoveGroupMemberInput): Promise<PublicGroup | null> {
+  if (!MongoObjectId.isValid(input.groupId)) {
+    return null;
+  }
+
+  const groups = await getGroupsCollection();
+  const groupObjectId = new MongoObjectId(input.groupId);
+  const group = await groups.findOne({
+    _id: groupObjectId,
+    createdBy: input.userId,
+  });
+
+  if (!group) {
+    return null;
+  }
+
+  if (input.memberId === input.userId) {
+    throw new Error("The group owner cannot be removed.");
+  }
+
+  const updatedMembers = group.members.filter(
+    (member) => member.userId !== input.memberId,
+  );
+
+  if (updatedMembers.length === group.members.length) {
+    throw new Error("Member not found in this group.");
+  }
+
+  await groups.updateOne(
+    { _id: groupObjectId, createdBy: input.userId },
+    {
+      $set: {
+        members: updatedMembers,
+        updatedAt: new Date(),
+      },
+    },
+  );
+
+  return toPublicGroupWithMembers({
+    ...group,
+    members: updatedMembers,
+    updatedAt: new Date(),
+  });
 }

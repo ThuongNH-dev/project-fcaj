@@ -5,6 +5,7 @@ import { CreateGroupModal } from "./CreateGroupModal";
 import { useLanguage } from "../context/LanguageContext";
 import { deleteGroup, getGroups, type Group } from "../api/groups";
 import { getStoredUser } from "../api/auth";
+import { useFeedback } from "./ui/FeedbackProvider";
 
 interface GroupsPageProps {
   onNavigate: (page: string) => void;
@@ -21,6 +22,7 @@ export function GroupsPage({ onNavigate, onSelectGroup }: GroupsPageProps) {
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const { t } = useLanguage();
+  const { confirm, showToast } = useFeedback();
 
   const filters = [
     { key: "all", label: t.all },
@@ -106,9 +108,13 @@ export function GroupsPage({ onNavigate, onSelectGroup }: GroupsPageProps) {
   };
 
   const handleDeleteGroup = async (group: Group) => {
-    const confirmed = window.confirm(
-      `${t.deleteGroupConfirm} "${group.name}"?`,
-    );
+    const confirmed = await confirm({
+      title: t.deleteGroup,
+      message: `${t.deleteGroupConfirm} "${group.name}"?`,
+      cancelLabel: t.cancel,
+      confirmLabel: t.deleteGroup,
+      variant: "danger",
+    });
 
     if (!confirmed) {
       return;
@@ -116,15 +122,20 @@ export function GroupsPage({ onNavigate, onSelectGroup }: GroupsPageProps) {
 
     try {
       setDeletingGroupId(group.id);
-      setErrorMessage("");
-      await deleteGroup(group.id);
+      const response = await deleteGroup(group.id);
       setGroups((currentGroups) =>
         currentGroups.filter((currentGroup) => currentGroup.id !== group.id),
       );
+      showToast({
+        variant: "success",
+        message: response.message,
+      });
     } catch (error) {
-      setErrorMessage(
-        error instanceof Error ? error.message : "Unable to delete group.",
-      );
+      showToast({
+        variant: "error",
+        message:
+          error instanceof Error ? error.message : "Unable to delete group.",
+      });
     } finally {
       setDeletingGroupId(null);
     }

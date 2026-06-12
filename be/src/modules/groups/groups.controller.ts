@@ -1,10 +1,12 @@
 import type { Request, Response } from "express";
 import { getUserById } from "../auth/auth.service.js";
 import {
+  addGroupMember,
   createGroup,
   deleteGroup,
   getGroupByIdForUser,
   getGroupsByUserId,
+  removeGroupMember,
   updateGroup,
 } from "./groups.service.js";
 
@@ -302,6 +304,118 @@ export async function deleteGroupHandler(req: Request, res: Response) {
       error instanceof Error ? error.message : "Unable to delete group.";
 
     return res.status(503).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function addGroupMemberHandler(req: Request, res: Response) {
+  const userId = req.auth?.userId;
+  const groupId =
+    typeof req.params.groupId === "string" ? req.params.groupId : "";
+  const email = typeof req.body?.email === "string" ? req.body.email : "";
+
+  if (!userId) {
+    return res.status(401).json({
+      ok: false,
+      message: "Authorization token is required.",
+    });
+  }
+
+  if (!email.trim()) {
+    return res.status(400).json({
+      ok: false,
+      message: "Member email is required.",
+    });
+  }
+
+  try {
+    const currentUser = await getUserById(userId);
+
+    if (!currentUser) {
+      return res.status(404).json({
+        ok: false,
+        message: "User not found.",
+      });
+    }
+
+    const group = await addGroupMember({
+      groupId,
+      userId: currentUser.id,
+      email,
+    });
+
+    if (!group) {
+      return res.status(404).json({
+        ok: false,
+        message: "Group not found.",
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message: "Member added successfully.",
+      group,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to add member.";
+
+    return res.status(400).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function removeGroupMemberHandler(req: Request, res: Response) {
+  const userId = req.auth?.userId;
+  const groupId =
+    typeof req.params.groupId === "string" ? req.params.groupId : "";
+  const memberId =
+    typeof req.params.memberId === "string" ? req.params.memberId : "";
+
+  if (!userId) {
+    return res.status(401).json({
+      ok: false,
+      message: "Authorization token is required.",
+    });
+  }
+
+  try {
+    const currentUser = await getUserById(userId);
+
+    if (!currentUser) {
+      return res.status(404).json({
+        ok: false,
+        message: "User not found.",
+      });
+    }
+
+    const group = await removeGroupMember({
+      groupId,
+      userId: currentUser.id,
+      memberId,
+    });
+
+    if (!group) {
+      return res.status(404).json({
+        ok: false,
+        message: "Group not found.",
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message: "Member removed successfully.",
+      group,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to remove member.";
+
+    return res.status(400).json({
       ok: false,
       message,
     });

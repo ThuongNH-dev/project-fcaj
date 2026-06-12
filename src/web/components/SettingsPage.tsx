@@ -29,6 +29,9 @@ interface SettingsPageProps {
 }
 
 export function SettingsPage({ onNavigate }: SettingsPageProps) {
+  const isLocalhost =
+    typeof window !== "undefined" &&
+    ["localhost", "127.0.0.1"].includes(window.location.hostname);
   const [activeTab, setActiveTab] = useState("profile");
   const [saved, setSaved] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
@@ -191,7 +194,9 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
 
   const tabs = [
     { id: "profile", label: t.profile, icon: User },
-    { id: "notifications", label: t.notifications, icon: Bell },
+    ...(!isLocalhost
+      ? [{ id: "notifications", label: t.notifications, icon: Bell }]
+      : []),
     { id: "security", label: t.security, icon: Shield },
     { id: "billing", label: t.billing, icon: CreditCard },
     { id: "appearance", label: t.appearance, icon: Palette },

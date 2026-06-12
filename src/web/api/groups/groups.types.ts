@@ -1,5 +1,7 @@
 export interface GroupMember {
+  id: string;
   name: string;
+  email: string;
   role: "owner" | "member";
 }
 
@@ -31,6 +33,10 @@ export interface UpdateGroupPayload {
   name: string;
   icon: string;
   color: string;
+}
+
+export interface AddGroupMemberPayload {
+  email: string;
 }
 
 export interface CreateGroupResponse {

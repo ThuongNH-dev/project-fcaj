@@ -13,6 +13,7 @@ import { AdminPage } from "./components/AdminPage";
 import { ExpensesPage } from "./components/ExpensesPage";
 import { ReceiptsPage } from "./components/ReceiptsPage";
 import { SettingsPage } from "./components/SettingsPage";
+import { FeedbackProvider } from "./components/ui/FeedbackProvider";
 import { getStoredUser } from "./api/auth";
 
 export default function App() {
@@ -81,21 +82,23 @@ export default function App() {
 
   return (
     <LanguageProvider>
-    <div className="min-h-screen bg-[#F6FBF8]">
-      {!showSidebar && (
-        <Navbar onNavigate={handleNavigate} currentPage={currentPage} />
-      )}
-      {showSidebar && (
-        <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
-      )}
-      <div className={showSidebar ? "flex-1" : ""}>
-        {renderPage()}
-      </div>
-      <AddExpenseModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-      />
-    </div>
+      <FeedbackProvider>
+        <div className="min-h-screen bg-[#F6FBF8]">
+          {!showSidebar && (
+            <Navbar onNavigate={handleNavigate} currentPage={currentPage} />
+          )}
+          {showSidebar && (
+            <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
+          )}
+          <div className={showSidebar ? "flex-1" : ""}>
+            {renderPage()}
+          </div>
+          <AddExpenseModal
+            isOpen={isModalOpen}
+            onClose={() => setIsModalOpen(false)}
+          />
+        </div>
+      </FeedbackProvider>
     </LanguageProvider>
   );
 }

@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, Plus, Users, DollarSign, TrendingUp, Receipt } from "lucide-react";
+import { ArrowLeft, Plus, Users, DollarSign, TrendingUp, Receipt, Trash2, UserPlus } from "lucide-react";
 import { AddExpenseModal, NewExpense } from "./AddExpenseModal";
 import { useLanguage } from "../context/LanguageContext";
-import { getGroup, type Group } from "../api/groups";
+import { addGroupMember, getGroup, removeGroupMember, type Group } from "../api/groups";
+import { getStoredUser } from "../api/auth";
+import { useFeedback } from "./ui/FeedbackProvider";
 
 interface GroupDetailPageProps {
   onNavigate: (page: string) => void;
@@ -45,7 +47,12 @@ export function GroupDetailPage({
   const [group, setGroup] = useState<Group | null>(null);
   const [isLoadingGroup, setIsLoadingGroup] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [memberEmail, setMemberEmail] = useState("");
+  const [isSubmittingMember, setIsSubmittingMember] = useState(false);
+  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const { t } = useLanguage();
+  const { confirm, showToast } = useFeedback();
+  const currentUser = getStoredUser();
 
   useEffect(() => {
     async function loadGroup() {
@@ -95,6 +102,78 @@ export function GroupDetailPage({
     : expenses.filter((e) => e.category === activeCategory);
 
   const memberCount = group?.members.length ?? 0;
+  const canManageMembers = Boolean(group && currentUser?.id === group.createdBy);
+
+  const handleAddMember = async () => {
+    if (!groupId) {
+      return;
+    }
+
+    if (!memberEmail.trim()) {
+      showToast({
+        variant: "error",
+        message: "Member email is required.",
+      });
+      return;
+    }
+
+    try {
+      setIsSubmittingMember(true);
+      const response = await addGroupMember(groupId, {
+        email: memberEmail.trim(),
+      });
+      setGroup(response.group ?? null);
+      setMemberEmail("");
+      showToast({
+        variant: "success",
+        message: response.message,
+      });
+    } catch (error) {
+      showToast({
+        variant: "error",
+        message:
+          error instanceof Error ? error.message : "Unable to add member.",
+      });
+    } finally {
+      setIsSubmittingMember(false);
+    }
+  };
+
+  const handleRemoveMember = async (memberId: string, memberName: string) => {
+    if (!groupId) {
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: t.removeMember,
+      message: `${t.removeMemberConfirm} "${memberName}"?`,
+      cancelLabel: t.cancel,
+      confirmLabel: t.removeMember,
+      variant: "danger",
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setRemovingMemberId(memberId);
+      const response = await removeGroupMember(groupId, memberId);
+      setGroup(response.group ?? null);
+      showToast({
+        variant: "success",
+        message: response.message,
+      });
+    } catch (error) {
+      showToast({
+        variant: "error",
+        message:
+          error instanceof Error ? error.message : "Unable to remove member.",
+      });
+    } finally {
+      setRemovingMemberId(null);
+    }
+  };
 
   return (
     <div className="lg:pl-60 min-h-screen bg-[#F6FBF8]">
@@ -242,7 +321,40 @@ export function GroupDetailPage({
           <div className="space-y-5">
             {/* Member balances */}
             <div className="bg-white rounded-2xl p-5 border border-[#E5E7EB]">
-              <h3 className="text-[#111827] mb-4" style={{ fontWeight: 700 }}>{t.memberBalances}</h3>
+              <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
+                <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>{t.memberBalances}</h3>
+                {canManageMembers && (
+                  <span className="rounded-full bg-[#F0FAF5] px-3 py-1 text-xs text-[#166534]" style={{ fontWeight: 600 }}>
+                    {t.manageMembers}
+                  </span>
+                )}
+              </div>
+              {canManageMembers && (
+                <div className="mb-4 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-3">
+                  <label className="mb-2 block text-xs text-[#6B7280]" style={{ fontWeight: 600 }}>
+                    {t.addMemberByEmail}
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="email"
+                      placeholder="friend@email.com"
+                      value={memberEmail}
+                      onChange={(event) => setMemberEmail(event.target.value)}
+                      className="flex-1 rounded-xl border border-[#E5E7EB] bg-white px-3 py-2.5 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleAddMember()}
+                      disabled={isSubmittingMember}
+                      className="inline-flex items-center gap-2 rounded-xl bg-[#16A34A] px-3 py-2.5 text-sm text-white hover:bg-[#15803d] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                      style={{ fontWeight: 600 }}
+                    >
+                      <UserPlus className="h-4 w-4" />
+                      {isSubmittingMember ? t.addingMember : t.addMember}
+                    </button>
+                  </div>
+                </div>
+              )}
               {group && group.members.length > 0 ? (
                 <div className="space-y-3">
                   {group.members.map((member, index) => (
@@ -263,12 +375,25 @@ export function GroupDetailPage({
                           <p className="text-sm text-[#111827]" style={{ fontWeight: 600 }}>
                             {member.name}
                           </p>
-                          <p className="text-xs text-[#9CA3AF] truncate">{member.role}</p>
+                          <p className="text-xs text-[#9CA3AF] truncate">{member.email || member.role}</p>
                         </div>
                       </div>
-                      <span className="text-xs text-[#6B7280]" style={{ fontWeight: 600 }}>
-                        {member.role}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-[#6B7280]" style={{ fontWeight: 600 }}>
+                          {member.role}
+                        </span>
+                        {canManageMembers && member.role !== "owner" && (
+                          <button
+                            type="button"
+                            onClick={() => void handleRemoveMember(member.id, member.name)}
+                            disabled={removingMemberId === member.id}
+                            className="inline-flex items-center justify-center rounded-lg bg-[#FEF2F2] p-2 text-[#B91C1C] hover:bg-[#FEE2E2] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                            title={t.removeMember}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>

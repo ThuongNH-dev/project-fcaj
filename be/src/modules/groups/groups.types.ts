@@ -20,7 +20,9 @@ export interface GroupMember {
 }
 
 export interface PublicGroupMember {
+  id: string;
   name: string;
+  email: string;
   role: "owner" | "member";
 }
 
@@ -50,4 +52,16 @@ export interface GroupResponse {
 export interface DeleteGroupResponse {
   ok: boolean;
   message: string;
+}
+
+export interface AddGroupMemberInput {
+  groupId: string;
+  userId: string;
+  email: string;
+}
+
+export interface RemoveGroupMemberInput {
+  groupId: string;
+  userId: string;
+  memberId: string;
 }

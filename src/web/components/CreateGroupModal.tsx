@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { X, Users, Plus, Trash2 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import { createGroup, type Group, updateGroup } from "../api/groups";
+import { useFeedback } from "./ui/FeedbackProvider";
 
 interface CreateGroupModalProps {
   isOpen: boolean;
@@ -26,6 +27,7 @@ export function CreateGroupModal({
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { t } = useLanguage();
+  const { showToast } = useFeedback();
   const isEditing = Boolean(groupToEdit);
 
   useEffect(() => {
@@ -80,34 +82,46 @@ export function CreateGroupModal({
       setIsSubmitting(true);
 
       if (groupToEdit) {
-        await updateGroup(groupToEdit.id, {
+        const response = await updateGroup(groupToEdit.id, {
           name: groupName.trim(),
           icon: selectedIcon,
           color: selectedColor,
+        });
+        showToast({
+          variant: "success",
+          message: response.message,
         });
       } else {
         const members = emails
           .map((email) => email.trim())
           .filter(Boolean);
 
-        await createGroup({
+        const response = await createGroup({
           name: groupName.trim(),
           icon: selectedIcon,
           color: selectedColor,
           members,
+        });
+        showToast({
+          variant: "success",
+          message: response.message,
         });
       }
 
       await onCreated?.();
       handleClose();
     } catch (error) {
-      setErrorMessage(
+      const message =
         error instanceof Error
           ? error.message
           : isEditing
             ? "Unable to update group."
-            : "Unable to create group.",
-      );
+            : "Unable to create group.";
+      setErrorMessage(message);
+      showToast({
+        variant: "error",
+        message,
+      });
     } finally {
       setIsSubmitting(false);
     }
