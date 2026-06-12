@@ -24,7 +24,7 @@
   Default local backend env:
 
   - `MONGODB_URI=mongodb://127.0.0.1:27017`
-  - `MONGODB_DB=project_fcaj`
+  - `MONGODB_DB=Splitly`
 
   Open Swagger at `http://localhost:5000`
 
