@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import {
+  changeCurrentUserPassword,
   getUserById,
   updateCurrentUserProfile,
 } from "../auth/auth.service.js";
@@ -114,6 +115,68 @@ export async function updateCurrentUserHandler(req: Request, res: Response) {
       message === "Default currency must be either USD or VND."
         ? 400
         : 503;
+
+    return res.status(statusCode).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function changeCurrentUserPasswordHandler(
+  req: Request,
+  res: Response,
+) {
+  const userId = req.auth?.userId;
+
+  if (!userId) {
+    return res.status(401).json({
+      ok: false,
+      message: "Authorization token is required.",
+    });
+  }
+
+  const { currentPassword, newPassword } = req.body as {
+    currentPassword?: string;
+    newPassword?: string;
+  };
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({
+      ok: false,
+      message: "Current password and new password are required.",
+    });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({
+      ok: false,
+      message: "Password must be at least 6 characters.",
+    });
+  }
+
+  try {
+    const isPasswordChanged = await changeCurrentUserPassword(userId, {
+      currentPassword,
+      newPassword,
+    });
+
+    if (!isPasswordChanged) {
+      return res.status(404).json({
+        ok: false,
+        message: "User not found.",
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message: "Password updated successfully.",
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to update password.";
+
+    const statusCode = message === "Current password is incorrect." ? 401 : 503;
 
     return res.status(statusCode).json({
       ok: false,

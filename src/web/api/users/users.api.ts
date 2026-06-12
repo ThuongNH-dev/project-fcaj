@@ -1,5 +1,6 @@
 import { getJson, patchJson } from "../client";
 import type {
+  ChangeCurrentUserPasswordPayload,
   CurrentUserResponse,
   UpdateCurrentUserPayload,
 } from "./users.types";
@@ -13,4 +14,13 @@ export function updateCurrentUser(payload: UpdateCurrentUserPayload) {
     "/api/users/me",
     payload,
   );
+}
+
+export function changeCurrentUserPassword(
+  payload: ChangeCurrentUserPasswordPayload,
+) {
+  return patchJson<
+    ChangeCurrentUserPasswordPayload,
+    { ok: boolean; message: string }
+  >("/api/users/me/password", payload);
 }

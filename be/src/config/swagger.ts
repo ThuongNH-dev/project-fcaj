@@ -245,6 +245,53 @@ swaggerSpec.paths = {
       },
     },
   },
+  "/api/users/me/password": {
+    patch: {
+      summary: "Change the current logged-in user's password",
+      tags: ["Users"],
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["currentPassword", "newPassword"],
+              properties: {
+                currentPassword: {
+                  type: "string",
+                  format: "password",
+                  example: "secret123",
+                },
+                newPassword: {
+                  type: "string",
+                  format: "password",
+                  example: "newsecret123",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Password updated successfully",
+        },
+        400: {
+          description: "Missing or invalid password payload",
+        },
+        401: {
+          description: "Missing or invalid bearer token, or current password is incorrect",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
 };
 
 export default swaggerSpec;

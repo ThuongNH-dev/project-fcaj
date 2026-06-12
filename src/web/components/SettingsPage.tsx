@@ -18,7 +18,11 @@ import {
   getUserInitials,
   setStoredUser,
 } from "../api/auth";
-import { getCurrentUser, updateCurrentUser } from "../api/users";
+import {
+  changeCurrentUserPassword,
+  getCurrentUser,
+  updateCurrentUser,
+} from "../api/users";
 
 interface SettingsPageProps {
   onNavigate: (page: string) => void;
@@ -29,13 +33,21 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
   const [saved, setSaved] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [passwordErrorMessage, setPasswordErrorMessage] = useState("");
+  const [passwordSuccessMessage, setPasswordSuccessMessage] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [bio, setBio] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [currency, setCurrency] = useState<"USD" | "VND">("USD");
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmNewPassword: "",
+  });
   const { t } = useLanguage();
 
   const [notifs, setNotifs] = useState({
@@ -126,6 +138,48 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
   const handleSignOut = () => {
     clearStoredUser();
     onNavigate("landing");
+  };
+
+  const handlePasswordChange = async () => {
+    setPasswordErrorMessage("");
+    setPasswordSuccessMessage("");
+
+    if (!passwordForm.currentPassword || !passwordForm.newPassword) {
+      setPasswordErrorMessage("Current password and new password are required.");
+      return;
+    }
+
+    if (passwordForm.newPassword.length < 6) {
+      setPasswordErrorMessage("Password must be at least 6 characters.");
+      return;
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmNewPassword) {
+      setPasswordErrorMessage("Passwords do not match.");
+      return;
+    }
+
+    try {
+      setIsSavingPassword(true);
+
+      const response = await changeCurrentUserPassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      });
+
+      setPasswordSuccessMessage(response.message);
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmNewPassword: "",
+      });
+    } catch (error) {
+      setPasswordErrorMessage(
+        error instanceof Error ? error.message : "Unable to update password.",
+      );
+    } finally {
+      setIsSavingPassword(false);
+    }
   };
 
   const initials = avatarUrl.trim()
@@ -463,29 +517,84 @@ export function SettingsPage({ onNavigate }: SettingsPageProps) {
                   >
                     {t.changePassword}
                   </h2>
+                  {passwordErrorMessage && (
+                    <div className="rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C] mb-4 max-w-sm">
+                      {passwordErrorMessage}
+                    </div>
+                  )}
+                  {passwordSuccessMessage && (
+                    <div className="rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 text-sm text-[#166534] mb-4 max-w-sm">
+                      {passwordSuccessMessage}
+                    </div>
+                  )}
                   <div className="space-y-4 max-w-sm">
-                    {[t.currentPassword, t.newPassword, t.confirmNewPassword].map(
-                      (label) => (
-                        <div key={label}>
-                          <label
-                            className="block text-sm text-[#374151] mb-1.5"
-                            style={{ fontWeight: 600 }}
-                          >
-                            {label}
-                          </label>
-                          <input
-                            type="password"
-                            placeholder="........"
-                            className="w-full bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-4 py-3 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent"
-                          />
-                        </div>
-                      ),
-                    )}
+                    <div>
+                      <label
+                        className="block text-sm text-[#374151] mb-1.5"
+                        style={{ fontWeight: 600 }}
+                      >
+                        {t.currentPassword}
+                      </label>
+                      <input
+                        type="password"
+                        placeholder="........"
+                        value={passwordForm.currentPassword}
+                        onChange={(e) =>
+                          setPasswordForm((prev) => ({
+                            ...prev,
+                            currentPassword: e.target.value,
+                          }))
+                        }
+                        className="w-full bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-4 py-3 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        className="block text-sm text-[#374151] mb-1.5"
+                        style={{ fontWeight: 600 }}
+                      >
+                        {t.newPassword}
+                      </label>
+                      <input
+                        type="password"
+                        placeholder="........"
+                        value={passwordForm.newPassword}
+                        onChange={(e) =>
+                          setPasswordForm((prev) => ({
+                            ...prev,
+                            newPassword: e.target.value,
+                          }))
+                        }
+                        className="w-full bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-4 py-3 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        className="block text-sm text-[#374151] mb-1.5"
+                        style={{ fontWeight: 600 }}
+                      >
+                        {t.confirmNewPassword}
+                      </label>
+                      <input
+                        type="password"
+                        placeholder="........"
+                        value={passwordForm.confirmNewPassword}
+                        onChange={(e) =>
+                          setPasswordForm((prev) => ({
+                            ...prev,
+                            confirmNewPassword: e.target.value,
+                          }))
+                        }
+                        className="w-full bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-4 py-3 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent"
+                      />
+                    </div>
                     <button
+                      onClick={() => void handlePasswordChange()}
+                      disabled={isSavingPassword}
                       className="bg-[#16A34A] text-white px-6 py-2.5 rounded-xl text-sm hover:bg-[#15803d] transition-colors"
                       style={{ fontWeight: 600 }}
                     >
-                      {t.updatePassword}
+                      {isSavingPassword ? "Saving..." : t.updatePassword}
                     </button>
                   </div>
                 </div>

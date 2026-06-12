@@ -44,3 +44,8 @@ export interface UpdateCurrentUserInput {
   avatarUrl?: string;
   defaultCurrency?: SupportedCurrency;
 }
+
+export interface ChangeCurrentUserPasswordInput {
+  currentPassword: string;
+  newPassword: string;
+}

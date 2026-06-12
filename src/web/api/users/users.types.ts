@@ -13,3 +13,8 @@ export interface UpdateCurrentUserPayload {
   avatarUrl?: string;
   defaultCurrency?: "USD" | "VND";
 }
+
+export interface ChangeCurrentUserPasswordPayload {
+  currentPassword: string;
+  newPassword: string;
+}

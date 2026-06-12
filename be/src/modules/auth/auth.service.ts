@@ -3,6 +3,7 @@ import type { Collection, ObjectId } from "mongodb";
 import { ObjectId as MongoObjectId } from "mongodb";
 import { connectToMongo } from "../../db/mongo.js";
 import type {
+  ChangeCurrentUserPasswordInput,
   LoginUserInput,
   PublicUser,
   RegisterUserInput,
@@ -194,4 +195,44 @@ export async function updateCurrentUserProfile(
   const updatedUser = await users.findOne({ _id: userObjectId });
 
   return updatedUser ? toPublicUser(updatedUser) : null;
+}
+
+export async function changeCurrentUserPassword(
+  userId: string,
+  input: ChangeCurrentUserPasswordInput,
+): Promise<boolean | null> {
+  if (!MongoObjectId.isValid(userId)) {
+    return null;
+  }
+
+  const users = await getUsersCollection();
+  const userObjectId = new MongoObjectId(userId);
+  const user = await users.findOne({ _id: userObjectId });
+
+  if (!user) {
+    return null;
+  }
+
+  const isPasswordValid = await bcrypt.compare(
+    input.currentPassword,
+    user.passwordHash,
+  );
+
+  if (!isPasswordValid) {
+    throw new Error("Current password is incorrect.");
+  }
+
+  const passwordHash = await bcrypt.hash(input.newPassword, 10);
+
+  await users.updateOne(
+    { _id: userObjectId },
+    {
+      $set: {
+        passwordHash,
+        updatedAt: new Date(),
+      },
+    },
+  );
+
+  return true;
 }
