@@ -6,4 +6,5 @@ export const env = {
   port: Number(process.env.PORT) || 5000,
   mongoUri: process.env.MONGODB_URI || "mongodb://127.0.0.1:27017",
   mongoDb: process.env.MONGODB_DB || "project_fcaj",
+  jwtSecret: process.env.JWT_SECRET || "project-fcaj-dev-secret",
 } as const;

@@ -1,8 +1,10 @@
 export { loginUser, registerUser } from "./auth.api";
 export {
   clearStoredUser,
+  getStoredToken,
   getStoredUser,
   getUserInitials,
+  setStoredToken,
   setStoredUser,
 } from "./auth.storage";
 export type {

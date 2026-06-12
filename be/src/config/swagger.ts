@@ -7,6 +7,15 @@ const definition = {
     version: "1.0.0",
     description: "Swagger documentation for the backend API.",
   },
+  components: {
+    securitySchemes: {
+      bearerAuth: {
+        type: "http",
+        scheme: "bearer",
+        bearerFormat: "JWT",
+      },
+    },
+  },
   servers: [
     {
       url: "/",
@@ -153,6 +162,82 @@ swaggerSpec.paths = {
         },
         401: {
           description: "Invalid credentials",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
+  "/api/users/me": {
+    get: {
+      summary: "Get the current logged-in user's profile",
+      tags: ["Users"],
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: "User profile fetched successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+    patch: {
+      summary: "Update the current logged-in user's profile",
+      tags: ["Users"],
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                firstName: {
+                  type: "string",
+                  example: "Thuong",
+                },
+                lastName: {
+                  type: "string",
+                  example: "Nguyen",
+                },
+                bio: {
+                  type: "string",
+                  example: "Trip organizer and finance lead.",
+                },
+                avatarUrl: {
+                  type: "string",
+                  example: "https://example.com/avatar.png",
+                },
+                defaultCurrency: {
+                  type: "string",
+                  enum: ["USD", "VND"],
+                  example: "VND",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "User profile updated successfully",
+        },
+        400: {
+          description: "Invalid update payload",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
         },
         503: {
           description: "MongoDB connection failed",

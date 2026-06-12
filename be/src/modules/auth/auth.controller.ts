@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { signAuthToken } from "./auth.token.js";
 import { loginUser, registerUser } from "./auth.service.js";
 
 export async function registerUserHandler(req: Request, res: Response) {
@@ -85,10 +86,12 @@ export async function loginUserHandler(req: Request, res: Response) {
       email,
       password,
     });
+    const token = signAuthToken(user);
 
     return res.status(200).json({
       ok: true,
       message: "Login successful.",
+      token,
       user,
     });
   } catch (error) {

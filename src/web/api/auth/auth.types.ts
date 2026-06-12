@@ -17,6 +17,7 @@ export interface AuthResponse {
   ok: boolean;
   message: string;
   user?: AuthUser;
+  token?: string;
 }
 
 export interface LoginPayload {

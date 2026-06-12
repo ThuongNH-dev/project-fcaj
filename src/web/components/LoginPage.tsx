@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 import { Mail, Lock, Eye, EyeOff, Leaf, ArrowRight } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
-import { loginUser, registerUser, setStoredUser } from "../api/auth";
+import {
+  loginUser,
+  registerUser,
+  setStoredToken,
+  setStoredUser,
+} from "../api/auth";
 
 interface LoginPageProps {
   onNavigate: (page: string) => void;
@@ -55,6 +60,10 @@ export function LoginPage({ onNavigate, initialMode = "login" }: LoginPageProps)
 
         if (response.user) {
           setStoredUser(response.user);
+        }
+
+        if (response.token) {
+          setStoredToken(response.token);
         }
 
         setSuccessMessage(response.message);
