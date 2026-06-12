@@ -85,6 +85,10 @@ export const translations = {
 
     // Create Group Modal
     createGroup: "Create Group", createGroupDesc: "Set up a new shared expense group",
+    editGroup: "Edit Group", editGroupDesc: "Update your group details",
+    deleteGroup: "Delete Group", deleteGroupConfirm: "Delete group",
+    readyToUpdate: "Ready to update",
+    deleting: "Deleting...", updating: "Updating...",
     groupName: "Group name", groupNamePlaceholder: "e.g. Bali Trip 2026",
     groupIcon: "Group icon", color: "Color",
     inviteMembers: "Invite members (optional)", addAnother: "Add another",
@@ -263,6 +267,10 @@ export const translations = {
 
     // Create Group Modal
     createGroup: "Tạo nhóm", createGroupDesc: "Thiết lập nhóm chi phí chung mới",
+    editGroup: "Sửa nhóm", editGroupDesc: "Cập nhật thông tin nhóm",
+    deleteGroup: "Xóa nhóm", deleteGroupConfirm: "Xóa nhóm",
+    readyToUpdate: "Sẵn sàng cập nhật",
+    deleting: "Đang xóa...", updating: "Đang cập nhật...",
     groupName: "Tên nhóm", groupNamePlaceholder: "vd: Chuyến đi Bali 2026",
     groupIcon: "Biểu tượng nhóm", color: "Màu sắc",
     inviteMembers: "Mời thành viên (tùy chọn)", addAnother: "Thêm người khác",

@@ -59,3 +59,9 @@ export async function patchJson<TPayload, TResponse>(
     body: JSON.stringify(payload),
   });
 }
+
+export async function deleteJson<TResponse>(path: string): Promise<TResponse> {
+  return requestJson<TResponse>(path, {
+    method: "DELETE",
+  });
+}

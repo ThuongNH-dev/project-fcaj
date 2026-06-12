@@ -7,6 +7,7 @@ import type {
   GroupMember,
   PublicGroupMember,
   PublicGroup,
+  UpdateGroupInput,
 } from "./groups.types.js";
 
 interface GroupDocument {
@@ -168,4 +169,51 @@ export async function getGroupByIdForUser(
   });
 
   return groupDocument ? toPublicGroupWithMembers(groupDocument) : null;
+}
+
+export async function updateGroup(input: UpdateGroupInput): Promise<PublicGroup | null> {
+  if (!MongoObjectId.isValid(input.groupId)) {
+    return null;
+  }
+
+  const groups = await getGroupsCollection();
+  const normalizedName = input.name.trim();
+  const normalizedIcon = input.icon.trim();
+  const normalizedColor = input.color.trim();
+  const updatedAt = new Date();
+  const groupObjectId = new MongoObjectId(input.groupId);
+
+  const result = await groups.findOneAndUpdate(
+    {
+      _id: groupObjectId,
+      createdBy: input.userId,
+    },
+    {
+      $set: {
+        name: normalizedName,
+        icon: normalizedIcon,
+        color: normalizedColor,
+        updatedAt,
+      },
+    },
+    {
+      returnDocument: "after",
+    },
+  );
+
+  return result ? toPublicGroupWithMembers(result) : null;
+}
+
+export async function deleteGroup(groupId: string, userId: string): Promise<boolean> {
+  if (!MongoObjectId.isValid(groupId)) {
+    return false;
+  }
+
+  const groups = await getGroupsCollection();
+  const result = await groups.deleteOne({
+    _id: new MongoObjectId(groupId),
+    createdBy: userId,
+  });
+
+  return result.deletedCount > 0;
 }

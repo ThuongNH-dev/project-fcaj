@@ -2,8 +2,10 @@ import type { Request, Response } from "express";
 import { getUserById } from "../auth/auth.service.js";
 import {
   createGroup,
+  deleteGroup,
   getGroupByIdForUser,
   getGroupsByUserId,
+  updateGroup,
 } from "./groups.service.js";
 
 export async function getGroupsHandler(req: Request, res: Response) {
@@ -172,6 +174,132 @@ export async function getGroupByIdHandler(req: Request, res: Response) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to fetch group.";
+
+    return res.status(503).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function updateGroupHandler(req: Request, res: Response) {
+  const userId = req.auth?.userId;
+  const groupId =
+    typeof req.params.groupId === "string" ? req.params.groupId : "";
+
+  if (!userId) {
+    return res.status(401).json({
+      ok: false,
+      message: "Authorization token is required.",
+    });
+  }
+
+  const { name, icon, color } = req.body as {
+    name?: string;
+    icon?: string;
+    color?: string;
+  };
+
+  if (!name?.trim()) {
+    return res.status(400).json({
+      ok: false,
+      message: "Group name is required.",
+    });
+  }
+
+  if (!icon?.trim()) {
+    return res.status(400).json({
+      ok: false,
+      message: "Group icon is required.",
+    });
+  }
+
+  if (!color?.trim()) {
+    return res.status(400).json({
+      ok: false,
+      message: "Group color is required.",
+    });
+  }
+
+  try {
+    const currentUser = await getUserById(userId);
+
+    if (!currentUser) {
+      return res.status(404).json({
+        ok: false,
+        message: "User not found.",
+      });
+    }
+
+    const group = await updateGroup({
+      groupId,
+      userId: currentUser.id,
+      name,
+      icon,
+      color,
+    });
+
+    if (!group) {
+      return res.status(404).json({
+        ok: false,
+        message: "Group not found.",
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message: "Group updated successfully.",
+      group,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to update group.";
+
+    return res.status(503).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function deleteGroupHandler(req: Request, res: Response) {
+  const userId = req.auth?.userId;
+  const groupId =
+    typeof req.params.groupId === "string" ? req.params.groupId : "";
+
+  if (!userId) {
+    return res.status(401).json({
+      ok: false,
+      message: "Authorization token is required.",
+    });
+  }
+
+  try {
+    const currentUser = await getUserById(userId);
+
+    if (!currentUser) {
+      return res.status(404).json({
+        ok: false,
+        message: "User not found.",
+      });
+    }
+
+    const deleted = await deleteGroup(groupId, currentUser.id);
+
+    if (!deleted) {
+      return res.status(404).json({
+        ok: false,
+        message: "Group not found.",
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message: "Group deleted successfully.",
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to delete group.";
 
     return res.status(503).json({
       ok: false,

@@ -27,6 +27,12 @@ export interface CreateGroupPayload {
   members?: string[];
 }
 
+export interface UpdateGroupPayload {
+  name: string;
+  icon: string;
+  color: string;
+}
+
 export interface CreateGroupResponse {
   ok: boolean;
   message: string;
@@ -37,4 +43,9 @@ export interface GroupResponse {
   ok: boolean;
   message: string;
   group?: Group;
+}
+
+export interface DeleteGroupResponse {
+  ok: boolean;
+  message: string;
 }

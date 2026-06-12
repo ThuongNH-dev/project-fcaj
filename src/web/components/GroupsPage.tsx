@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronRight, Plus, Search, Users } from "lucide-react";
+import { ChevronRight, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import { CreateGroupModal } from "./CreateGroupModal";
 import { useLanguage } from "../context/LanguageContext";
-import { getGroups, type Group } from "../api/groups";
+import { deleteGroup, getGroups, type Group } from "../api/groups";
 import { getStoredUser } from "../api/auth";
 
 interface GroupsPageProps {
@@ -15,6 +15,8 @@ export function GroupsPage({ onNavigate, onSelectGroup }: GroupsPageProps) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [groupToEdit, setGroupToEdit] = useState<Group | null>(null);
+  const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -103,6 +105,31 @@ export function GroupsPage({ onNavigate, onSelectGroup }: GroupsPageProps) {
     }));
   };
 
+  const handleDeleteGroup = async (group: Group) => {
+    const confirmed = window.confirm(
+      `${t.deleteGroupConfirm} "${group.name}"?`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeletingGroupId(group.id);
+      setErrorMessage("");
+      await deleteGroup(group.id);
+      setGroups((currentGroups) =>
+        currentGroups.filter((currentGroup) => currentGroup.id !== group.id),
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Unable to delete group.",
+      );
+    } finally {
+      setDeletingGroupId(null);
+    }
+  };
+
   const statusStyles: Record<string, string> = {
     Active: "bg-[#D1FAE5] text-[#065f46]",
     Settled: "bg-[#F3F4F6] text-[#6B7280]",
@@ -188,6 +215,7 @@ export function GroupsPage({ onNavigate, onSelectGroup }: GroupsPageProps) {
               const isPositive = yourBalance.startsWith("+");
               const isZero = yourBalance === "$0.00";
               const status = "Active";
+              const canManageGroup = currentUser?.id === group.createdBy;
 
               return (
                 <button
@@ -225,6 +253,37 @@ export function GroupsPage({ onNavigate, onSelectGroup }: GroupsPageProps) {
                       {status}
                     </span>
                   </div>
+
+                  {canManageGroup && (
+                    <div className="mb-4 flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setGroupToEdit(group);
+                          setShowCreateModal(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-1.5 text-xs text-[#374151] hover:bg-[#F3F4F6] transition-colors"
+                        style={{ fontWeight: 600 }}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        {t.editGroup}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void handleDeleteGroup(group);
+                        }}
+                        disabled={deletingGroupId === group.id}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-[#FECACA] bg-[#FEF2F2] px-3 py-1.5 text-xs text-[#B91C1C] hover:bg-[#FEE2E2] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                        style={{ fontWeight: 600 }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        {deletingGroupId === group.id ? t.deleting : t.deleteGroup}
+                      </button>
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-2 mb-4">
                     <div className="flex -space-x-2">
@@ -291,8 +350,12 @@ export function GroupsPage({ onNavigate, onSelectGroup }: GroupsPageProps) {
         {createPortal(
           <CreateGroupModal
             isOpen={showCreateModal}
-            onClose={() => setShowCreateModal(false)}
+            onClose={() => {
+              setShowCreateModal(false);
+              setGroupToEdit(null);
+            }}
             onCreated={loadGroups}
+            groupToEdit={groupToEdit}
           />,
           document.body
         )}

@@ -6,6 +6,14 @@ export interface CreateGroupInput {
   members?: string[];
 }
 
+export interface UpdateGroupInput {
+  groupId: string;
+  userId: string;
+  name: string;
+  icon: string;
+  color: string;
+}
+
 export interface GroupMember {
   userId: string;
   role: "owner" | "member";
@@ -37,4 +45,9 @@ export interface GroupResponse {
   ok: boolean;
   message: string;
   group?: PublicGroup;
+}
+
+export interface DeleteGroupResponse {
+  ok: boolean;
+  message: string;
 }
