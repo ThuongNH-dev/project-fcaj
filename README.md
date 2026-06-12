@@ -12,9 +12,19 @@
   The backend lives in `be/`.
 
   1. Run `npm i --prefix be`
-  2. Create `be/.env`
-  3. Set `MONGODB_URI` and `MONGODB_DB`
+  2. Copy `be/.env.example` to `be/.env`
+  3. Start MongoDB
   4. Run `npm run backend`
+
+  Quick local MongoDB option with Docker:
+
+  1. Run `npm run db:up`
+  2. Run `npm run backend`
+
+  Default local backend env:
+
+  - `MONGODB_URI=mongodb://127.0.0.1:27017`
+  - `MONGODB_DB=Splitly`
 
   Open Swagger at `http://localhost:5000`
 
