@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, Plus, Users, DollarSign, TrendingUp, Receipt } from "lucide-react";
 import { AddExpenseModal, NewExpense } from "./AddExpenseModal";
 import { useLanguage } from "../context/LanguageContext";
+import { getGroup, type Group } from "../api/groups";
 
 interface GroupDetailPageProps {
   onNavigate: (page: string) => void;
   onOpenModal: () => void;
+  groupId: string | null;
 }
 
 interface Expense {
@@ -32,11 +34,44 @@ const statusStyles: Record<string, string> = {
   Pending: "bg-[#FEF3C7] text-[#92400e]",
 };
 
-export function GroupDetailPage({ onNavigate, onOpenModal }: GroupDetailPageProps) {
+export function GroupDetailPage({
+  onNavigate,
+  onOpenModal,
+  groupId,
+}: GroupDetailPageProps) {
   const [activeCategory, setActiveCategory] = useState("All");
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [group, setGroup] = useState<Group | null>(null);
+  const [isLoadingGroup, setIsLoadingGroup] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
   const { t } = useLanguage();
+
+  useEffect(() => {
+    async function loadGroup() {
+      if (!groupId) {
+        setErrorMessage("No group selected.");
+        setIsLoadingGroup(false);
+        return;
+      }
+
+      try {
+        setErrorMessage("");
+        setIsLoadingGroup(true);
+
+        const response = await getGroup(groupId);
+        setGroup(response.group ?? null);
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error ? error.message : "Unable to load group.",
+        );
+      } finally {
+        setIsLoadingGroup(false);
+      }
+    }
+
+    void loadGroup();
+  }, [groupId]);
 
   const handleAddExpense = (expense: NewExpense) => {
     setExpenses((prev) => [
@@ -59,6 +94,8 @@ export function GroupDetailPage({ onNavigate, onOpenModal }: GroupDetailPageProp
     ? expenses
     : expenses.filter((e) => e.category === activeCategory);
 
+  const memberCount = group?.members.length ?? 0;
+
   return (
     <div className="lg:pl-60 min-h-screen bg-[#F6FBF8]">
       <div className="max-w-7xl mx-auto px-6 py-8 pt-16 lg:pt-8">
@@ -72,9 +109,21 @@ export function GroupDetailPage({ onNavigate, onOpenModal }: GroupDetailPageProp
             <ArrowLeft className="w-4 h-4" />
             {t.backToGroups}
           </button>
+          {errorMessage && (
+            <div className="rounded-2xl border border-[#FECACA] bg-[#FEF2F2] px-5 py-4 text-sm text-[#B91C1C] mb-4">
+              {errorMessage}
+            </div>
+          )}
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
-              <h1 className="text-[#111827] mb-1" style={{ fontSize: "1.5rem", fontWeight: 800 }}>{t.groupsTitle}</h1>
+              <h1 className="text-[#111827] mb-1" style={{ fontSize: "1.5rem", fontWeight: 800 }}>
+                {isLoadingGroup ? "Loading group..." : group?.name ?? t.groupsTitle}
+              </h1>
+              {!isLoadingGroup && group && (
+                <p className="text-[#6B7280] text-sm mb-2">
+                  {memberCount} {t.members}
+                </p>
+              )}
               <div className="flex items-center gap-3 mt-2">
                 <span className="text-xs bg-[#D1FAE5] text-[#065f46] px-2.5 py-1 rounded-full" style={{ fontWeight: 600 }}>{t.active}</span>
               </div>
@@ -138,6 +187,7 @@ export function GroupDetailPage({ onNavigate, onOpenModal }: GroupDetailPageProp
                   <p className="text-[#9CA3AF] text-xs mb-4">{t.addExpensePrompt}</p>
                   <button
                     onClick={() => setShowExpenseModal(true)}
+                    disabled={isLoadingGroup || !group}
                     className="flex items-center gap-2 bg-[#16A34A] text-white px-4 py-2 rounded-xl text-sm hover:bg-[#15803d] transition-colors"
                     style={{ fontWeight: 600 }}
                   >
@@ -193,12 +243,43 @@ export function GroupDetailPage({ onNavigate, onOpenModal }: GroupDetailPageProp
             {/* Member balances */}
             <div className="bg-white rounded-2xl p-5 border border-[#E5E7EB]">
               <h3 className="text-[#111827] mb-4" style={{ fontWeight: 700 }}>{t.memberBalances}</h3>
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <div className="w-10 h-10 bg-[#F0FAF5] rounded-2xl flex items-center justify-center mx-auto mb-2">
-                  <Users className="w-5 h-5 text-[#7EDDBA]" />
+              {group && group.members.length > 0 ? (
+                <div className="space-y-3">
+                  {group.members.map((member, index) => (
+                    <div
+                      key={`${member.name}-${index}`}
+                      className="flex items-center justify-between rounded-xl bg-[#F9FAFB] px-3 py-2.5"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-full bg-[#D1FAE5] flex items-center justify-center text-[#065f46] text-xs" style={{ fontWeight: 700 }}>
+                          {member.name
+                            .split(" ")
+                            .map((part) => part.charAt(0))
+                            .join("")
+                            .slice(0, 2)
+                            .toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm text-[#111827]" style={{ fontWeight: 600 }}>
+                            {member.name}
+                          </p>
+                          <p className="text-xs text-[#9CA3AF] truncate">{member.role}</p>
+                        </div>
+                      </div>
+                      <span className="text-xs text-[#6B7280]" style={{ fontWeight: 600 }}>
+                        {member.role}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-                <p className="text-[#9CA3AF] text-xs">{t.noMembersYet}</p>
-              </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <div className="w-10 h-10 bg-[#F0FAF5] rounded-2xl flex items-center justify-center mx-auto mb-2">
+                    <Users className="w-5 h-5 text-[#7EDDBA]" />
+                  </div>
+                  <p className="text-[#9CA3AF] text-xs">{t.noMembersYet}</p>
+                </div>
+              )}
             </div>
 
             {/* Who owes whom */}

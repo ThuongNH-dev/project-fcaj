@@ -20,6 +20,7 @@ export default function App() {
     getStoredUser() ? "dashboard" : "landing",
   );
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
   const handleNavigate = (page: string) => {
     setCurrentPage(page);
@@ -49,12 +50,18 @@ export default function App() {
       case "dashboard":
         return <Dashboard />;
       case "groups":
-        return <GroupsPage onNavigate={handleNavigate} />;
+        return (
+          <GroupsPage
+            onNavigate={handleNavigate}
+            onSelectGroup={setSelectedGroupId}
+          />
+        );
       case "group-detail":
         return (
           <GroupDetailPage
             onNavigate={handleNavigate}
             onOpenModal={() => setIsModalOpen(true)}
+            groupId={selectedGroupId}
           />
         );
       case "settlement":

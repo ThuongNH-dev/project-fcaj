@@ -1,0 +1,40 @@
+export interface GroupMember {
+  name: string;
+  role: "owner" | "member";
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  createdBy: string;
+  members: GroupMember[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GroupsResponse {
+  ok: boolean;
+  message: string;
+  groups?: Group[];
+}
+
+export interface CreateGroupPayload {
+  name: string;
+  icon: string;
+  color: string;
+  members?: string[];
+}
+
+export interface CreateGroupResponse {
+  ok: boolean;
+  message: string;
+  group?: Group;
+}
+
+export interface GroupResponse {
+  ok: boolean;
+  message: string;
+  group?: Group;
+}

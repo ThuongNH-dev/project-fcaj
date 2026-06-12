@@ -1,20 +1,28 @@
 import { useState } from "react";
 import { X, Users, Plus, Trash2 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
+import { createGroup } from "../api/groups";
 
 interface CreateGroupModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onCreated?: () => Promise<void> | void;
 }
 
 const colorOptions = ["#7EDDBA", "#93C5FD", "#FCA5A5", "#FCD34D", "#C4B5FD", "#F9A8D4"];
 const iconOptions = ["✈️", "🏠", "🍕", "🛒", "🎉", "🏋️", "🎵", "🌴"];
 
-export function CreateGroupModal({ isOpen, onClose }: CreateGroupModalProps) {
+export function CreateGroupModal({
+  isOpen,
+  onClose,
+  onCreated,
+}: CreateGroupModalProps) {
   const [groupName, setGroupName] = useState("");
   const [selectedColor, setSelectedColor] = useState(colorOptions[0]);
   const [selectedIcon, setSelectedIcon] = useState(iconOptions[0]);
   const [emails, setEmails] = useState<string[]>([""]);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { t } = useLanguage();
 
   if (!isOpen) return null;
@@ -22,22 +30,71 @@ export function CreateGroupModal({ isOpen, onClose }: CreateGroupModalProps) {
   const addEmail = () => setEmails((prev) => [...prev, ""]);
   const removeEmail = (i: number) => setEmails((prev) => prev.filter((_, idx) => idx !== i));
   const updateEmail = (i: number, val: string) => setEmails((prev) => prev.map((e, idx) => (idx === i ? val : e)));
+  const resetForm = () => {
+    setGroupName("");
+    setSelectedColor(colorOptions[0]);
+    setSelectedIcon(iconOptions[0]);
+    setEmails([""]);
+    setErrorMessage("");
+    setIsSubmitting(false);
+  };
+  const handleClose = () => {
+    resetForm();
+    onClose();
+  };
+  const handleCreateGroup = async () => {
+    setErrorMessage("");
+
+    if (!groupName.trim()) {
+      setErrorMessage("Group name is required.");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      const members = emails
+        .map((email) => email.trim())
+        .filter(Boolean);
+
+      await createGroup({
+        name: groupName.trim(),
+        icon: selectedIcon,
+        color: selectedColor,
+        members,
+      });
+
+      await onCreated?.();
+      handleClose();
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Unable to create group.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={handleClose} />
       <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-5 border-b border-[#E5E7EB]">
           <div>
             <h2 className="text-[#111827]" style={{ fontWeight: 800, fontSize: "1.125rem" }}>{t.createGroup}</h2>
             <p className="text-[#9CA3AF] text-xs mt-0.5">{t.createGroupDesc}</p>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-xl bg-[#F9FAFB] flex items-center justify-center text-[#9CA3AF] hover:bg-[#F3F4F6] hover:text-[#374151] transition-colors">
+          <button onClick={handleClose} className="w-8 h-8 rounded-xl bg-[#F9FAFB] flex items-center justify-center text-[#9CA3AF] hover:bg-[#F3F4F6] hover:text-[#374151] transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
 
         <div className="px-6 py-5 space-y-5">
+          {errorMessage && (
+            <div className="rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C]">
+              {errorMessage}
+            </div>
+          )}
           <div>
             <label className="block text-sm text-[#374151] mb-1.5" style={{ fontWeight: 600 }}>{t.groupName}</label>
             <input type="text" placeholder={t.groupNamePlaceholder} value={groupName} onChange={(e) => setGroupName(e.target.value)}
@@ -104,13 +161,13 @@ export function CreateGroupModal({ isOpen, onClose }: CreateGroupModalProps) {
         </div>
 
         <div className="flex items-center gap-3 px-6 pb-6">
-          <button onClick={onClose} className="flex-1 py-3 rounded-xl border border-[#E5E7EB] text-[#374151] text-sm hover:bg-[#F9FAFB] transition-colors" style={{ fontWeight: 600 }}>
+          <button onClick={handleClose} className="flex-1 py-3 rounded-xl border border-[#E5E7EB] text-[#374151] text-sm hover:bg-[#F9FAFB] transition-colors" style={{ fontWeight: 600 }}>
             {t.cancel}
           </button>
-          <button onClick={onClose} disabled={!groupName.trim()}
+          <button onClick={() => void handleCreateGroup()} disabled={!groupName.trim() || isSubmitting}
             className="flex-1 py-3 rounded-xl bg-[#16A34A] text-white text-sm hover:bg-[#15803d] transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ fontWeight: 600 }}>
-            {t.createGroup}
+            {isSubmitting ? "Creating..." : t.createGroup}
           </button>
         </div>
       </div>

@@ -292,6 +292,113 @@ swaggerSpec.paths = {
       },
     },
   },
+  "/api/groups": {
+    get: {
+      summary: "Get groups for the current logged-in user",
+      tags: ["Groups"],
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: "Groups fetched successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+    post: {
+      summary: "Create a new group",
+      tags: ["Groups"],
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["name", "icon", "color"],
+              properties: {
+                name: {
+                  type: "string",
+                  example: "Summer Trip",
+                },
+                icon: {
+                  type: "string",
+                  example: "Plane",
+                },
+                color: {
+                  type: "string",
+                  example: "#16A34A",
+                },
+                members: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                    format: "email",
+                  },
+                  example: ["alex@gmail.com", "mia@gmail.com"],
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        201: {
+          description: "Group created successfully",
+        },
+        400: {
+          description: "Missing or invalid group payload",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
+  "/api/groups/{groupId}": {
+    get: {
+      summary: "Get a single group for the current logged-in user",
+      tags: ["Groups"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "groupId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+        },
+      ],
+      responses: {
+        200: {
+          description: "Group fetched successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User or group not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
 };
 
 export default swaggerSpec;
