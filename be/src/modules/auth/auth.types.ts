@@ -17,6 +17,15 @@ export interface LoginUserInput {
   password: string;
 }
 
+export interface ForgotPasswordInput {
+  email: string;
+}
+
+export interface ResetPasswordInput {
+  token: string;
+  newPassword: string;
+}
+
 export interface PublicUser {
   id: string;
   firstName: string;
