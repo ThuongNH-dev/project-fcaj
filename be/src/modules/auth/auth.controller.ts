@@ -1,4 +1,6 @@
 import type { Request, Response } from "express";
+import { env } from "../../config/env.js";
+import { sendPasswordResetEmail } from "./auth.email.js";
 import { signAuthToken } from "./auth.token.js";
 import {
   loginUser,
@@ -9,6 +11,13 @@ import {
 
 const PASSWORD_RESET_RESPONSE_MESSAGE =
   "If an account with this email exists, a password reset link has been sent.";
+
+function buildPasswordResetUrl(token: string) {
+  const resetUrl = new URL("/reset-password", env.frontendUrl);
+  resetUrl.searchParams.set("token", token);
+
+  return resetUrl.toString();
+}
 
 export async function registerUserHandler(req: Request, res: Response) {
   const {
@@ -128,14 +137,45 @@ export async function forgotPasswordHandler(req: Request, res: Response) {
   }
 
   try {
-    await requestPasswordReset({
+    const passwordReset = await requestPasswordReset({
       email,
     });
+    const resetUrl = passwordReset.resetToken
+      ? buildPasswordResetUrl(passwordReset.resetToken)
+      : null;
 
-    return res.status(200).json({
+    if (resetUrl && passwordReset.otpCode && passwordReset.expiresAt) {
+      await sendPasswordResetEmail({
+        email: email.trim().toLowerCase(),
+        resetUrl,
+        otpCode: passwordReset.otpCode,
+        expiresAt: passwordReset.expiresAt,
+      });
+    }
+
+    const responseBody: {
+      ok: boolean;
+      message: string;
+      resetUrl?: string;
+      otpCode?: string;
+      expiresAt?: string;
+    } = {
       ok: true,
       message: PASSWORD_RESET_RESPONSE_MESSAGE,
-    });
+    };
+
+    if (
+      env.nodeEnv !== "production" &&
+      resetUrl &&
+      passwordReset.otpCode &&
+      passwordReset.expiresAt
+    ) {
+      responseBody.resetUrl = resetUrl;
+      responseBody.otpCode = passwordReset.otpCode;
+      responseBody.expiresAt = passwordReset.expiresAt.toISOString();
+    }
+
+    return res.status(200).json(responseBody);
   } catch (error) {
     const message =
       error instanceof Error
@@ -150,21 +190,25 @@ export async function forgotPasswordHandler(req: Request, res: Response) {
 }
 
 export async function resetPasswordHandler(req: Request, res: Response) {
-  const { token, newPassword } = req.body as {
+  const { token, email, otp, newPassword } = req.body as {
     token?: string;
+    email?: string;
+    otp?: string;
     newPassword?: string;
   };
 
-  if (!token?.trim() || !newPassword) {
+  if ((!token?.trim() && (!email?.trim() || !otp?.trim())) || !newPassword) {
     return res.status(400).json({
       ok: false,
-      message: "Password reset token and new password are required.",
+      message: "Password reset token or email, OTP, and new password are required.",
     });
   }
 
   try {
     await resetPasswordWithToken({
       token,
+      email,
+      otp,
       newPassword,
     });
 
@@ -177,9 +221,9 @@ export async function resetPasswordHandler(req: Request, res: Response) {
       error instanceof Error ? error.message : "Unable to reset password.";
 
     const statusCode =
-      message === "Password reset token is required." ||
+      message === "Password reset token or email and OTP are required." ||
       message === "Password must be at least 6 characters." ||
-      message === "Password reset token is invalid or has expired."
+      message === "Password reset token or OTP is invalid or has expired."
         ? 400
         : 503;
 

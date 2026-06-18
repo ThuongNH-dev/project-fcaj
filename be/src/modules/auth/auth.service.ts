@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { createHash, randomBytes } from "crypto";
+import { createHash, randomBytes, randomInt } from "crypto";
 import type { Collection, ObjectId } from "mongodb";
 import { ObjectId as MongoObjectId } from "mongodb";
 import { connectToMongo } from "../../db/mongo.js";
@@ -25,6 +25,7 @@ export interface UserDocument {
   defaultCurrency: SupportedCurrency;
   role: "admin" | "user";
   passwordResetTokenHash?: string;
+  passwordResetOtpHash?: string;
   passwordResetExpiresAt?: Date;
   passwordResetRequestedAt?: Date;
   createdAt: Date;
@@ -74,6 +75,10 @@ function normalizeDefaultCurrency(defaultCurrency?: string): SupportedCurrency {
 
 function hashPasswordResetToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
+}
+
+function generatePasswordResetOtp() {
+  return randomInt(0, 1_000_000).toString().padStart(6, "0");
 }
 
 export async function registerUser(
@@ -148,6 +153,7 @@ export async function loginUser(input: LoginUserInput): Promise<PublicUser> {
 
 export async function requestPasswordReset(input: ForgotPasswordInput): Promise<{
   resetToken: string | null;
+  otpCode: string | null;
   expiresAt: Date | null;
 }> {
   const users = await getUsersCollection();
@@ -156,6 +162,7 @@ export async function requestPasswordReset(input: ForgotPasswordInput): Promise<
   if (!normalizedEmail) {
     return {
       resetToken: null,
+      otpCode: null,
       expiresAt: null,
     };
   }
@@ -165,11 +172,13 @@ export async function requestPasswordReset(input: ForgotPasswordInput): Promise<
   if (!user?._id) {
     return {
       resetToken: null,
+      otpCode: null,
       expiresAt: null,
     };
   }
 
   const resetToken = randomBytes(32).toString("hex");
+  const otpCode = generatePasswordResetOtp();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + PASSWORD_RESET_TOKEN_TTL_MS);
 
@@ -178,6 +187,7 @@ export async function requestPasswordReset(input: ForgotPasswordInput): Promise<
     {
       $set: {
         passwordResetTokenHash: hashPasswordResetToken(resetToken),
+        passwordResetOtpHash: hashPasswordResetToken(otpCode),
         passwordResetExpiresAt: expiresAt,
         passwordResetRequestedAt: now,
         updatedAt: now,
@@ -187,6 +197,7 @@ export async function requestPasswordReset(input: ForgotPasswordInput): Promise<
 
   return {
     resetToken,
+    otpCode,
     expiresAt,
   };
 }
@@ -194,10 +205,12 @@ export async function requestPasswordReset(input: ForgotPasswordInput): Promise<
 export async function resetPasswordWithToken(
   input: ResetPasswordInput,
 ): Promise<boolean> {
-  const resetToken = input.token.trim();
+  const resetToken = input.token?.trim() ?? "";
+  const otpCode = input.otp?.trim() ?? "";
+  const normalizedEmail = input.email?.trim().toLowerCase() ?? "";
 
-  if (!resetToken) {
-    throw new Error("Password reset token is required.");
+  if (!resetToken && (!normalizedEmail || !otpCode)) {
+    throw new Error("Password reset token or email and OTP are required.");
   }
 
   if (input.newPassword.length < 6) {
@@ -206,15 +219,23 @@ export async function resetPasswordWithToken(
 
   const users = await getUsersCollection();
   const now = new Date();
+  const resetCredentialFilter = resetToken
+    ? {
+        passwordResetTokenHash: hashPasswordResetToken(resetToken),
+      }
+    : {
+        email: normalizedEmail,
+        passwordResetOtpHash: hashPasswordResetToken(otpCode),
+      };
   const user = await users.findOne({
-    passwordResetTokenHash: hashPasswordResetToken(resetToken),
+    ...resetCredentialFilter,
     passwordResetExpiresAt: {
       $gt: now,
     },
   });
 
   if (!user?._id) {
-    throw new Error("Password reset token is invalid or has expired.");
+    throw new Error("Password reset token or OTP is invalid or has expired.");
   }
 
   const passwordHash = await bcrypt.hash(input.newPassword, 10);
@@ -228,6 +249,7 @@ export async function resetPasswordWithToken(
       },
       $unset: {
         passwordResetTokenHash: "",
+        passwordResetOtpHash: "",
         passwordResetExpiresAt: "",
         passwordResetRequestedAt: "",
       },
