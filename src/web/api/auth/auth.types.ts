@@ -35,3 +35,27 @@ export interface RegisterPayload {
   defaultCurrency?: string;
   role?: UserRole;
 }
+
+export interface ForgotPasswordPayload {
+  email: string;
+}
+
+export interface ForgotPasswordResponse {
+  ok: boolean;
+  message: string;
+  resetUrl?: string;
+  otpCode?: string;
+  expiresAt?: string;
+}
+
+export interface ResetPasswordPayload {
+  token?: string;
+  email?: string;
+  otp?: string;
+  newPassword: string;
+}
+
+export interface ResetPasswordResponse {
+  ok: boolean;
+  message: string;
+}
