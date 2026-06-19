@@ -46,3 +46,25 @@ export function authMiddleware(
     });
   }
 }
+
+export function requireAdmin(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  if (!req.auth) {
+    return res.status(401).json({
+      ok: false,
+      message: "Authorization token is required.",
+    });
+  }
+
+  if (req.auth.role !== "admin") {
+    return res.status(403).json({
+      ok: false,
+      message: "Admin access is required.",
+    });
+  }
+
+  next();
+}
