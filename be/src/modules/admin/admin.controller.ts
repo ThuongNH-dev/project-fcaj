@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { getUserById } from "../auth/auth.service.js";
+import { getAdminDashboardStats } from "./admin.service.js";
 
 export async function getAdminSessionHandler(req: Request, res: Response) {
   const userId = req.auth?.userId;
@@ -29,6 +30,26 @@ export async function getAdminSessionHandler(req: Request, res: Response) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to fetch admin session.";
+
+    return res.status(503).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function getAdminDashboardHandler(_req: Request, res: Response) {
+  try {
+    const stats = await getAdminDashboardStats();
+
+    return res.status(200).json({
+      ok: true,
+      message: "Admin dashboard fetched successfully.",
+      stats,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to fetch admin dashboard.";
 
     return res.status(503).json({
       ok: false,

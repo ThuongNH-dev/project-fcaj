@@ -5,3 +5,17 @@ export interface AdminSessionResponse {
   message: string;
   user?: AuthUser;
 }
+
+export interface AdminDashboardStats {
+  totalUsers: number;
+  totalAdmins: number;
+  totalGroups: number;
+  newUsersLast7Days: number;
+  recentUsers: AuthUser[];
+}
+
+export interface AdminDashboardResponse {
+  ok: boolean;
+  message: string;
+  stats?: AdminDashboardStats;
+}
