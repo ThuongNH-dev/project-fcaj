@@ -1,4 +1,10 @@
-export { loginUser, registerUser } from "./auth.api";
+export {
+  forgotPassword,
+  loginUser,
+  registerUser,
+  resetPassword,
+  verifyResetOtp,
+} from "./auth.api";
 export {
   clearStoredUser,
   getStoredToken,
@@ -10,7 +16,13 @@ export {
 export type {
   AuthResponse,
   AuthUser,
+  ForgotPasswordPayload,
+  ForgotPasswordResponse,
   LoginPayload,
   RegisterPayload,
+  ResetPasswordPayload,
+  ResetPasswordResponse,
   UserRole,
+  VerifyResetOtpPayload,
+  VerifyResetOtpResponse,
 } from "./auth.types";

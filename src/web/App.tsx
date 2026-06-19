@@ -4,6 +4,8 @@ import { Navbar } from "./components/Navbar";
 import { Sidebar } from "./components/Sidebar";
 import { LandingPage } from "./components/LandingPage";
 import { LoginPage } from "./components/LoginPage";
+import { ForgotPasswordPage } from "./components/ForgotPasswordPage";
+import { ResetPasswordPage } from "./components/ResetPasswordPage";
 import { Dashboard } from "./components/Dashboard";
 import { GroupsPage } from "./components/GroupsPage";
 import { GroupDetailPage } from "./components/GroupDetailPage";
@@ -27,6 +29,8 @@ export default function App() {
             <Route path="about" element={<LandingPage section="about" />} />
             <Route path="login" element={<LoginPage initialMode="login" />} />
             <Route path="register" element={<LoginPage initialMode="register" />} />
+            <Route path="forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="reset-password" element={<ResetPasswordPage />} />
           </Route>
 
           <Route element={<PrivateLayout />}>

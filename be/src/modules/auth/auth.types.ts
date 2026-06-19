@@ -17,6 +17,22 @@ export interface LoginUserInput {
   password: string;
 }
 
+export interface ForgotPasswordInput {
+  email: string;
+}
+
+export interface ResetPasswordInput {
+  token?: string;
+  email?: string;
+  otp?: string;
+  newPassword: string;
+}
+
+export interface VerifyResetOtpInput {
+  email: string;
+  otp: string;
+}
+
 export interface PublicUser {
   id: string;
   firstName: string;

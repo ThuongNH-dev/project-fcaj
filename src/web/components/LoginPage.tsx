@@ -241,7 +241,16 @@ export function LoginPage({ initialMode = "login" }: LoginPageProps) {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-sm text-[#374151]" style={{ fontWeight: 500 }}>{t.password}</label>
-                {!isRegister && <a href="#" className="text-xs text-[#16A34A] hover:underline" style={{ fontWeight: 500 }}>{t.forgotPassword}</a>}
+                {!isRegister && (
+                  <button
+                    type="button"
+                    onClick={() => navigate("/forgot-password")}
+                    className="text-xs text-[#16A34A] hover:underline"
+                    style={{ fontWeight: 500 }}
+                  >
+                    {t.forgotPassword}
+                  </button>
+                )}
               </div>
               <div className="relative">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF]" />

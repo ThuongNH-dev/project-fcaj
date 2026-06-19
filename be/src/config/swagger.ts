@@ -169,6 +169,144 @@ swaggerSpec.paths = {
       },
     },
   },
+  "/api/auth/forgot-password": {
+    post: {
+      summary: "Request a password reset OTP and reset link",
+      tags: ["Auth"],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["email"],
+              properties: {
+                email: {
+                  type: "string",
+                  format: "email",
+                  example: "thuong@example.com",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description:
+            "Password reset request accepted. The response does not reveal whether the email exists.",
+        },
+        400: {
+          description: "Missing email",
+        },
+        503: {
+          description: "MongoDB connection failed or email provider failed",
+        },
+      },
+    },
+  },
+  "/api/auth/verify-reset-otp": {
+    post: {
+      summary: "Verify a password reset OTP before entering a new password",
+      tags: ["Auth"],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["email", "otp"],
+              properties: {
+                email: {
+                  type: "string",
+                  format: "email",
+                  example: "thuong@example.com",
+                },
+                otp: {
+                  type: "string",
+                  example: "123456",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "OTP verified successfully",
+        },
+        400: {
+          description: "Missing, invalid, or expired OTP",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
+  "/api/auth/reset-password": {
+    post: {
+      summary: "Reset a password with a reset token or OTP",
+      tags: ["Auth"],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              oneOf: [
+                {
+                  type: "object",
+                  required: ["token", "newPassword"],
+                  properties: {
+                    token: {
+                      type: "string",
+                      example: "5f3d4d...",
+                    },
+                    newPassword: {
+                      type: "string",
+                      format: "password",
+                      example: "newsecret123",
+                    },
+                  },
+                },
+                {
+                  type: "object",
+                  required: ["email", "otp", "newPassword"],
+                  properties: {
+                    email: {
+                      type: "string",
+                      format: "email",
+                      example: "thuong@example.com",
+                    },
+                    otp: {
+                      type: "string",
+                      example: "123456",
+                    },
+                    newPassword: {
+                      type: "string",
+                      format: "password",
+                      example: "newsecret123",
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Password reset successfully",
+        },
+        400: {
+          description: "Missing, invalid, or expired reset credential",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
   "/api/users/me": {
     get: {
       summary: "Get the current logged-in user's profile",

@@ -1,14 +1,18 @@
 import bcrypt from "bcryptjs";
+import { createHash, randomBytes, randomInt } from "crypto";
 import type { Collection, ObjectId } from "mongodb";
 import { ObjectId as MongoObjectId } from "mongodb";
 import { connectToMongo } from "../../db/mongo.js";
 import type {
   ChangeCurrentUserPasswordInput,
+  ForgotPasswordInput,
   LoginUserInput,
   PublicUser,
   RegisterUserInput,
+  ResetPasswordInput,
   SupportedCurrency,
   UpdateCurrentUserInput,
+  VerifyResetOtpInput,
 } from "./auth.types.js";
 
 export interface UserDocument {
@@ -21,11 +25,16 @@ export interface UserDocument {
   avatarUrl: string;
   defaultCurrency: SupportedCurrency;
   role: "admin" | "user";
+  passwordResetTokenHash?: string;
+  passwordResetOtpHash?: string;
+  passwordResetExpiresAt?: Date;
+  passwordResetRequestedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
 
 const SUPPORTED_CURRENCIES = new Set<SupportedCurrency>(["USD", "VND"]);
+const PASSWORD_RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
 
 export async function getUsersCollection(): Promise<Collection<UserDocument>> {
   const db = await connectToMongo();
@@ -63,6 +72,14 @@ function normalizeDefaultCurrency(defaultCurrency?: string): SupportedCurrency {
   }
 
   return normalizedDefaultCurrency as SupportedCurrency;
+}
+
+function hashPasswordResetToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function generatePasswordResetOtp() {
+  return randomInt(0, 1_000_000).toString().padStart(6, "0");
 }
 
 export async function registerUser(
@@ -133,6 +150,140 @@ export async function loginUser(input: LoginUserInput): Promise<PublicUser> {
   }
 
   return toPublicUser(user);
+}
+
+export async function requestPasswordReset(input: ForgotPasswordInput): Promise<{
+  resetToken: string | null;
+  otpCode: string | null;
+  expiresAt: Date | null;
+}> {
+  const users = await getUsersCollection();
+  const normalizedEmail = input.email.trim().toLowerCase();
+
+  if (!normalizedEmail) {
+    return {
+      resetToken: null,
+      otpCode: null,
+      expiresAt: null,
+    };
+  }
+
+  const user = await users.findOne({ email: normalizedEmail });
+
+  if (!user?._id) {
+    return {
+      resetToken: null,
+      otpCode: null,
+      expiresAt: null,
+    };
+  }
+
+  const resetToken = randomBytes(32).toString("hex");
+  const otpCode = generatePasswordResetOtp();
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + PASSWORD_RESET_TOKEN_TTL_MS);
+
+  await users.updateOne(
+    { _id: user._id },
+    {
+      $set: {
+        passwordResetTokenHash: hashPasswordResetToken(resetToken),
+        passwordResetOtpHash: hashPasswordResetToken(otpCode),
+        passwordResetExpiresAt: expiresAt,
+        passwordResetRequestedAt: now,
+        updatedAt: now,
+      },
+    },
+  );
+
+  return {
+    resetToken,
+    otpCode,
+    expiresAt,
+  };
+}
+
+export async function resetPasswordWithToken(
+  input: ResetPasswordInput,
+): Promise<boolean> {
+  const resetToken = input.token?.trim() ?? "";
+  const otpCode = input.otp?.trim() ?? "";
+  const normalizedEmail = input.email?.trim().toLowerCase() ?? "";
+
+  if (!resetToken && (!normalizedEmail || !otpCode)) {
+    throw new Error("Password reset token or email and OTP are required.");
+  }
+
+  if (input.newPassword.length < 6) {
+    throw new Error("Password must be at least 6 characters.");
+  }
+
+  const users = await getUsersCollection();
+  const now = new Date();
+  const resetCredentialFilter = resetToken
+    ? {
+        passwordResetTokenHash: hashPasswordResetToken(resetToken),
+      }
+    : {
+        email: normalizedEmail,
+        passwordResetOtpHash: hashPasswordResetToken(otpCode),
+      };
+  const user = await users.findOne({
+    ...resetCredentialFilter,
+    passwordResetExpiresAt: {
+      $gt: now,
+    },
+  });
+
+  if (!user?._id) {
+    throw new Error("Password reset token or OTP is invalid or has expired.");
+  }
+
+  const passwordHash = await bcrypt.hash(input.newPassword, 10);
+
+  await users.updateOne(
+    { _id: user._id },
+    {
+      $set: {
+        passwordHash,
+        updatedAt: now,
+      },
+      $unset: {
+        passwordResetTokenHash: "",
+        passwordResetOtpHash: "",
+        passwordResetExpiresAt: "",
+        passwordResetRequestedAt: "",
+      },
+    },
+  );
+
+  return true;
+}
+
+export async function verifyPasswordResetOtp(
+  input: VerifyResetOtpInput,
+): Promise<boolean> {
+  const normalizedEmail = input.email.trim().toLowerCase();
+  const otpCode = input.otp.trim();
+
+  if (!normalizedEmail || !otpCode) {
+    throw new Error("Email and OTP are required.");
+  }
+
+  const users = await getUsersCollection();
+  const user = await users.findOne({
+    email: normalizedEmail,
+    passwordResetOtpHash: hashPasswordResetToken(otpCode),
+    passwordResetExpiresAt: {
+      $gt: new Date(),
+    },
+  });
+
+  if (!user?._id) {
+    throw new Error("OTP is invalid or has expired.");
+  }
+
+  return true;
 }
 
 export async function getUserById(userId: string): Promise<PublicUser | null> {
