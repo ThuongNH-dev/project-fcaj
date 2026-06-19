@@ -1,19 +1,17 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { ArrowLeft, KeyRound, Leaf, Mail, Send } from "lucide-react";
-import { forgotPassword, type ForgotPasswordResponse } from "../api/auth";
+import { forgotPassword } from "../api/auth";
 
 export function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [response, setResponse] = useState<ForgotPasswordResponse | null>(null);
   const navigate = useNavigate();
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setErrorMessage("");
-    setResponse(null);
 
     if (!email.trim()) {
       setErrorMessage("Email is required.");
@@ -25,8 +23,19 @@ export function ForgotPasswordPage() {
       const forgotPasswordResponse = await forgotPassword({
         email: email.trim(),
       });
+      const normalizedEmail = email.trim().toLowerCase();
+      const query = new URLSearchParams({
+        email: normalizedEmail,
+      });
 
-      setResponse(forgotPasswordResponse);
+      navigate(`/reset-password?${query.toString()}`, {
+        state: {
+          message: forgotPasswordResponse.message,
+          devOtpCode: forgotPasswordResponse.otpCode,
+          devResetUrl: forgotPasswordResponse.resetUrl,
+          expiresAt: forgotPasswordResponse.expiresAt,
+        },
+      });
     } catch (error) {
       setErrorMessage(
         error instanceof Error
@@ -36,14 +45,6 @@ export function ForgotPasswordPage() {
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleContinueWithOtp = () => {
-    const query = new URLSearchParams({
-      email: email.trim(),
-    });
-
-    navigate(`/reset-password?${query.toString()}`);
   };
 
   return (
@@ -93,32 +94,6 @@ export function ForgotPasswordPage() {
             </div>
           )}
 
-          {response && (
-            <div className="mb-4 rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 text-sm text-[#166534]">
-              <p style={{ fontWeight: 600 }}>{response.message}</p>
-              {response.otpCode && (
-                <div className="mt-3 rounded-lg bg-white px-3 py-2">
-                  <p className="text-xs text-[#6B7280]">Dev OTP</p>
-                  <p
-                    className="tracking-[0.35em] text-[#111827]"
-                    style={{ fontWeight: 800, fontSize: "1.25rem" }}
-                  >
-                    {response.otpCode}
-                  </p>
-                </div>
-              )}
-              {response.resetUrl && (
-                <a
-                  href={response.resetUrl}
-                  className="mt-3 inline-flex text-sm text-[#16A34A] hover:underline"
-                  style={{ fontWeight: 700 }}
-                >
-                  Open dev reset link
-                </a>
-              )}
-            </div>
-          )}
-
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label
@@ -149,17 +124,6 @@ export function ForgotPasswordPage() {
               {isSubmitting ? "Sending..." : "Send reset code"}
             </button>
           </form>
-
-          {response && (
-            <button
-              type="button"
-              onClick={handleContinueWithOtp}
-              className="mt-4 w-full rounded-xl border border-[#D1FAE5] bg-[#F0FAF5] py-3 text-sm text-[#166534] transition-colors hover:bg-[#DCFCE7]"
-              style={{ fontWeight: 700 }}
-            >
-              Continue with OTP
-            </button>
-          )}
         </div>
       </div>
     </div>
