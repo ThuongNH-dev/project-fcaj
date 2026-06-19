@@ -1,10 +1,25 @@
-import { useMemo, useState } from "react";
-import { TrendingUp, TrendingDown, Users, DollarSign, Bell, Search, Plus, ArrowUpRight } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  TrendingUp,
+  TrendingDown,
+  Users,
+  DollarSign,
+  Bell,
+  Search,
+  Plus,
+  ArrowUpRight,
+  ChevronRight,
+} from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import { getStoredUser, getUserInitials } from "../api/auth";
+import { getGroups, type Group } from "../api/groups";
+import { useNavigate } from "react-router";
 
 export function Dashboard() {
   const [search, setSearch] = useState("");
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
   const { t } = useLanguage();
   const user = useMemo(() => getStoredUser(), []);
   const userName = user ? `${user.firstName} ${user.lastName}` : "Guest";
@@ -12,12 +27,73 @@ export function Dashboard() {
   const welcomeMessage = user
     ? `Signed in as ${userName} (${user.role})`
     : t.welcomeMsg;
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    async function loadGroups() {
+      try {
+        setErrorMessage("");
+        setIsLoadingGroups(true);
+        const response = await getGroups();
+        setGroups(response.groups ?? []);
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error ? error.message : "Unable to load groups.",
+        );
+      } finally {
+        setIsLoadingGroups(false);
+      }
+    }
+
+    void loadGroups();
+  }, []);
+
+  const filteredGroups = groups.filter((group) => {
+    const keyword = search.trim().toLowerCase();
+
+    if (!keyword) {
+      return true;
+    }
+
+    return (
+      group.name.toLowerCase().includes(keyword) ||
+      group.members.some((member) => member.name.toLowerCase().includes(keyword))
+    );
+  });
 
   const summaryCards = [
-    { label: t.totalExpenses, value: "$0.00", icon: DollarSign, bg: "bg-[#F0FAF5]", iconBg: "bg-[#7EDDBA]", iconColor: "text-[#065f46]" },
-    { label: t.youOwe, value: "$0.00", icon: TrendingDown, bg: "bg-[#FEF2F2]", iconBg: "bg-[#FCA5A5]", iconColor: "text-[#991b1b]" },
-    { label: t.youAreOwed, value: "$0.00", icon: TrendingUp, bg: "bg-[#EFF6FF]", iconBg: "bg-[#93C5FD]", iconColor: "text-[#1e40af]" },
-    { label: t.activeGroups, value: "0", icon: Users, bg: "bg-[#FEFCE8]", iconBg: "bg-[#FCD34D]", iconColor: "text-[#92400e]" },
+    {
+      label: t.totalExpenses,
+      value: "$0.00",
+      icon: DollarSign,
+      bg: "bg-[#F0FAF5]",
+      iconBg: "bg-[#7EDDBA]",
+      iconColor: "text-[#065f46]",
+    },
+    {
+      label: t.youOwe,
+      value: "$0.00",
+      icon: TrendingDown,
+      bg: "bg-[#FEF2F2]",
+      iconBg: "bg-[#FCA5A5]",
+      iconColor: "text-[#991b1b]",
+    },
+    {
+      label: t.youAreOwed,
+      value: "$0.00",
+      icon: TrendingUp,
+      bg: "bg-[#EFF6FF]",
+      iconBg: "bg-[#93C5FD]",
+      iconColor: "text-[#1e40af]",
+    },
+    {
+      label: t.activeGroups,
+      value: isLoadingGroups ? "--" : String(groups.length),
+      icon: Users,
+      bg: "bg-[#FEFCE8]",
+      iconBg: "bg-[#FCD34D]",
+      iconColor: "text-[#92400e]",
+    },
   ];
 
   return (
@@ -25,7 +101,12 @@ export function Dashboard() {
       <div className="max-w-7xl mx-auto px-6 py-8 pt-16 lg:pt-8">
         <div className="flex items-center justify-between mb-8 gap-4">
           <div>
-            <h1 className="text-[#111827]" style={{ fontSize: "1.5rem", fontWeight: 800 }}>{t.dashboard}</h1>
+            <h1
+              className="text-[#111827]"
+              style={{ fontSize: "1.5rem", fontWeight: 800 }}
+            >
+              {t.dashboard}
+            </h1>
             <p className="text-[#6B7280] text-sm mt-0.5">{welcomeMessage}</p>
           </div>
           <div className="flex items-center gap-3">
@@ -33,7 +114,7 @@ export function Dashboard() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF]" />
               <input
                 type="text"
-                placeholder={t.searchExpenses}
+                placeholder={t.searchGroups}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="bg-white border border-[#E5E7EB] rounded-xl pl-9 pr-4 py-2.5 text-sm text-[#374151] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] w-56"
@@ -52,13 +133,26 @@ export function Dashboard() {
           </div>
         </div>
 
+        {errorMessage && (
+          <div className="rounded-2xl border border-[#FECACA] bg-[#FEF2F2] px-5 py-4 text-sm text-[#B91C1C] mb-6">
+            {errorMessage}
+          </div>
+        )}
+
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           {summaryCards.map(({ label, value, icon: Icon, bg, iconBg, iconColor }) => (
             <div key={label} className={`${bg} rounded-2xl p-5 border border-white`}>
-              <div className={`w-9 h-9 ${iconBg} rounded-xl flex items-center justify-center mb-3`}>
+              <div
+                className={`w-9 h-9 ${iconBg} rounded-xl flex items-center justify-center mb-3`}
+              >
                 <Icon className={`w-4 h-4 ${iconColor}`} />
               </div>
-              <p className="text-[#111827]" style={{ fontSize: "1.5rem", fontWeight: 800 }}>{value}</p>
+              <p
+                className="text-[#111827]"
+                style={{ fontSize: "1.5rem", fontWeight: 800 }}
+              >
+                {value}
+              </p>
               <p className="text-[#6B7280] text-xs mt-0.5">{label}</p>
             </div>
           ))}
@@ -66,19 +160,76 @@ export function Dashboard() {
 
         <div className="grid lg:grid-cols-3 gap-6 mb-6">
           <div className="lg:col-span-2 bg-white rounded-2xl p-6 border border-[#E5E7EB]">
-            <h3 className="text-[#111827] mb-1" style={{ fontWeight: 700 }}>{t.expenseChart}</h3>
+            <h3 className="text-[#111827] mb-1" style={{ fontWeight: 700 }}>
+              {t.groupsTitle}
+            </h3>
             <p className="text-[#9CA3AF] text-xs mb-4">{t.monthlyOverview}</p>
-            <div className="flex flex-col items-center justify-center h-48 text-center">
-              <div className="w-12 h-12 bg-[#F0FAF5] rounded-2xl flex items-center justify-center mx-auto mb-3">
-                <ArrowUpRight className="w-6 h-6 text-[#7EDDBA]" />
+            {isLoadingGroups ? (
+              <div className="flex flex-col items-center justify-center h-48 text-center">
+                <div className="w-12 h-12 bg-[#F0FAF5] rounded-2xl flex items-center justify-center mx-auto mb-3">
+                  <ArrowUpRight className="w-6 h-6 text-[#7EDDBA]" />
+                </div>
+                <p className="text-[#374151] text-sm" style={{ fontWeight: 600 }}>
+                  Loading groups...
+                </p>
               </div>
-              <p className="text-[#374151] text-sm" style={{ fontWeight: 600 }}>{t.noExpensesYet}</p>
-              <p className="text-[#9CA3AF] text-xs mt-1">{t.activityDesc}</p>
-            </div>
+            ) : filteredGroups.length > 0 ? (
+              <div className="space-y-3">
+                {filteredGroups.slice(0, 4).map((group) => (
+                  <button
+                    key={group.id}
+                    onClick={() => navigate(`/groups/${group.id}`)}
+                    className="w-full rounded-2xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3 text-left hover:bg-[#F0FAF5] transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
+                          style={{ background: group.color }}
+                        >
+                          {group.icon}
+                        </div>
+                        <div className="min-w-0">
+                          <p
+                            className="text-[#111827] truncate"
+                            style={{ fontWeight: 700 }}
+                          >
+                            {group.name}
+                          </p>
+                          <p className="text-xs text-[#9CA3AF]">
+                            {group.members.length} {t.members}
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-[#9CA3AF]" />
+                    </div>
+                  </button>
+                ))}
+                <button
+                  onClick={() => navigate("/groups")}
+                  className="text-sm text-[#16A34A] hover:underline"
+                  style={{ fontWeight: 600 }}
+                >
+                  {t.viewExpenses}
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-48 text-center">
+                <div className="w-12 h-12 bg-[#F0FAF5] rounded-2xl flex items-center justify-center mx-auto mb-3">
+                  <ArrowUpRight className="w-6 h-6 text-[#7EDDBA]" />
+                </div>
+                <p className="text-[#374151] text-sm" style={{ fontWeight: 600 }}>
+                  {t.noGroupsYet}
+                </p>
+                <p className="text-[#9CA3AF] text-xs mt-1">{t.noGroupsDesc}</p>
+              </div>
+            )}
           </div>
 
           <div className="bg-white rounded-2xl p-6 border border-[#E5E7EB]">
-            <h3 className="text-[#111827] mb-1" style={{ fontWeight: 700 }}>{t.byCategory}</h3>
+            <h3 className="text-[#111827] mb-1" style={{ fontWeight: 700 }}>
+              {t.byCategory}
+            </h3>
             <p className="text-[#9CA3AF] text-xs mb-4">{t.thisMonth}</p>
             <div className="flex flex-col items-center justify-center h-36 text-center">
               <div className="w-10 h-10 bg-[#F0FAF5] rounded-2xl flex items-center justify-center mx-auto mb-2">
@@ -91,14 +242,50 @@ export function Dashboard() {
 
         <div className="grid lg:grid-cols-5 gap-6">
           <div className="lg:col-span-3 bg-white rounded-2xl p-6 border border-[#E5E7EB]">
-            <h3 className="text-[#111827] mb-5" style={{ fontWeight: 700 }}>{t.recentActivity}</h3>
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="w-14 h-14 bg-[#F0FAF5] rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <TrendingUp className="w-7 h-7 text-[#7EDDBA]" />
+            <h3 className="text-[#111827] mb-5" style={{ fontWeight: 700 }}>
+              {t.recentActivity}
+            </h3>
+            {isLoadingGroups ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="w-14 h-14 bg-[#F0FAF5] rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <TrendingUp className="w-7 h-7 text-[#7EDDBA]" />
+                </div>
+                <p className="text-[#374151] text-sm mb-1" style={{ fontWeight: 600 }}>
+                  Loading groups...
+                </p>
               </div>
-              <p className="text-[#374151] text-sm mb-1" style={{ fontWeight: 600 }}>{t.noActivityYet}</p>
-              <p className="text-[#9CA3AF] text-xs">{t.activityDesc}</p>
-            </div>
+            ) : filteredGroups.length > 0 ? (
+              <div className="space-y-3">
+                {filteredGroups.slice(0, 5).map((group) => (
+                  <div
+                    key={group.id}
+                    className="flex items-center justify-between rounded-2xl bg-[#F9FAFB] px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[#111827]" style={{ fontWeight: 600 }}>
+                        {group.name}
+                      </p>
+                      <p className="text-xs text-[#9CA3AF]">
+                        Created {new Date(group.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <span className="text-xs rounded-full bg-[#F0FAF5] px-3 py-1 text-[#166534]" style={{ fontWeight: 600 }}>
+                      {group.members.length} {t.members}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="w-14 h-14 bg-[#F0FAF5] rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <TrendingUp className="w-7 h-7 text-[#7EDDBA]" />
+                </div>
+                <p className="text-[#374151] text-sm mb-1" style={{ fontWeight: 600 }}>
+                  {t.noActivityYet}
+                </p>
+                <p className="text-[#9CA3AF] text-xs">{t.activityDesc}</p>
+              </div>
+            )}
           </div>
 
           <div className="lg:col-span-2 flex flex-col gap-6">
@@ -108,7 +295,10 @@ export function Dashboard() {
                   Account
                 </h3>
                 <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-[#7EDDBA] flex items-center justify-center text-[#065f46]" style={{ fontWeight: 700 }}>
+                  <div
+                    className="w-12 h-12 rounded-2xl bg-[#7EDDBA] flex items-center justify-center text-[#065f46]"
+                    style={{ fontWeight: 700 }}
+                  >
                     {userInitials}
                   </div>
                   <div className="min-w-0">
@@ -125,7 +315,9 @@ export function Dashboard() {
             )}
 
             <div className="bg-white rounded-2xl p-5 border border-[#E5E7EB]">
-              <h3 className="text-[#111827] mb-4" style={{ fontWeight: 700 }}>{t.quickDebts}</h3>
+              <h3 className="text-[#111827] mb-4" style={{ fontWeight: 700 }}>
+                {t.quickDebts}
+              </h3>
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <div className="w-10 h-10 bg-[#F0FAF5] rounded-2xl flex items-center justify-center mx-auto mb-3">
                   <Users className="w-5 h-5 text-[#7EDDBA]" />
@@ -135,12 +327,22 @@ export function Dashboard() {
             </div>
 
             <div className="bg-[#16A34A] rounded-2xl p-5 text-white">
-              <p className="text-[#A7F3D0] text-sm mb-2" style={{ fontWeight: 600 }}>{t.getStarted}</p>
-              <p className="text-white mb-4" style={{ fontSize: "1rem", fontWeight: 700 }}>{t.heroDesc}</p>
-              <div className="flex items-center gap-1.5 text-[#A7F3D0] text-xs">
+              <p className="text-[#A7F3D0] text-sm mb-2" style={{ fontWeight: 600 }}>
+                {t.getStarted}
+              </p>
+              <p
+                className="text-white mb-4"
+                style={{ fontSize: "1rem", fontWeight: 700 }}
+              >
+                {groups.length > 0 ? t.groupsTitle : t.heroDesc}
+              </p>
+              <button
+                onClick={() => navigate("/groups")}
+                className="flex items-center gap-1.5 text-[#A7F3D0] text-xs"
+              >
                 <Plus className="w-3.5 h-3.5" />
                 <span>{t.goToGroups}</span>
-              </div>
+              </button>
             </div>
           </div>
         </div>
