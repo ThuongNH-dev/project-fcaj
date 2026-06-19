@@ -36,7 +36,14 @@ export default function App() {
             <Route path="/expenses" element={<ExpensesPage />} />
             <Route path="/settlement" element={<SettlementPage />} />
             <Route path="/receipts" element={<ReceiptsPage />} />
-            <Route path="/admin" element={<AdminPage />} />
+            <Route
+              path="/admin"
+              element={
+                <AdminRoute>
+                  <AdminPage />
+                </AdminRoute>
+              }
+            />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/profile" element={<Navigate to="/settings" replace />} />
           </Route>
@@ -80,4 +87,18 @@ function PrivateLayout() {
       <Outlet />
     </div>
   );
+}
+
+function AdminRoute({ children }: { children: JSX.Element }) {
+  const user = getStoredUser();
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user.role !== "admin") {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
 }
