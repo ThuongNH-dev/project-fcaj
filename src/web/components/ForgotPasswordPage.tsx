@@ -31,9 +31,6 @@ export function ForgotPasswordPage() {
       navigate(`/reset-password?${query.toString()}`, {
         state: {
           message: forgotPasswordResponse.message,
-          devOtpCode: forgotPasswordResponse.otpCode,
-          devResetUrl: forgotPasswordResponse.resetUrl,
-          expiresAt: forgotPasswordResponse.expiresAt,
         },
       });
     } catch (error) {

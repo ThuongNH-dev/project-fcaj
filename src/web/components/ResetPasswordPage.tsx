@@ -15,9 +15,6 @@ type ResetStep = "otp" | "password";
 
 interface ResetPasswordLocationState {
   message?: string;
-  devOtpCode?: string;
-  devResetUrl?: string;
-  expiresAt?: string;
 }
 
 export function ResetPasswordPage() {
@@ -188,34 +185,6 @@ export function ResetPasswordPage() {
           {successMessage && (
             <div className="mb-4 rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 text-sm text-[#166534]">
               {successMessage}
-            </div>
-          )}
-
-          {isOtpStep && locationState?.devOtpCode && (
-            <div className="mb-4 rounded-xl border border-[#D1FAE5] bg-[#F0FAF5] px-4 py-3 text-sm text-[#166534]">
-              <p className="mb-2" style={{ fontWeight: 700 }}>
-                Dev OTP
-              </p>
-              <p
-                className="tracking-[0.35em] text-[#111827]"
-                style={{ fontWeight: 800, fontSize: "1.25rem" }}
-              >
-                {locationState.devOtpCode}
-              </p>
-              {locationState.expiresAt && (
-                <p className="mt-2 text-xs text-[#6B7280]">
-                  Expires at {new Date(locationState.expiresAt).toLocaleString()}
-                </p>
-              )}
-              {locationState.devResetUrl && (
-                <a
-                  href={locationState.devResetUrl}
-                  className="mt-3 inline-flex text-sm text-[#16A34A] hover:underline"
-                  style={{ fontWeight: 700 }}
-                >
-                  Open dev reset link instead
-                </a>
-              )}
             </div>
           )}
 
