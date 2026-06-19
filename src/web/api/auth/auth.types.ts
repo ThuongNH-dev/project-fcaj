@@ -48,6 +48,16 @@ export interface ForgotPasswordResponse {
   expiresAt?: string;
 }
 
+export interface VerifyResetOtpPayload {
+  email: string;
+  otp: string;
+}
+
+export interface VerifyResetOtpResponse {
+  ok: boolean;
+  message: string;
+}
+
 export interface ResetPasswordPayload {
   token?: string;
   email?: string;

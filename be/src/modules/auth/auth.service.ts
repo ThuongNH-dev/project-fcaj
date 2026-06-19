@@ -12,6 +12,7 @@ import type {
   ResetPasswordInput,
   SupportedCurrency,
   UpdateCurrentUserInput,
+  VerifyResetOtpInput,
 } from "./auth.types.js";
 
 export interface UserDocument {
@@ -255,6 +256,32 @@ export async function resetPasswordWithToken(
       },
     },
   );
+
+  return true;
+}
+
+export async function verifyPasswordResetOtp(
+  input: VerifyResetOtpInput,
+): Promise<boolean> {
+  const normalizedEmail = input.email.trim().toLowerCase();
+  const otpCode = input.otp.trim();
+
+  if (!normalizedEmail || !otpCode) {
+    throw new Error("Email and OTP are required.");
+  }
+
+  const users = await getUsersCollection();
+  const user = await users.findOne({
+    email: normalizedEmail,
+    passwordResetOtpHash: hashPasswordResetToken(otpCode),
+    passwordResetExpiresAt: {
+      $gt: new Date(),
+    },
+  });
+
+  if (!user?._id) {
+    throw new Error("OTP is invalid or has expired.");
+  }
 
   return true;
 }

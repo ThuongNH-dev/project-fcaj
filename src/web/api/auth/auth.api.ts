@@ -7,6 +7,8 @@ import type {
   RegisterPayload,
   ResetPasswordPayload,
   ResetPasswordResponse,
+  VerifyResetOtpPayload,
+  VerifyResetOtpResponse,
 } from "./auth.types";
 
 export function loginUser(payload: LoginPayload) {
@@ -20,6 +22,13 @@ export function registerUser(payload: RegisterPayload) {
 export function forgotPassword(payload: ForgotPasswordPayload) {
   return postJson<ForgotPasswordPayload, ForgotPasswordResponse>(
     "/api/auth/forgot-password",
+    payload,
+  );
+}
+
+export function verifyResetOtp(payload: VerifyResetOtpPayload) {
+  return postJson<VerifyResetOtpPayload, VerifyResetOtpResponse>(
+    "/api/auth/verify-reset-otp",
     payload,
   );
 }
