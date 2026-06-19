@@ -1,3 +1,4 @@
+import nodemailer from "nodemailer";
 import { env } from "../../config/env.js";
 
 interface SendPasswordResetEmailInput {
@@ -40,21 +41,62 @@ function buildPasswordResetEmail(input: SendPasswordResetEmailInput) {
   };
 }
 
-export async function sendPasswordResetEmail(
-  input: SendPasswordResetEmailInput,
-) {
-  const email = buildPasswordResetEmail(input);
+function logPasswordResetEmail(input: SendPasswordResetEmailInput) {
+  console.info(
+    [
+      `Password reset email for ${input.email}`,
+      `OTP: ${input.otpCode}`,
+      `Reset URL: ${input.resetUrl}`,
+      `Expires at: ${input.expiresAt.toISOString()}`,
+    ].join("\n"),
+  );
+}
 
-  if (!env.resendApiKey) {
-    console.info(
-      [
-        `Password reset email for ${input.email}`,
-        `OTP: ${input.otpCode}`,
-        `Reset URL: ${input.resetUrl}`,
-        `Expires at: ${input.expiresAt.toISOString()}`,
-      ].join("\n"),
+function getEmailFrom() {
+  if (env.emailFrom) {
+    return env.emailFrom;
+  }
+
+  if (env.emailProvider === "gmail" && env.gmailSmtpUser) {
+    return `Splitly <${env.gmailSmtpUser}>`;
+  }
+
+  return "Splitly <no-reply@splitly.local>";
+}
+
+async function sendWithGmail(
+  input: SendPasswordResetEmailInput,
+  email: ReturnType<typeof buildPasswordResetEmail>,
+) {
+  if (!env.gmailSmtpUser || !env.gmailAppPassword) {
+    throw new Error(
+      "Gmail SMTP is not configured. Set GMAIL_SMTP_USER and GMAIL_APP_PASSWORD in be/.env.",
     );
-    return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: env.gmailSmtpUser,
+      pass: env.gmailAppPassword,
+    },
+  });
+
+  await transporter.sendMail({
+    from: getEmailFrom(),
+    to: input.email,
+    subject: email.subject,
+    html: email.html,
+    text: email.text,
+  });
+}
+
+async function sendWithResend(
+  input: SendPasswordResetEmailInput,
+  email: ReturnType<typeof buildPasswordResetEmail>,
+) {
+  if (!env.resendApiKey) {
+    throw new Error("Resend is not configured. Set RESEND_API_KEY in be/.env.");
   }
 
   const response = await fetch(env.resendApiUrl, {
@@ -64,7 +106,7 @@ export async function sendPasswordResetEmail(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: env.emailFrom,
+      from: getEmailFrom(),
       to: input.email,
       subject: email.subject,
       html: email.html,
@@ -74,8 +116,24 @@ export async function sendPasswordResetEmail(
 
   if (!response.ok) {
     const responseText = await response.text().catch(() => "");
-    throw new Error(
-      responseText || "Unable to send password reset email.",
-    );
+    throw new Error(responseText || "Unable to send password reset email.");
   }
+}
+
+export async function sendPasswordResetEmail(
+  input: SendPasswordResetEmailInput,
+) {
+  const email = buildPasswordResetEmail(input);
+
+  if (env.emailProvider === "gmail") {
+    await sendWithGmail(input, email);
+    return;
+  }
+
+  if (env.emailProvider === "resend") {
+    await sendWithResend(input, email);
+    return;
+  }
+
+  logPasswordResetEmail(input);
 }

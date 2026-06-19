@@ -11,7 +11,7 @@ import {
 } from "./auth.service.js";
 
 const PASSWORD_RESET_RESPONSE_MESSAGE =
-  "Link đặt lại mật khẩu đã được gửi ";
+  "otp đã được gửi đên email.";
 
 function buildPasswordResetUrl(token: string) {
   const resetUrl = new URL("/reset-password", env.frontendUrl);
@@ -154,27 +154,10 @@ export async function forgotPasswordHandler(req: Request, res: Response) {
       });
     }
 
-    const responseBody: {
-      ok: boolean;
-      message: string;
-      resetUrl?: string;
-      otpCode?: string;
-      expiresAt?: string;
-    } = {
+    const responseBody = {
       ok: true,
       message: PASSWORD_RESET_RESPONSE_MESSAGE,
     };
-
-    if (
-      env.nodeEnv !== "production" &&
-      resetUrl &&
-      passwordReset.otpCode &&
-      passwordReset.expiresAt
-    ) {
-      responseBody.resetUrl = resetUrl;
-      responseBody.otpCode = passwordReset.otpCode;
-      responseBody.expiresAt = passwordReset.expiresAt.toISOString();
-    }
 
     return res.status(200).json(responseBody);
   } catch (error) {
