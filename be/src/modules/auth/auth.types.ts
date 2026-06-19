@@ -28,6 +28,11 @@ export interface ResetPasswordInput {
   newPassword: string;
 }
 
+export interface VerifyResetOtpInput {
+  email: string;
+  otp: string;
+}
+
 export interface PublicUser {
   id: string;
   firstName: string;

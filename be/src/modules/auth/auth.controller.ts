@@ -7,10 +7,11 @@ import {
   registerUser,
   requestPasswordReset,
   resetPasswordWithToken,
+  verifyPasswordResetOtp,
 } from "./auth.service.js";
 
 const PASSWORD_RESET_RESPONSE_MESSAGE =
-  "If an account with this email exists, a password reset link has been sent.";
+  "Link đặt lại mật khẩu đã được gửi ";
 
 function buildPasswordResetUrl(token: string) {
   const resetUrl = new URL("/reset-password", env.frontendUrl);
@@ -224,6 +225,46 @@ export async function resetPasswordHandler(req: Request, res: Response) {
       message === "Password reset token or email and OTP are required." ||
       message === "Password must be at least 6 characters." ||
       message === "Password reset token or OTP is invalid or has expired."
+        ? 400
+        : 503;
+
+    return res.status(statusCode).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function verifyResetOtpHandler(req: Request, res: Response) {
+  const { email, otp } = req.body as {
+    email?: string;
+    otp?: string;
+  };
+
+  if (!email?.trim() || !otp?.trim()) {
+    return res.status(400).json({
+      ok: false,
+      message: "Email and OTP are required.",
+    });
+  }
+
+  try {
+    await verifyPasswordResetOtp({
+      email,
+      otp,
+    });
+
+    return res.status(200).json({
+      ok: true,
+      message: "OTP verified. You can reset your password now.",
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to verify OTP.";
+
+    const statusCode =
+      message === "Email and OTP are required." ||
+      message === "OTP is invalid or has expired."
         ? 400
         : 503;
 

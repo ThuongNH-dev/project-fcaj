@@ -26,6 +26,15 @@
   - `MONGODB_URI=mongodb://127.0.0.1:27017`
   - `MONGODB_DB=Splitly`
 
+  Optional password reset email env:
+
+  - `FRONTEND_URL=http://localhost:5173`
+  - `EMAIL_FROM=Splitly <no-reply@yourdomain.com>`
+  - `RESEND_API_KEY=your_resend_key`
+  - `RESEND_API_URL=https://api.resend.com/emails`
+
+  If `RESEND_API_KEY` is not set, password reset OTP codes and reset links are logged in the backend terminal for local development.
+
   Open Swagger at `http://localhost:5000`
 
   Raw OpenAPI JSON is available at `http://localhost:5000/docs.json`
