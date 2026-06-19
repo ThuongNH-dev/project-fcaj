@@ -1,31 +1,84 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { useNavigate, useSearchParams } from "react-router";
-import { ArrowLeft, CheckCircle2, KeyRound, Leaf, Lock, Mail } from "lucide-react";
-import { resetPassword } from "../api/auth";
+import { useLocation, useNavigate, useSearchParams } from "react-router";
 import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-} from "./ui/input-otp";
+  ArrowLeft,
+  CheckCircle2,
+  KeyRound,
+  Leaf,
+  Lock,
+  Mail,
+} from "lucide-react";
+import { resetPassword, verifyResetOtp } from "../api/auth";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "./ui/input-otp";
+
+type ResetStep = "otp" | "password";
+
+interface ResetPasswordLocationState {
+  message?: string;
+  devOtpCode?: string;
+  devResetUrl?: string;
+  expiresAt?: string;
+}
 
 export function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const locationState = location.state as ResetPasswordLocationState | null;
+  const token = searchParams.get("token")?.trim() ?? "";
+  const isUsingResetLink = Boolean(token);
+  const [step, setStep] = useState<ResetStep>(
+    isUsingResetLink ? "password" : "otp",
+  );
   const [email, setEmail] = useState(searchParams.get("email") ?? "");
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState(
+    locationState?.message ?? "",
+  );
   const navigate = useNavigate();
-  const token = searchParams.get("token")?.trim() ?? "";
-  const isUsingResetLink = Boolean(token);
 
   useEffect(() => {
     setEmail(searchParams.get("email") ?? "");
-  }, [searchParams]);
+    setStep(isUsingResetLink ? "password" : "otp");
+  }, [isUsingResetLink, searchParams]);
 
-  const handleSubmit = async (event: FormEvent) => {
+  const handleVerifyOtp = async (event: FormEvent) => {
+    event.preventDefault();
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    if (!email.trim()) {
+      setErrorMessage("Email is required when using an OTP code.");
+      return;
+    }
+
+    if (!/^\d{6}$/.test(otp)) {
+      setErrorMessage("Enter the 6-digit OTP code sent to your email.");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const response = await verifyResetOtp({
+        email: email.trim(),
+        otp,
+      });
+
+      setSuccessMessage(response.message);
+      setStep("password");
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Unable to verify OTP.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResetPassword = async (event: FormEvent) => {
     event.preventDefault();
     setErrorMessage("");
     setSuccessMessage("");
@@ -35,8 +88,9 @@ export function ResetPasswordPage() {
       return;
     }
 
-    if (!isUsingResetLink && otp.length !== 6) {
+    if (!isUsingResetLink && !/^\d{6}$/.test(otp)) {
       setErrorMessage("Enter the 6-digit OTP code sent to your email.");
+      setStep("otp");
       return;
     }
 
@@ -63,6 +117,9 @@ export function ResetPasswordPage() {
       setNewPassword("");
       setConfirmPassword("");
       setOtp("");
+      window.setTimeout(() => {
+        navigate("/login", { replace: true });
+      }, 900);
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Unable to reset password.",
@@ -71,6 +128,8 @@ export function ResetPasswordPage() {
       setIsSubmitting(false);
     }
   };
+
+  const isOtpStep = !isUsingResetLink && step === "otp";
 
   return (
     <div className="min-h-screen bg-[#F6FBF8] flex items-center justify-center px-6 py-10">
@@ -99,7 +158,7 @@ export function ResetPasswordPage() {
         <div className="rounded-3xl border border-[#E5E7EB] bg-white p-6 shadow-sm">
           <div className="mb-6">
             <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F0FAF5]">
-              {successMessage ? (
+              {successMessage && !isOtpStep ? (
                 <CheckCircle2 className="h-6 w-6 text-[#16A34A]" />
               ) : (
                 <KeyRound className="h-6 w-6 text-[#16A34A]" />
@@ -109,12 +168,14 @@ export function ResetPasswordPage() {
               className="mb-2 text-[#111827]"
               style={{ fontSize: "1.75rem", fontWeight: 800 }}
             >
-              Create a new password
+              {isOtpStep ? "Enter your OTP" : "Create a new password"}
             </h1>
             <p className="text-sm text-[#6B7280]">
               {isUsingResetLink
                 ? "Your reset link is ready. Choose a new password to continue."
-                : "Enter the OTP code from your email, then choose a new password."}
+                : isOtpStep
+                  ? "We sent a 6-digit code to your email. Verify it before choosing a new password."
+                  : "OTP verified. Choose a new password for your account."}
             </p>
           </div>
 
@@ -130,113 +191,140 @@ export function ResetPasswordPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {!isUsingResetLink && (
-              <>
-                <div>
-                  <label
-                    className="mb-1.5 block text-sm text-[#374151]"
-                    style={{ fontWeight: 600 }}
-                  >
-                    Email
-                  </label>
-                  <div className="relative">
-                    <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
-                    <input
-                      type="email"
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
-                      className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] py-3 pl-10 pr-4 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#7EDDBA]"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label
-                    className="mb-2 block text-sm text-[#374151]"
-                    style={{ fontWeight: 600 }}
-                  >
-                    OTP code
-                  </label>
-                  <InputOTP
-                    maxLength={6}
-                    value={otp}
-                    onChange={setOtp}
-                    containerClassName="justify-between"
-                  >
-                    <InputOTPGroup className="gap-2">
-                      {Array.from({ length: 6 }).map((_, index) => (
-                        <InputOTPSlot
-                          key={index}
-                          index={index}
-                          className="h-11 w-11 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] text-base text-[#111827] first:rounded-xl first:border-l last:rounded-xl data-[active=true]:border-[#16A34A] data-[active=true]:ring-[#7EDDBA]/40"
-                        />
-                      ))}
-                    </InputOTPGroup>
-                  </InputOTP>
-                </div>
-              </>
-            )}
-
-            <div>
-              <label
-                className="mb-1.5 block text-sm text-[#374151]"
-                style={{ fontWeight: 600 }}
+          {isOtpStep && locationState?.devOtpCode && (
+            <div className="mb-4 rounded-xl border border-[#D1FAE5] bg-[#F0FAF5] px-4 py-3 text-sm text-[#166534]">
+              <p className="mb-2" style={{ fontWeight: 700 }}>
+                Dev OTP
+              </p>
+              <p
+                className="tracking-[0.35em] text-[#111827]"
+                style={{ fontWeight: 800, fontSize: "1.25rem" }}
               >
-                New password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
-                <input
-                  type="password"
-                  placeholder="At least 6 characters"
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] py-3 pl-10 pr-4 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#7EDDBA]"
-                />
-              </div>
+                {locationState.devOtpCode}
+              </p>
+              {locationState.expiresAt && (
+                <p className="mt-2 text-xs text-[#6B7280]">
+                  Expires at {new Date(locationState.expiresAt).toLocaleString()}
+                </p>
+              )}
+              {locationState.devResetUrl && (
+                <a
+                  href={locationState.devResetUrl}
+                  className="mt-3 inline-flex text-sm text-[#16A34A] hover:underline"
+                  style={{ fontWeight: 700 }}
+                >
+                  Open dev reset link instead
+                </a>
+              )}
             </div>
+          )}
 
-            <div>
-              <label
-                className="mb-1.5 block text-sm text-[#374151]"
-                style={{ fontWeight: 600 }}
+          {isOtpStep ? (
+            <form onSubmit={handleVerifyOtp} className="space-y-4">
+              <div>
+                <label
+                  className="mb-1.5 block text-sm text-[#374151]"
+                  style={{ fontWeight: 600 }}
+                >
+                  Email
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
+                  <input
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] py-3 pl-10 pr-4 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#7EDDBA]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label
+                  className="mb-2 block text-sm text-[#374151]"
+                  style={{ fontWeight: 600 }}
+                >
+                  OTP code
+                </label>
+                <InputOTP
+                  maxLength={6}
+                  value={otp}
+                  onChange={setOtp}
+                  containerClassName="justify-between"
+                >
+                  <InputOTPGroup className="gap-2">
+                    {Array.from({ length: 6 }).map((_, index) => (
+                      <InputOTPSlot
+                        key={index}
+                        index={index}
+                        className="h-11 w-11 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] text-base text-[#111827] first:rounded-xl first:border-l last:rounded-xl data-[active=true]:border-[#16A34A] data-[active=true]:ring-[#7EDDBA]/40"
+                      />
+                    ))}
+                  </InputOTPGroup>
+                </InputOTP>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#16A34A] py-3.5 text-white shadow-sm transition-colors hover:bg-[#15803d] disabled:cursor-not-allowed disabled:opacity-70"
+                style={{ fontWeight: 700 }}
               >
-                Confirm password
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
-                <input
-                  type="password"
-                  placeholder="Repeat new password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] py-3 pl-10 pr-4 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#7EDDBA]"
-                />
+                <KeyRound className="h-4 w-4" />
+                {isSubmitting ? "Verifying..." : "Verify OTP"}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              <div>
+                <label
+                  className="mb-1.5 block text-sm text-[#374151]"
+                  style={{ fontWeight: 600 }}
+                >
+                  New password
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
+                  <input
+                    type="password"
+                    placeholder="At least 6 characters"
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] py-3 pl-10 pr-4 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#7EDDBA]"
+                  />
+                </div>
               </div>
-            </div>
 
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#16A34A] py-3.5 text-white shadow-sm transition-colors hover:bg-[#15803d] disabled:cursor-not-allowed disabled:opacity-70"
-              style={{ fontWeight: 700 }}
-            >
-              <KeyRound className="h-4 w-4" />
-              {isSubmitting ? "Resetting..." : "Reset password"}
-            </button>
-          </form>
+              <div>
+                <label
+                  className="mb-1.5 block text-sm text-[#374151]"
+                  style={{ fontWeight: 600 }}
+                >
+                  Confirm password
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
+                  <input
+                    type="password"
+                    placeholder="Repeat new password"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                    className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] py-3 pl-10 pr-4 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[#7EDDBA]"
+                  />
+                </div>
+              </div>
 
-          {successMessage && (
-            <button
-              type="button"
-              onClick={() => navigate("/login")}
-              className="mt-4 w-full rounded-xl border border-[#D1FAE5] bg-[#F0FAF5] py-3 text-sm text-[#166534] transition-colors hover:bg-[#DCFCE7]"
-              style={{ fontWeight: 700 }}
-            >
-              Back to login
-            </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#16A34A] py-3.5 text-white shadow-sm transition-colors hover:bg-[#15803d] disabled:cursor-not-allowed disabled:opacity-70"
+                style={{ fontWeight: 700 }}
+              >
+                <KeyRound className="h-4 w-4" />
+                {isSubmitting ? "Resetting..." : "Reset password"}
+              </button>
+            </form>
           )}
         </div>
       </div>
