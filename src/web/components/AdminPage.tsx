@@ -199,24 +199,33 @@ export function AdminPage() {
     try {
       setDeletingGroupId(group.id);
       const response = await deleteAdminGroup(group.id);
-      const remainingGroups = groups.filter((currentGroup) => currentGroup.id !== group.id);
+      const groupsResponse = await getAdminGroups();
+      const refreshedGroups = groupsResponse.groups ?? [];
 
-      setGroups(remainingGroups);
+      setGroups(refreshedGroups);
       setSelectedGroup((currentSelectedGroup) =>
-        currentSelectedGroup?.id === group.id ? null : currentSelectedGroup,
+        currentSelectedGroup && refreshedGroups.some((currentGroup) => currentGroup.id === currentSelectedGroup.id)
+          ? currentSelectedGroup.id === group.id
+            ? null
+            : currentSelectedGroup
+          : null,
       );
       setSelectedGroupId((currentSelectedGroupId) => {
-        if (currentSelectedGroupId !== group.id) {
+        if (
+          currentSelectedGroupId &&
+          currentSelectedGroupId !== group.id &&
+          refreshedGroups.some((currentGroup) => currentGroup.id === currentSelectedGroupId)
+        ) {
           return currentSelectedGroupId;
         }
 
-        return remainingGroups[0]?.id ?? null;
+        return refreshedGroups[0]?.id ?? null;
       });
       setStats((currentStats) =>
         currentStats
           ? {
               ...currentStats,
-              totalGroups: Math.max(currentStats.totalGroups - 1, 0),
+              totalGroups: refreshedGroups.length,
             }
           : currentStats,
       );
