@@ -1,4 +1,5 @@
 export {
+  deleteAdminGroup,
   getAdminDashboard,
   getAdminGroup,
   getAdminGroups,
@@ -6,6 +7,7 @@ export {
 } from "./admin.api";
 export type {
   AdminDashboardResponse,
+  AdminDeleteGroupResponse,
   AdminGroupResponse,
   AdminDashboardStats,
   AdminGroupsResponse,

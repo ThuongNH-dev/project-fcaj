@@ -10,15 +10,18 @@ import {
   CheckCircle2,
   XCircle,
   Eye,
+  Trash2,
 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import {
+  deleteAdminGroup,
   getAdminDashboard,
   getAdminGroup,
   getAdminGroups,
   type AdminDashboardStats,
 } from "../api/admin";
 import type { Group } from "../api/groups";
+import { useFeedback } from "./ui/FeedbackProvider";
 
 export function AdminPage() {
   const [search, setSearch] = useState("");
@@ -30,8 +33,10 @@ export function AdminPage() {
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
   const [isLoadingGroupDetail, setIsLoadingGroupDetail] = useState(false);
+  const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const { t } = useLanguage();
+  const { confirm, showToast } = useFeedback();
 
   const tabs = [
     { id: "users", label: t.users, icon: Users },
@@ -80,6 +85,9 @@ export function AdminPage() {
             setSelectedGroupId((currentSelectedGroupId) =>
               currentSelectedGroupId ?? loadedGroups[0].id,
             );
+          } else {
+            setSelectedGroupId(null);
+            setSelectedGroup(null);
           }
         }
       } catch (error) {
@@ -174,6 +182,58 @@ export function AdminPage() {
       )
     );
   });
+
+  async function handleDeleteGroup(group: Group) {
+    const confirmed = await confirm({
+      title: t.deleteGroup,
+      message: `${t.deleteGroupConfirm} "${group.name}"?`,
+      cancelLabel: t.cancel,
+      confirmLabel: t.deleteGroup,
+      variant: "danger",
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeletingGroupId(group.id);
+      const response = await deleteAdminGroup(group.id);
+      const remainingGroups = groups.filter((currentGroup) => currentGroup.id !== group.id);
+
+      setGroups(remainingGroups);
+      setSelectedGroup((currentSelectedGroup) =>
+        currentSelectedGroup?.id === group.id ? null : currentSelectedGroup,
+      );
+      setSelectedGroupId((currentSelectedGroupId) => {
+        if (currentSelectedGroupId !== group.id) {
+          return currentSelectedGroupId;
+        }
+
+        return remainingGroups[0]?.id ?? null;
+      });
+      setStats((currentStats) =>
+        currentStats
+          ? {
+              ...currentStats,
+              totalGroups: Math.max(currentStats.totalGroups - 1, 0),
+            }
+          : currentStats,
+      );
+      showToast({
+        variant: "success",
+        message: response.message,
+      });
+    } catch (error) {
+      showToast({
+        variant: "error",
+        message:
+          error instanceof Error ? error.message : "Unable to delete group.",
+      });
+    } finally {
+      setDeletingGroupId(null);
+    }
+  }
 
   const statCards = [
     {
@@ -430,9 +490,23 @@ export function AdminPage() {
             </div>
 
             <div className="bg-white rounded-2xl border border-[#E5E7EB] p-5">
-              <h3 className="text-[#111827] mb-4" style={{ fontWeight: 700 }}>
-                Group Detail
-              </h3>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
+                  Group Detail
+                </h3>
+                {selectedGroup && (
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteGroup(selectedGroup)}
+                    disabled={deletingGroupId === selectedGroup.id}
+                    className="inline-flex items-center gap-2 rounded-xl bg-[#FEF2F2] px-3 py-2 text-sm text-[#B91C1C] hover:bg-[#FEE2E2] transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                    style={{ fontWeight: 600 }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {deletingGroupId === selectedGroup.id ? t.deleting : t.deleteGroup}
+                  </button>
+                )}
+              </div>
               {isLoadingGroupDetail ? (
                 <p className="text-sm text-[#6B7280]">Loading group detail...</p>
               ) : selectedGroup ? (

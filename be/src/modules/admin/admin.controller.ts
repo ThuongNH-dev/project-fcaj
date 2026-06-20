@@ -1,6 +1,10 @@
 import type { Request, Response } from "express";
 import { getUserById } from "../auth/auth.service.js";
-import { getAllGroups, getGroupById } from "../groups/groups.service.js";
+import {
+  deleteGroupById,
+  getAllGroups,
+  getGroupById,
+} from "../groups/groups.service.js";
 import { getAdminDashboardStats } from "./admin.service.js";
 
 export async function getAdminSessionHandler(req: Request, res: Response) {
@@ -101,6 +105,35 @@ export async function getAdminGroupByIdHandler(req: Request, res: Response) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to fetch admin group.";
+
+    return res.status(503).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function deleteAdminGroupHandler(req: Request, res: Response) {
+  const groupId =
+    typeof req.params.groupId === "string" ? req.params.groupId : "";
+
+  try {
+    const deleted = await deleteGroupById(groupId);
+
+    if (!deleted) {
+      return res.status(404).json({
+        ok: false,
+        message: "Group not found.",
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message: "Group deleted successfully.",
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to delete admin group.";
 
     return res.status(503).json({
       ok: false,

@@ -248,6 +248,19 @@ export async function deleteGroup(groupId: string, userId: string): Promise<bool
   return result.deletedCount > 0;
 }
 
+export async function deleteGroupById(groupId: string): Promise<boolean> {
+  if (!MongoObjectId.isValid(groupId)) {
+    return false;
+  }
+
+  const groups = await getGroupsCollection();
+  const result = await groups.deleteOne({
+    _id: new MongoObjectId(groupId),
+  });
+
+  return result.deletedCount > 0;
+}
+
 export async function addGroupMember(input: AddGroupMemberInput): Promise<PublicGroup | null> {
   if (!MongoObjectId.isValid(input.groupId)) {
     return null;

@@ -32,3 +32,8 @@ export interface AdminGroupResponse {
   message: string;
   group?: Group;
 }
+
+export interface AdminDeleteGroupResponse {
+  ok: boolean;
+  message: string;
+}
