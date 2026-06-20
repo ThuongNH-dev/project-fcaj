@@ -188,6 +188,19 @@ export async function getGroupByIdForUser(
   return groupDocument ? toPublicGroupWithMembers(groupDocument) : null;
 }
 
+export async function getGroupById(groupId: string): Promise<PublicGroup | null> {
+  if (!MongoObjectId.isValid(groupId)) {
+    return null;
+  }
+
+  const groups = await getGroupsCollection();
+  const groupDocument = await groups.findOne({
+    _id: new MongoObjectId(groupId),
+  });
+
+  return groupDocument ? toPublicGroupWithMembers(groupDocument) : null;
+}
+
 export async function updateGroup(input: UpdateGroupInput): Promise<PublicGroup | null> {
   if (!MongoObjectId.isValid(input.groupId)) {
     return null;

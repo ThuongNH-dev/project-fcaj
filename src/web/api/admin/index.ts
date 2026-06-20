@@ -1,6 +1,12 @@
-export { getAdminDashboard, getAdminGroups, getAdminSession } from "./admin.api";
+export {
+  getAdminDashboard,
+  getAdminGroup,
+  getAdminGroups,
+  getAdminSession,
+} from "./admin.api";
 export type {
   AdminDashboardResponse,
+  AdminGroupResponse,
   AdminDashboardStats,
   AdminGroupsResponse,
   AdminSessionResponse,

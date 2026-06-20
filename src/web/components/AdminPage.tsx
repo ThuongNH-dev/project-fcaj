@@ -9,10 +9,12 @@ import {
   AlertCircle,
   CheckCircle2,
   XCircle,
+  Eye,
 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import {
   getAdminDashboard,
+  getAdminGroup,
   getAdminGroups,
   type AdminDashboardStats,
 } from "../api/admin";
@@ -23,8 +25,11 @@ export function AdminPage() {
   const [activeTab, setActiveTab] = useState("users");
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
+  const [isLoadingGroupDetail, setIsLoadingGroupDetail] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const { t } = useLanguage();
 
@@ -69,7 +74,13 @@ export function AdminPage() {
         const response = await getAdminGroups();
 
         if (isMounted) {
-          setGroups(response.groups ?? []);
+          const loadedGroups = response.groups ?? [];
+          setGroups(loadedGroups);
+          if (loadedGroups.length > 0) {
+            setSelectedGroupId((currentSelectedGroupId) =>
+              currentSelectedGroupId ?? loadedGroups[0].id,
+            );
+          }
         }
       } catch (error) {
         if (isMounted) {
@@ -92,6 +103,43 @@ export function AdminPage() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!selectedGroupId || activeTab !== "groups") {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadGroupDetail() {
+      try {
+        setIsLoadingGroupDetail(true);
+        const response = await getAdminGroup(selectedGroupId);
+
+        if (isMounted) {
+          setSelectedGroup(response.group ?? null);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setErrorMessage(
+            error instanceof Error
+              ? error.message
+              : "Unable to load admin group detail.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingGroupDetail(false);
+        }
+      }
+    }
+
+    void loadGroupDetail();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTab, selectedGroupId]);
 
   const filteredUsers = (stats?.recentUsers ?? []).filter((user) => {
     const keyword = search.trim().toLowerCase();
@@ -313,63 +361,153 @@ export function AdminPage() {
         )}
 
         {activeTab === "groups" && (
-          <div className="bg-white rounded-2xl border border-[#E5E7EB] overflow-hidden">
-            {isLoadingGroups ? (
-              <div className="px-5 py-8 text-sm text-[#6B7280]">
-                Loading admin groups...
-              </div>
-            ) : filteredGroups.length > 0 ? (
-              <div className="divide-y divide-[#F3F4F6]">
-                <div className="px-5 py-4">
-                  <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
-                    All Groups
-                  </h3>
-                  <p className="text-sm text-[#6B7280] mt-1">
-                    Groups across the whole system.
-                  </p>
+          <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+            <div className="bg-white rounded-2xl border border-[#E5E7EB] overflow-hidden">
+              {isLoadingGroups ? (
+                <div className="px-5 py-8 text-sm text-[#6B7280]">
+                  Loading admin groups...
                 </div>
-                {filteredGroups.map((group) => {
-                  const owner =
-                    group.members.find((member) => member.role === "owner") ??
-                    group.members[0];
+              ) : filteredGroups.length > 0 ? (
+                <div className="divide-y divide-[#F3F4F6]">
+                  <div className="px-5 py-4">
+                    <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
+                      All Groups
+                    </h3>
+                    <p className="text-sm text-[#6B7280] mt-1">
+                      Groups across the whole system.
+                    </p>
+                  </div>
+                  {filteredGroups.map((group) => {
+                    const owner =
+                      group.members.find((member) => member.role === "owner") ??
+                      group.members[0];
+                    const isSelected = selectedGroupId === group.id;
 
-                  return (
+                    return (
+                      <button
+                        key={group.id}
+                        type="button"
+                        onClick={() => setSelectedGroupId(group.id)}
+                        className={`w-full px-5 py-4 text-left transition-colors ${
+                          isSelected ? "bg-[#F0FAF5]" : "hover:bg-[#FAFAFA]"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div
+                              className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
+                              style={{ background: group.color }}
+                            >
+                              {group.icon}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[#111827]" style={{ fontWeight: 600 }}>
+                                {group.name}
+                              </p>
+                              <p className="text-sm text-[#6B7280] truncate">
+                                Owner: {owner?.name ?? "Unknown"} · {group.members.length}{" "}
+                                {t.members}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <div className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs text-[#166534] border border-[#D1FAE5]" style={{ fontWeight: 600 }}>
+                              <Eye className="h-3.5 w-3.5" />
+                              View
+                            </div>
+                            <p className="text-xs text-[#9CA3AF] mt-2">
+                              Updated {new Date(group.updatedAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <EmptyState icon={Users} title={t.noGroupsYet} desc={t.noGroupsDesc} />
+              )}
+            </div>
+
+            <div className="bg-white rounded-2xl border border-[#E5E7EB] p-5">
+              <h3 className="text-[#111827] mb-4" style={{ fontWeight: 700 }}>
+                Group Detail
+              </h3>
+              {isLoadingGroupDetail ? (
+                <p className="text-sm text-[#6B7280]">Loading group detail...</p>
+              ) : selectedGroup ? (
+                <div className="space-y-5">
+                  <div className="flex items-center gap-3">
                     <div
-                      key={group.id}
-                      className="px-5 py-4 flex items-center justify-between gap-4"
+                      className="w-12 h-12 rounded-2xl flex items-center justify-center text-xl flex-shrink-0"
+                      style={{ background: selectedGroup.color }}
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div
-                          className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
-                          style={{ background: group.color }}
-                        >
-                          {group.icon}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[#111827]" style={{ fontWeight: 600 }}>
-                            {group.name}
-                          </p>
-                          <p className="text-sm text-[#6B7280] truncate">
-                            Owner: {owner?.name ?? "Unknown"} · {group.members.length}{" "}
-                            {t.members}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right flex-shrink-0">
-                        <p className="text-xs uppercase text-[#16A34A]" style={{ fontWeight: 700 }}>
-                          {owner?.email ?? "No email"}
-                        </p>
-                        <p className="text-xs text-[#9CA3AF]">
-                          Updated {new Date(group.updatedAt).toLocaleDateString()}
-                        </p>
-                      </div>
+                      {selectedGroup.icon}
                     </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <EmptyState icon={Users} title={t.noGroupsYet} desc={t.noGroupsDesc} />
-            )}
+                    <div className="min-w-0">
+                      <p className="text-[#111827]" style={{ fontWeight: 700 }}>
+                        {selectedGroup.name}
+                      </p>
+                      <p className="text-sm text-[#6B7280]">
+                        {selectedGroup.members.length} {t.members}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-xl bg-[#F9FAFB] px-4 py-3">
+                      <p className="text-xs text-[#9CA3AF] uppercase">Created</p>
+                      <p className="text-sm text-[#111827] mt-1" style={{ fontWeight: 600 }}>
+                        {new Date(selectedGroup.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-[#F9FAFB] px-4 py-3">
+                      <p className="text-xs text-[#9CA3AF] uppercase">Updated</p>
+                      <p className="text-sm text-[#111827] mt-1" style={{ fontWeight: 600 }}>
+                        {new Date(selectedGroup.updatedAt).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-sm text-[#111827] mb-3" style={{ fontWeight: 700 }}>
+                      Members
+                    </p>
+                    <div className="space-y-3">
+                      {selectedGroup.members.map((member) => (
+                        <div
+                          key={member.id}
+                          className="flex items-center justify-between gap-3 rounded-xl bg-[#F9FAFB] px-4 py-3"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-[#111827]" style={{ fontWeight: 600 }}>
+                              {member.name}
+                            </p>
+                            <p className="text-sm text-[#6B7280] truncate">
+                              {member.email}
+                            </p>
+                          </div>
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs ${
+                              member.role === "owner"
+                                ? "bg-[#FEF3C7] text-[#92400e]"
+                                : "bg-[#EFF6FF] text-[#1e40af]"
+                            }`}
+                            style={{ fontWeight: 600 }}
+                          >
+                            {member.role}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-[#6B7280]">
+                  Select a group to see details.
+                </p>
+              )}
+            </div>
           </div>
         )}
 

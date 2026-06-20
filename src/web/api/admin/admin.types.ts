@@ -26,3 +26,9 @@ export interface AdminGroupsResponse {
   message: string;
   groups?: Group[];
 }
+
+export interface AdminGroupResponse {
+  ok: boolean;
+  message: string;
+  group?: Group;
+}
