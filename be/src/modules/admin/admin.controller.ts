@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { getUserById } from "../auth/auth.service.js";
+import { getAllGroups } from "../groups/groups.service.js";
 import { getAdminDashboardStats } from "./admin.service.js";
 
 export async function getAdminSessionHandler(req: Request, res: Response) {
@@ -50,6 +51,26 @@ export async function getAdminDashboardHandler(_req: Request, res: Response) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to fetch admin dashboard.";
+
+    return res.status(503).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function getAdminGroupsHandler(_req: Request, res: Response) {
+  try {
+    const groups = await getAllGroups();
+
+    return res.status(200).json({
+      ok: true,
+      message: "Admin groups fetched successfully.",
+      groups,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to fetch admin groups.";
 
     return res.status(503).json({
       ok: false,

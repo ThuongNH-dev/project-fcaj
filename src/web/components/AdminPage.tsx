@@ -11,18 +11,26 @@ import {
   XCircle,
 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
-import { getAdminDashboard, type AdminDashboardStats } from "../api/admin";
+import {
+  getAdminDashboard,
+  getAdminGroups,
+  type AdminDashboardStats,
+} from "../api/admin";
+import type { Group } from "../api/groups";
 
 export function AdminPage() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("users");
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const { t } = useLanguage();
 
   const tabs = [
     { id: "users", label: t.users, icon: Users },
+    { id: "groups", label: t.groups, icon: Activity },
     { id: "uploads", label: t.uploads, icon: Receipt },
     { id: "rejected", label: t.rejectedTx, icon: XCircle },
     { id: "logs", label: t.activityLogs, icon: Activity },
@@ -33,7 +41,7 @@ export function AdminPage() {
 
     async function loadDashboard() {
       try {
-        setIsLoading(true);
+        setIsLoadingDashboard(true);
         setErrorMessage("");
         const response = await getAdminDashboard();
 
@@ -50,12 +58,35 @@ export function AdminPage() {
         }
       } finally {
         if (isMounted) {
-          setIsLoading(false);
+          setIsLoadingDashboard(false);
         }
       }
     }
 
-    void loadDashboard();
+    async function loadGroups() {
+      try {
+        setIsLoadingGroups(true);
+        const response = await getAdminGroups();
+
+        if (isMounted) {
+          setGroups(response.groups ?? []);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setErrorMessage(
+            error instanceof Error
+              ? error.message
+              : "Unable to load admin groups.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingGroups(false);
+        }
+      }
+    }
+
+    void Promise.all([loadDashboard(), loadGroups()]);
 
     return () => {
       isMounted = false;
@@ -72,6 +103,27 @@ export function AdminPage() {
     return (
       `${user.firstName} ${user.lastName}`.toLowerCase().includes(keyword) ||
       user.email.toLowerCase().includes(keyword)
+    );
+  });
+
+  const filteredGroups = groups.filter((group) => {
+    const keyword = search.trim().toLowerCase();
+
+    if (!keyword) {
+      return true;
+    }
+
+    const owner = group.members.find((member) => member.role === "owner");
+
+    return (
+      group.name.toLowerCase().includes(keyword) ||
+      owner?.name.toLowerCase().includes(keyword) === true ||
+      owner?.email.toLowerCase().includes(keyword) === true ||
+      group.members.some(
+        (member) =>
+          member.name.toLowerCase().includes(keyword) ||
+          member.email.toLowerCase().includes(keyword),
+      )
     );
   });
 
@@ -178,7 +230,7 @@ export function AdminPage() {
           ))}
         </div>
 
-        <div className="flex items-center gap-1 mb-5 bg-white border border-[#E5E7EB] rounded-xl p-1 w-fit">
+        <div className="flex items-center gap-1 mb-5 bg-white border border-[#E5E7EB] rounded-xl p-1 w-fit flex-wrap">
           {tabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -196,21 +248,24 @@ export function AdminPage() {
           ))}
         </div>
 
+        {(activeTab === "users" || activeTab === "groups") && (
+          <div className="mb-5 max-w-xs">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF]" />
+              <input
+                type="text"
+                placeholder={activeTab === "groups" ? t.searchGroups : t.searchUsers}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full bg-white border border-[#E5E7EB] rounded-xl pl-9 pr-4 py-2 text-sm text-[#374151] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA]"
+              />
+            </div>
+          </div>
+        )}
+
         {activeTab === "users" && (
           <div className="bg-white rounded-2xl border border-[#E5E7EB] overflow-hidden">
-            <div className="px-5 py-4 border-b border-[#F3F4F6] flex items-center gap-3">
-              <div className="relative flex-1 max-w-xs">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF]" />
-                <input
-                  type="text"
-                  placeholder={t.searchUsers}
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="w-full bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl pl-9 pr-4 py-2 text-sm text-[#374151] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA]"
-                />
-              </div>
-            </div>
-            {isLoading ? (
+            {isLoadingDashboard ? (
               <div className="px-5 py-8 text-sm text-[#6B7280]">
                 Loading admin dashboard...
               </div>
@@ -253,6 +308,67 @@ export function AdminPage() {
               </div>
             ) : (
               <EmptyState icon={Users} title={t.noUsersYet} desc={t.noUsersDesc} />
+            )}
+          </div>
+        )}
+
+        {activeTab === "groups" && (
+          <div className="bg-white rounded-2xl border border-[#E5E7EB] overflow-hidden">
+            {isLoadingGroups ? (
+              <div className="px-5 py-8 text-sm text-[#6B7280]">
+                Loading admin groups...
+              </div>
+            ) : filteredGroups.length > 0 ? (
+              <div className="divide-y divide-[#F3F4F6]">
+                <div className="px-5 py-4">
+                  <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
+                    All Groups
+                  </h3>
+                  <p className="text-sm text-[#6B7280] mt-1">
+                    Groups across the whole system.
+                  </p>
+                </div>
+                {filteredGroups.map((group) => {
+                  const owner =
+                    group.members.find((member) => member.role === "owner") ??
+                    group.members[0];
+
+                  return (
+                    <div
+                      key={group.id}
+                      className="px-5 py-4 flex items-center justify-between gap-4"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
+                          style={{ background: group.color }}
+                        >
+                          {group.icon}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[#111827]" style={{ fontWeight: 600 }}>
+                            {group.name}
+                          </p>
+                          <p className="text-sm text-[#6B7280] truncate">
+                            Owner: {owner?.name ?? "Unknown"} · {group.members.length}{" "}
+                            {t.members}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-xs uppercase text-[#16A34A]" style={{ fontWeight: 700 }}>
+                          {owner?.email ?? "No email"}
+                        </p>
+                        <p className="text-xs text-[#9CA3AF]">
+                          Updated {new Date(group.updatedAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <EmptyState icon={Users} title={t.noGroupsYet} desc={t.noGroupsDesc} />
             )}
           </div>
         )}

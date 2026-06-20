@@ -1,4 +1,5 @@
 import type { AuthUser } from "../auth";
+import type { Group } from "../groups";
 
 export interface AdminSessionResponse {
   ok: boolean;
@@ -18,4 +19,10 @@ export interface AdminDashboardResponse {
   ok: boolean;
   message: string;
   stats?: AdminDashboardStats;
+}
+
+export interface AdminGroupsResponse {
+  ok: boolean;
+  message: string;
+  groups?: Group[];
 }

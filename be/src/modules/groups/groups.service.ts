@@ -161,6 +161,16 @@ export async function getGroupsByUserId(userId: string): Promise<PublicGroup[]> 
   return Promise.all(groupDocuments.map(toPublicGroupWithMembers));
 }
 
+export async function getAllGroups(): Promise<PublicGroup[]> {
+  const groups = await getGroupsCollection();
+  const groupDocuments = await groups
+    .find({})
+    .sort({ updatedAt: -1 })
+    .toArray();
+
+  return Promise.all(groupDocuments.map(toPublicGroupWithMembers));
+}
+
 export async function getGroupByIdForUser(
   groupId: string,
   userId: string,
