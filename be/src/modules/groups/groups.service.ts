@@ -161,6 +161,16 @@ export async function getGroupsByUserId(userId: string): Promise<PublicGroup[]> 
   return Promise.all(groupDocuments.map(toPublicGroupWithMembers));
 }
 
+export async function getAllGroups(): Promise<PublicGroup[]> {
+  const groups = await getGroupsCollection();
+  const groupDocuments = await groups
+    .find({})
+    .sort({ updatedAt: -1 })
+    .toArray();
+
+  return Promise.all(groupDocuments.map(toPublicGroupWithMembers));
+}
+
 export async function getGroupByIdForUser(
   groupId: string,
   userId: string,
@@ -173,6 +183,19 @@ export async function getGroupByIdForUser(
   const groupDocument = await groups.findOne({
     _id: new MongoObjectId(groupId),
     "members.userId": userId,
+  });
+
+  return groupDocument ? toPublicGroupWithMembers(groupDocument) : null;
+}
+
+export async function getGroupById(groupId: string): Promise<PublicGroup | null> {
+  if (!MongoObjectId.isValid(groupId)) {
+    return null;
+  }
+
+  const groups = await getGroupsCollection();
+  const groupDocument = await groups.findOne({
+    _id: new MongoObjectId(groupId),
   });
 
   return groupDocument ? toPublicGroupWithMembers(groupDocument) : null;
@@ -220,6 +243,19 @@ export async function deleteGroup(groupId: string, userId: string): Promise<bool
   const result = await groups.deleteOne({
     _id: new MongoObjectId(groupId),
     createdBy: userId,
+  });
+
+  return result.deletedCount > 0;
+}
+
+export async function deleteGroupById(groupId: string): Promise<boolean> {
+  if (!MongoObjectId.isValid(groupId)) {
+    return false;
+  }
+
+  const groups = await getGroupsCollection();
+  const result = await groups.deleteOne({
+    _id: new MongoObjectId(groupId),
   });
 
   return result.deletedCount > 0;
