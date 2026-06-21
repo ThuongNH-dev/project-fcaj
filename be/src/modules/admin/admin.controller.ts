@@ -5,7 +5,12 @@ import {
   getAllGroups,
   getGroupById,
 } from "../groups/groups.service.js";
-import { getAdminDashboardStats } from "./admin.service.js";
+import {
+  getAdminActivityLogs,
+  getAdminDashboardStats,
+  getAdminRejectedRecords,
+  getAdminUploadRecords,
+} from "./admin.service.js";
 
 export async function getAdminSessionHandler(req: Request, res: Response) {
   const userId = req.auth?.userId;
@@ -134,6 +139,70 @@ export async function deleteAdminGroupHandler(req: Request, res: Response) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to delete admin group.";
+
+    return res.status(503).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function getAdminUploadsHandler(_req: Request, res: Response) {
+  try {
+    const uploads = await getAdminUploadRecords();
+
+    return res.status(200).json({
+      ok: true,
+      message: "Admin uploads fetched successfully.",
+      uploads,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to fetch admin uploads.";
+
+    return res.status(503).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function getAdminRejectedHandler(_req: Request, res: Response) {
+  try {
+    const rejectedItems = await getAdminRejectedRecords();
+
+    return res.status(200).json({
+      ok: true,
+      message: "Admin rejected items fetched successfully.",
+      rejectedItems,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to fetch admin rejected items.";
+
+    return res.status(503).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function getAdminActivityLogsHandler(_req: Request, res: Response) {
+  try {
+    const activityLogs = await getAdminActivityLogs();
+
+    return res.status(200).json({
+      ok: true,
+      message: "Admin activity logs fetched successfully.",
+      activityLogs,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to fetch admin activity logs.";
 
     return res.status(503).json({
       ok: false,

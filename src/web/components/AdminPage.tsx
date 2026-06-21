@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Users,
   Receipt,
@@ -7,21 +7,84 @@ import {
   Shield,
   Search,
   AlertCircle,
-  CheckCircle2,
-  XCircle,
   Eye,
   Trash2,
+  XCircle,
 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import {
   deleteAdminGroup,
+  getAdminActivityLogs,
   getAdminDashboard,
   getAdminGroup,
   getAdminGroups,
+  getAdminRejected,
+  getAdminUploads,
+  type AdminActivityLog,
   type AdminDashboardStats,
+  type AdminRejectedRecord,
+  type AdminUploadRecord,
 } from "../api/admin";
 import type { Group } from "../api/groups";
 import { useFeedback } from "./ui/FeedbackProvider";
+
+function formatFileSize(sizeInBytes: number) {
+  if (sizeInBytes < 1024) {
+    return `${sizeInBytes} B`;
+  }
+
+  if (sizeInBytes < 1024 * 1024) {
+    return `${(sizeInBytes / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(sizeInBytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatDateTime(dateValue: string) {
+  return new Date(dateValue).toLocaleString();
+}
+
+function getSearchPlaceholder(activeTab: string, t: ReturnType<typeof useLanguage>["t"]) {
+  switch (activeTab) {
+    case "groups":
+      return t.searchGroups;
+    case "uploads":
+      return "Search uploads...";
+    case "rejected":
+      return "Search rejected items...";
+    case "logs":
+      return "Search activity logs...";
+    default:
+      return t.searchUsers;
+  }
+}
+
+function getUploadStatusLabel(upload: AdminUploadRecord, t: ReturnType<typeof useLanguage>["t"]) {
+  if (upload.processingStatus === "processed") {
+    return t.processed;
+  }
+
+  if (upload.processingStatus === "failed") {
+    return t.failedErrors;
+  }
+
+  return t.pendingReview;
+}
+
+function getLogTypeLabel(eventType: AdminActivityLog["eventType"]) {
+  switch (eventType) {
+    case "user_registered":
+      return "User";
+    case "group_created":
+      return "Group";
+    case "expense_created":
+      return "Expense";
+    case "receipt_uploaded":
+      return "Receipt";
+    default:
+      return "Activity";
+  }
+}
 
 export function AdminPage() {
   const [search, setSearch] = useState("");
@@ -30,9 +93,15 @@ export function AdminPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [uploads, setUploads] = useState<AdminUploadRecord[]>([]);
+  const [rejectedItems, setRejectedItems] = useState<AdminRejectedRecord[]>([]);
+  const [activityLogs, setActivityLogs] = useState<AdminActivityLog[]>([]);
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
   const [isLoadingGroupDetail, setIsLoadingGroupDetail] = useState(false);
+  const [isLoadingUploads, setIsLoadingUploads] = useState(true);
+  const [isLoadingRejected, setIsLoadingRejected] = useState(true);
+  const [isLoadingActivity, setIsLoadingActivity] = useState(true);
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const { t } = useLanguage();
@@ -46,70 +115,95 @@ export function AdminPage() {
     { id: "logs", label: t.activityLogs, icon: Activity },
   ];
 
+  async function loadDashboard() {
+    try {
+      setIsLoadingDashboard(true);
+      const response = await getAdminDashboard();
+      setStats(response.stats ?? null);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Unable to load admin dashboard.",
+      );
+    } finally {
+      setIsLoadingDashboard(false);
+    }
+  }
+
+  async function loadGroups() {
+    try {
+      setIsLoadingGroups(true);
+      const response = await getAdminGroups();
+      const loadedGroups = response.groups ?? [];
+
+      setGroups(loadedGroups);
+      if (loadedGroups.length > 0) {
+        setSelectedGroupId((currentSelectedGroupId) =>
+          currentSelectedGroupId ?? loadedGroups[0].id,
+        );
+      } else {
+        setSelectedGroupId(null);
+        setSelectedGroup(null);
+      }
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Unable to load admin groups.",
+      );
+    } finally {
+      setIsLoadingGroups(false);
+    }
+  }
+
+  async function loadUploads() {
+    try {
+      setIsLoadingUploads(true);
+      const response = await getAdminUploads();
+      setUploads(response.uploads ?? []);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Unable to load admin uploads.",
+      );
+    } finally {
+      setIsLoadingUploads(false);
+    }
+  }
+
+  async function loadRejected() {
+    try {
+      setIsLoadingRejected(true);
+      const response = await getAdminRejected();
+      setRejectedItems(response.rejectedItems ?? []);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Unable to load rejected items.",
+      );
+    } finally {
+      setIsLoadingRejected(false);
+    }
+  }
+
+  async function loadActivity() {
+    try {
+      setIsLoadingActivity(true);
+      const response = await getAdminActivityLogs();
+      setActivityLogs(response.activityLogs ?? []);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Unable to load activity logs.",
+      );
+    } finally {
+      setIsLoadingActivity(false);
+    }
+  }
+
   useEffect(() => {
-    let isMounted = true;
-
-    async function loadDashboard() {
-      try {
-        setIsLoadingDashboard(true);
-        setErrorMessage("");
-        const response = await getAdminDashboard();
-
-        if (isMounted) {
-          setStats(response.stats ?? null);
-        }
-      } catch (error) {
-        if (isMounted) {
-          setErrorMessage(
-            error instanceof Error
-              ? error.message
-              : "Unable to load admin dashboard.",
-          );
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoadingDashboard(false);
-        }
-      }
-    }
-
-    async function loadGroups() {
-      try {
-        setIsLoadingGroups(true);
-        const response = await getAdminGroups();
-
-        if (isMounted) {
-          const loadedGroups = response.groups ?? [];
-          setGroups(loadedGroups);
-          if (loadedGroups.length > 0) {
-            setSelectedGroupId((currentSelectedGroupId) =>
-              currentSelectedGroupId ?? loadedGroups[0].id,
-            );
-          } else {
-            setSelectedGroupId(null);
-            setSelectedGroup(null);
-          }
-        }
-      } catch (error) {
-        if (isMounted) {
-          setErrorMessage(
-            error instanceof Error
-              ? error.message
-              : "Unable to load admin groups.",
-          );
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoadingGroups(false);
-        }
-      }
-    }
-
-    void Promise.all([loadDashboard(), loadGroups()]);
-
-    return () => {
-      isMounted = false;
-    };
+    setErrorMessage("");
+    void Promise.all([
+      loadDashboard(),
+      loadGroups(),
+      loadUploads(),
+      loadRejected(),
+      loadActivity(),
+    ]);
   }, []);
 
   useEffect(() => {
@@ -183,6 +277,50 @@ export function AdminPage() {
     );
   });
 
+  const filteredUploads = uploads.filter((upload) => {
+    const keyword = search.trim().toLowerCase();
+
+    if (!keyword) {
+      return true;
+    }
+
+    return (
+      upload.originalFileName.toLowerCase().includes(keyword) ||
+      upload.uploadedByName.toLowerCase().includes(keyword) ||
+      upload.uploadedByEmail.toLowerCase().includes(keyword) ||
+      upload.groupName?.toLowerCase().includes(keyword) === true ||
+      upload.expenseTitle?.toLowerCase().includes(keyword) === true
+    );
+  });
+
+  const filteredRejectedItems = rejectedItems.filter((item) => {
+    const keyword = search.trim().toLowerCase();
+
+    if (!keyword) {
+      return true;
+    }
+
+    return (
+      item.title.toLowerCase().includes(keyword) ||
+      item.actorName.toLowerCase().includes(keyword) ||
+      item.groupName?.toLowerCase().includes(keyword) === true ||
+      item.reason.toLowerCase().includes(keyword)
+    );
+  });
+
+  const filteredActivityLogs = activityLogs.filter((activityLog) => {
+    const keyword = search.trim().toLowerCase();
+
+    if (!keyword) {
+      return true;
+    }
+
+    return (
+      activityLog.title.toLowerCase().includes(keyword) ||
+      activityLog.description.toLowerCase().includes(keyword)
+    );
+  });
+
   async function handleDeleteGroup(group: Group) {
     const confirmed = await confirm({
       title: t.deleteGroup,
@@ -199,24 +337,34 @@ export function AdminPage() {
     try {
       setDeletingGroupId(group.id);
       const response = await deleteAdminGroup(group.id);
-      const remainingGroups = groups.filter((currentGroup) => currentGroup.id !== group.id);
+      const groupsResponse = await getAdminGroups();
+      const refreshedGroups = groupsResponse.groups ?? [];
 
-      setGroups(remainingGroups);
+      setGroups(refreshedGroups);
       setSelectedGroup((currentSelectedGroup) =>
-        currentSelectedGroup?.id === group.id ? null : currentSelectedGroup,
+        currentSelectedGroup &&
+        refreshedGroups.some((currentGroup) => currentGroup.id === currentSelectedGroup.id)
+          ? currentSelectedGroup.id === group.id
+            ? null
+            : currentSelectedGroup
+          : null,
       );
       setSelectedGroupId((currentSelectedGroupId) => {
-        if (currentSelectedGroupId !== group.id) {
+        if (
+          currentSelectedGroupId &&
+          currentSelectedGroupId !== group.id &&
+          refreshedGroups.some((currentGroup) => currentGroup.id === currentSelectedGroupId)
+        ) {
           return currentSelectedGroupId;
         }
 
-        return remainingGroups[0]?.id ?? null;
+        return refreshedGroups[0]?.id ?? null;
       });
       setStats((currentStats) =>
         currentStats
           ? {
               ...currentStats,
-              totalGroups: Math.max(currentStats.totalGroups - 1, 0),
+              totalGroups: refreshedGroups.length,
             }
           : currentStats,
       );
@@ -249,6 +397,20 @@ export function AdminPage() {
       icon: Activity,
       bg: "bg-[#EFF6FF]",
       iconBg: "bg-[#93C5FD]",
+    },
+    {
+      label: "Expenses",
+      value: stats?.totalExpenses.toString() ?? "--",
+      icon: Receipt,
+      bg: "bg-[#FFF7ED]",
+      iconBg: "bg-[#FDBA74]",
+    },
+    {
+      label: "Uploads",
+      value: stats?.totalReceiptUploads.toString() ?? "--",
+      icon: Receipt,
+      bg: "bg-[#F0FDF4]",
+      iconBg: "bg-[#86EFAC]",
     },
     {
       label: "Admin Accounts",
@@ -319,7 +481,7 @@ export function AdminPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
           {statCards.map(({ label, value, icon: Icon, bg, iconBg }) => (
             <div key={label} className={`${bg} rounded-2xl p-5 border border-white`}>
               <div
@@ -356,20 +518,18 @@ export function AdminPage() {
           ))}
         </div>
 
-        {(activeTab === "users" || activeTab === "groups") && (
-          <div className="mb-5 max-w-xs">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF]" />
-              <input
-                type="text"
-                placeholder={activeTab === "groups" ? t.searchGroups : t.searchUsers}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-white border border-[#E5E7EB] rounded-xl pl-9 pr-4 py-2 text-sm text-[#374151] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA]"
-              />
-            </div>
+        <div className="mb-5 max-w-xs">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9CA3AF]" />
+            <input
+              type="text"
+              placeholder={getSearchPlaceholder(activeTab, t)}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full bg-white border border-[#E5E7EB] rounded-xl pl-9 pr-4 py-2 text-sm text-[#374151] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA]"
+            />
           </div>
-        )}
+        </div>
 
         {activeTab === "users" && (
           <div className="bg-white rounded-2xl border border-[#E5E7EB] overflow-hidden">
@@ -471,7 +631,10 @@ export function AdminPage() {
                             </div>
                           </div>
                           <div className="text-right flex-shrink-0">
-                            <div className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs text-[#166534] border border-[#D1FAE5]" style={{ fontWeight: 600 }}>
+                            <div
+                              className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs text-[#166534] border border-[#D1FAE5]"
+                              style={{ fontWeight: 600 }}
+                            >
                               <Eye className="h-3.5 w-3.5" />
                               View
                             </div>
@@ -532,13 +695,13 @@ export function AdminPage() {
                     <div className="rounded-xl bg-[#F9FAFB] px-4 py-3">
                       <p className="text-xs text-[#9CA3AF] uppercase">Created</p>
                       <p className="text-sm text-[#111827] mt-1" style={{ fontWeight: 600 }}>
-                        {new Date(selectedGroup.createdAt).toLocaleString()}
+                        {formatDateTime(selectedGroup.createdAt)}
                       </p>
                     </div>
                     <div className="rounded-xl bg-[#F9FAFB] px-4 py-3">
                       <p className="text-xs text-[#9CA3AF] uppercase">Updated</p>
                       <p className="text-sm text-[#111827] mt-1" style={{ fontWeight: 600 }}>
-                        {new Date(selectedGroup.updatedAt).toLocaleString()}
+                        {formatDateTime(selectedGroup.updatedAt)}
                       </p>
                     </div>
                   </div>
@@ -577,9 +740,7 @@ export function AdminPage() {
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-[#6B7280]">
-                  Select a group to see details.
-                </p>
+                <p className="text-sm text-[#6B7280]">Select a group to see details.</p>
               )}
             </div>
           </div>
@@ -587,46 +748,195 @@ export function AdminPage() {
 
         {activeTab === "uploads" && (
           <div className="bg-white rounded-2xl border border-[#E5E7EB] overflow-hidden">
-            <div className="px-5 py-4 border-b border-[#F3F4F6]">
-              <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
-                {t.uploadHistory}
-              </h3>
-            </div>
-            <EmptyState
-              icon={Receipt}
-              title={t.noUploads}
-              desc="This admin section will be connected in a later step."
-            />
+            {isLoadingUploads ? (
+              <div className="px-5 py-8 text-sm text-[#6B7280]">
+                Loading uploads...
+              </div>
+            ) : filteredUploads.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-[#F3F4F6]">
+                      {["File", "Uploader", "Group", "Expense", "Status", "Uploaded"].map(
+                        (heading) => (
+                          <th
+                            key={heading}
+                            className="text-left px-5 py-3 text-xs text-[#9CA3AF] uppercase tracking-wider whitespace-nowrap"
+                            style={{ fontWeight: 600 }}
+                          >
+                            {heading}
+                          </th>
+                        ),
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredUploads.map((upload) => (
+                      <tr
+                        key={upload.id}
+                        className="border-b border-[#F9FAFB] hover:bg-[#FAFAFA] transition-colors"
+                      >
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 bg-[#F0FAF5] rounded-xl flex items-center justify-center flex-shrink-0">
+                              <Receipt className="w-3.5 h-3.5 text-[#16A34A]" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm text-[#111827]" style={{ fontWeight: 600 }}>
+                                {upload.originalFileName}
+                              </p>
+                              <p className="text-xs text-[#9CA3AF] truncate">
+                                {upload.fileKind.toUpperCase()} · {formatFileSize(upload.sizeInBytes)}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <p className="text-sm text-[#111827]" style={{ fontWeight: 600 }}>
+                            {upload.uploadedByName}
+                          </p>
+                          <p className="text-xs text-[#9CA3AF] truncate">
+                            {upload.uploadedByEmail}
+                          </p>
+                        </td>
+                        <td className="px-5 py-3.5 text-sm text-[#374151] whitespace-nowrap">
+                          {upload.groupName ?? "Unassigned"}
+                        </td>
+                        <td className="px-5 py-3.5 text-sm text-[#374151] whitespace-nowrap">
+                          {upload.expenseTitle ?? "Not linked"}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <span
+                            className={`text-xs px-2.5 py-1 rounded-full ${
+                              upload.processingStatus === "processed"
+                                ? "bg-[#D1FAE5] text-[#065f46]"
+                                : upload.processingStatus === "failed"
+                                  ? "bg-[#FEE2E2] text-[#991b1b]"
+                                  : "bg-[#FEF3C7] text-[#92400e]"
+                            }`}
+                            style={{ fontWeight: 600 }}
+                          >
+                            {getUploadStatusLabel(upload, t)}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5 text-xs text-[#9CA3AF] whitespace-nowrap">
+                          {formatDateTime(upload.createdAt)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <EmptyState icon={Receipt} title={t.noUploads} desc={t.noUploadsDesc} />
+            )}
           </div>
         )}
 
         {activeTab === "rejected" && (
           <div className="bg-white rounded-2xl border border-[#E5E7EB] overflow-hidden">
-            <div className="px-5 py-4 border-b border-[#F3F4F6]">
-              <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
-                {t.rejectedTransactions}
-              </h3>
-            </div>
-            <EmptyState
-              icon={CheckCircle2}
-              title={t.noRejectedTx}
-              desc="This admin section will be connected in a later step."
-            />
+            {isLoadingRejected ? (
+              <div className="px-5 py-8 text-sm text-[#6B7280]">
+                Loading rejected items...
+              </div>
+            ) : filteredRejectedItems.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-[#F3F4F6]">
+                      {["Type", "Title", "Group", "Actor", "Reason", "Date"].map(
+                        (heading) => (
+                          <th
+                            key={heading}
+                            className="text-left px-5 py-3 text-xs text-[#9CA3AF] uppercase tracking-wider whitespace-nowrap"
+                            style={{ fontWeight: 600 }}
+                          >
+                            {heading}
+                          </th>
+                        ),
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRejectedItems.map((item) => (
+                      <tr
+                        key={item.id}
+                        className="border-b border-[#F9FAFB] hover:bg-[#FAFAFA] transition-colors"
+                      >
+                        <td className="px-5 py-3.5">
+                          <span
+                            className={`text-xs px-2.5 py-1 rounded-full ${
+                              item.entityType === "receipt"
+                                ? "bg-[#EFF6FF] text-[#1e40af]"
+                                : "bg-[#FEF3C7] text-[#92400e]"
+                            }`}
+                            style={{ fontWeight: 600 }}
+                          >
+                            {item.entityType}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5 text-sm text-[#111827]" style={{ fontWeight: 600 }}>
+                          {item.title}
+                        </td>
+                        <td className="px-5 py-3.5 text-sm text-[#374151] whitespace-nowrap">
+                          {item.groupName ?? "Unassigned"}
+                        </td>
+                        <td className="px-5 py-3.5 text-sm text-[#374151] whitespace-nowrap">
+                          {item.actorName}
+                        </td>
+                        <td className="px-5 py-3.5 text-sm text-[#6B7280]">
+                          {item.reason}
+                        </td>
+                        <td className="px-5 py-3.5 text-xs text-[#9CA3AF] whitespace-nowrap">
+                          {formatDateTime(item.createdAt)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <EmptyState icon={XCircle} title={t.noRejectedTx} desc={t.noRejectedDesc} />
+            )}
           </div>
         )}
 
         {activeTab === "logs" && (
           <div className="bg-white rounded-2xl border border-[#E5E7EB] overflow-hidden">
-            <div className="px-5 py-4 border-b border-[#F3F4F6]">
-              <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
-                {t.systemLogs}
-              </h3>
-            </div>
-            <EmptyState
-              icon={Activity}
-              title={t.noLogsYet}
-              desc="This admin section will be connected in a later step."
-            />
+            {isLoadingActivity ? (
+              <div className="px-5 py-8 text-sm text-[#6B7280]">
+                Loading activity logs...
+              </div>
+            ) : filteredActivityLogs.length > 0 ? (
+              <div className="divide-y divide-[#F3F4F6]">
+                {filteredActivityLogs.map((activityLog) => (
+                  <div
+                    key={activityLog.id}
+                    className="px-5 py-4 flex items-start justify-between gap-4"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span
+                          className="inline-flex rounded-full bg-[#F0FAF5] px-2.5 py-1 text-xs text-[#166534]"
+                          style={{ fontWeight: 700 }}
+                        >
+                          {getLogTypeLabel(activityLog.eventType)}
+                        </span>
+                        <p className="text-[#111827]" style={{ fontWeight: 700 }}>
+                          {activityLog.title}
+                        </p>
+                      </div>
+                      <p className="text-sm text-[#6B7280]">{activityLog.description}</p>
+                    </div>
+                    <p className="text-xs text-[#9CA3AF] whitespace-nowrap">
+                      {formatDateTime(activityLog.createdAt)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState icon={Activity} title={t.noLogsYet} desc={t.noLogsDesc} />
+            )}
           </div>
         )}
       </div>

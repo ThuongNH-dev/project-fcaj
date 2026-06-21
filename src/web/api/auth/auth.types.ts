@@ -33,7 +33,6 @@ export interface RegisterPayload {
   bio?: string;
   avatarUrl?: string;
   defaultCurrency?: string;
-  role?: UserRole;
 }
 
 export interface ForgotPasswordPayload {

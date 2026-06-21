@@ -29,7 +29,6 @@ export async function registerUserHandler(req: Request, res: Response) {
     bio,
     avatarUrl,
     defaultCurrency,
-    role,
   } = req.body as {
     firstName?: string;
     lastName?: string;
@@ -38,7 +37,6 @@ export async function registerUserHandler(req: Request, res: Response) {
     bio?: string;
     avatarUrl?: string;
     defaultCurrency?: string;
-    role?: "admin" | "user";
   };
 
   if (!firstName?.trim() || !lastName?.trim() || !email?.trim() || !password) {
@@ -64,7 +62,6 @@ export async function registerUserHandler(req: Request, res: Response) {
       bio,
       avatarUrl,
       defaultCurrency,
-      role,
     });
 
     return res.status(201).json({

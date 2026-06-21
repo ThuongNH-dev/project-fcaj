@@ -116,7 +116,6 @@ export function LoginPage({ initialMode = "login" }: LoginPageProps) {
         email: form.email.trim(),
         password: form.password,
         defaultCurrency: "USD",
-        role: "user",
       });
 
       setSuccessMessage(response.message);

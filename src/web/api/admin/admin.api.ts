@@ -1,10 +1,13 @@
 import { deleteJson, getJson } from "../client";
 import type {
+  AdminActivityResponse,
   AdminDashboardResponse,
   AdminDeleteGroupResponse,
   AdminGroupResponse,
   AdminGroupsResponse,
+  AdminRejectedResponse,
   AdminSessionResponse,
+  AdminUploadsResponse,
 } from "./admin.types";
 
 export function getAdminDashboard() {
@@ -21,6 +24,18 @@ export function getAdminGroup(groupId: string) {
 
 export function deleteAdminGroup(groupId: string) {
   return deleteJson<AdminDeleteGroupResponse>(`/api/admin/groups/${groupId}`);
+}
+
+export function getAdminUploads() {
+  return getJson<AdminUploadsResponse>("/api/admin/uploads");
+}
+
+export function getAdminRejected() {
+  return getJson<AdminRejectedResponse>("/api/admin/rejected");
+}
+
+export function getAdminActivityLogs() {
+  return getJson<AdminActivityResponse>("/api/admin/activity");
 }
 
 export function getAdminSession() {

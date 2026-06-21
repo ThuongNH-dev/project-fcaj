@@ -4,9 +4,27 @@ import { useNavigate } from "react-router";
 import { ChevronRight, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import { CreateGroupModal } from "./CreateGroupModal";
 import { useLanguage } from "../context/LanguageContext";
+import { getExpenses, type Expense } from "../api/expenses";
 import { deleteGroup, getGroups, type Group } from "../api/groups";
 import { getStoredUser } from "../api/auth";
 import { useFeedback } from "./ui/FeedbackProvider";
+
+type GroupStatus = "Active" | "Pending" | "Settled";
+
+interface GroupExpenseSummary {
+  totalExpenses: number;
+  yourBalance: number;
+  currency: string;
+  status: GroupStatus;
+}
+
+function formatCurrency(amount: number, currency: string) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency || "USD",
+    minimumFractionDigits: 2,
+  }).format(amount);
+}
 
 export function GroupsPage() {
   const [search, setSearch] = useState("");
@@ -15,11 +33,13 @@ export function GroupsPage() {
   const [groupToEdit, setGroupToEdit] = useState<Group | null>(null);
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const { t } = useLanguage();
   const { confirm, showToast } = useFeedback();
   const navigate = useNavigate();
+  const currentUser = getStoredUser();
 
   const filters = [
     { key: "all", label: t.all },
@@ -33,8 +53,13 @@ export function GroupsPage() {
       setErrorMessage("");
       setIsLoadingGroups(true);
 
-      const response = await getGroups();
-      setGroups(response.groups ?? []);
+      const [groupsResponse, expensesResponse] = await Promise.all([
+        getGroups(),
+        getExpenses(),
+      ]);
+
+      setGroups(groupsResponse.groups ?? []);
+      setExpenses(expensesResponse.expenses ?? []);
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Unable to load groups.",
@@ -48,6 +73,47 @@ export function GroupsPage() {
     void loadGroups();
   }, []);
 
+  const groupExpenseSummaries = useMemo(() => {
+    const summaries = new Map<string, GroupExpenseSummary>();
+
+    groups.forEach((group) => {
+      summaries.set(group.id, {
+        totalExpenses: 0,
+        yourBalance: 0,
+        currency: currentUser?.defaultCurrency ?? "USD",
+        status: "Active",
+      });
+    });
+
+    expenses.forEach((expense) => {
+      const summary = summaries.get(expense.groupId);
+
+      if (!summary) {
+        return;
+      }
+
+      summary.totalExpenses += expense.amount;
+      summary.currency = expense.currency || summary.currency;
+
+      const yourShare =
+        expense.participants.find((participant) => participant.userId === currentUser?.id)
+          ?.shareAmount ?? 0;
+      const yourPaidAmount = expense.paidByUserId === currentUser?.id ? expense.amount : 0;
+
+      summary.yourBalance = Number(
+        (summary.yourBalance + yourPaidAmount - yourShare).toFixed(2),
+      );
+
+      if (expense.settlementStatus === "pending") {
+        summary.status = "Pending";
+      } else if (summary.status === "Active") {
+        summary.status = "Settled";
+      }
+    });
+
+    return summaries;
+  }, [currentUser?.defaultCurrency, currentUser?.id, expenses, groups]);
+
   const filteredGroups = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
 
@@ -56,13 +122,11 @@ export function GroupsPage() {
         return false;
       }
 
-      if (filter === "all" || filter === "active") {
-        return true;
-      }
+      const groupStatus = groupExpenseSummaries.get(group.id)?.status.toLowerCase() ?? "active";
 
-      return false;
+      return filter === "all" || filter === groupStatus;
     });
-  }, [filter, groups, search]);
+  }, [filter, groupExpenseSummaries, groups, search]);
 
   const formatRelativeTime = (value: string) => {
     const now = Date.now();
@@ -85,10 +149,7 @@ export function GroupsPage() {
 
     return new Date(value).toLocaleDateString();
   };
-
   const avatarPalette = ["#7EDDBA", "#93C5FD", "#FCA5A5", "#FCD34D", "#C4B5FD"];
-
-  const currentUser = getStoredUser();
 
   const buildMemberBadges = (group: Group) => {
     return group.members.slice(0, 4).map((member, index) => ({
@@ -219,10 +280,29 @@ export function GroupsPage() {
         ) : (
           <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-5">
             {filteredGroups.map((group) => {
-              const yourBalance = "+$0.00";
-              const isPositive = yourBalance.startsWith("+");
-              const isZero = yourBalance === "$0.00";
-              const status = "Active";
+              const summary = groupExpenseSummaries.get(group.id) ?? {
+                totalExpenses: 0,
+                yourBalance: 0,
+                currency: currentUser?.defaultCurrency ?? "USD",
+                status: "Active" as GroupStatus,
+              };
+              const formattedTotalExpenses = formatCurrency(
+                summary.totalExpenses,
+                summary.currency,
+              );
+              const formattedBalanceAmount = formatCurrency(
+                Math.abs(summary.yourBalance),
+                summary.currency,
+              );
+              const yourBalance =
+                summary.yourBalance > 0
+                  ? `+${formattedBalanceAmount}`
+                  : summary.yourBalance < 0
+                    ? `-${formattedBalanceAmount}`
+                    : formattedBalanceAmount;
+              const isPositive = summary.yourBalance > 0;
+              const isZero = summary.yourBalance === 0;
+              const status = summary.status;
               const canManageGroup = currentUser?.id === group.createdBy;
 
               return (
@@ -320,7 +400,7 @@ export function GroupsPage() {
                         {t.totalExpensesLabel}
                       </p>
                       <p className="text-[#111827]" style={{ fontWeight: 700 }}>
-                        $0.00
+                        {formattedTotalExpenses}
                       </p>
                     </div>
                     <div className="text-right">
