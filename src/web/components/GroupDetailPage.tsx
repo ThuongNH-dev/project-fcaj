@@ -1,35 +1,85 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useParams } from "react-router";
-import { ArrowLeft, Plus, Users, DollarSign, TrendingUp, Receipt, Trash2, UserPlus } from "lucide-react";
-import { AddExpenseModal, NewExpense } from "./AddExpenseModal";
+import {
+  ArrowLeft,
+  Plus,
+  Users,
+  DollarSign,
+  TrendingUp,
+  Receipt,
+  Trash2,
+  UserPlus,
+} from "lucide-react";
+import { AddExpenseModal, type NewExpense } from "./AddExpenseModal";
 import { useLanguage } from "../context/LanguageContext";
 import { addGroupMember, getGroup, removeGroupMember, type Group } from "../api/groups";
+import { createExpense, getExpenses, type Expense } from "../api/expenses";
+import { uploadReceipt } from "../api/receipts";
 import { getStoredUser } from "../api/auth";
 import { useFeedback } from "./ui/FeedbackProvider";
 
-interface Expense {
-  id: number;
-  title: string;
-  category: string;
-  paidBy: string;
-  amount: string;
-  date: string;
-  status: string;
-}
-
 const catColors: Record<string, string> = {
-  Food: "bg-[#D1FAE5] text-[#065f46]",
-  Travel: "bg-[#DBEAFE] text-[#1e40af]",
-  Entertainment: "bg-[#FCE7F3] text-[#9d174d]",
-  Rent: "bg-[#FEF3C7] text-[#92400e]",
-  Shopping: "bg-[#EDE9FE] text-[#4c1d95]",
+  food: "bg-[#D1FAE5] text-[#065f46]",
+  travel: "bg-[#DBEAFE] text-[#1e40af]",
+  entertainment: "bg-[#FCE7F3] text-[#9d174d]",
+  accommodation: "bg-[#FEF3C7] text-[#92400e]",
+  shopping: "bg-[#EDE9FE] text-[#4c1d95]",
+  utilities: "bg-[#FEE2E2] text-[#991b1b]",
+  other: "bg-[#F3F4F6] text-[#6B7280]",
 };
 
 const statusStyles: Record<string, string> = {
-  Settled: "bg-[#D1FAE5] text-[#065f46]",
-  Pending: "bg-[#FEF3C7] text-[#92400e]",
+  settled: "bg-[#D1FAE5] text-[#065f46]",
+  pending: "bg-[#FEF3C7] text-[#92400e]",
 };
+
+function formatCurrency(amount: number, currency: string) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency || "USD",
+    minimumFractionDigits: 2,
+  }).format(amount);
+}
+
+function formatDisplayDate(dateValue: string) {
+  return new Date(dateValue).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function toTitleCase(value: string) {
+  return value
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function buildStoredFileName(fileName: string) {
+  const sanitizedFileName = fileName.replace(/\s+/g, "-");
+  return `${Date.now()}-${sanitizedFileName}`;
+}
+
+function getMimeType(file: File) {
+  if (file.type) {
+    return file.type;
+  }
+
+  const normalizedFileName = file.name.toLowerCase();
+
+  if (normalizedFileName.endsWith(".pdf")) {
+    return "application/pdf";
+  }
+
+  if (normalizedFileName.endsWith(".png")) {
+    return "image/png";
+  }
+
+  return "image/jpeg";
+}
 
 export function GroupDetailPage() {
   const [activeCategory, setActiveCategory] = useState("All");
@@ -37,6 +87,7 @@ export function GroupDetailPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [group, setGroup] = useState<Group | null>(null);
   const [isLoadingGroup, setIsLoadingGroup] = useState(true);
+  const [isLoadingExpenses, setIsLoadingExpenses] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
   const [isSubmittingMember, setIsSubmittingMember] = useState(false);
@@ -73,29 +124,117 @@ export function GroupDetailPage() {
     void loadGroup();
   }, [groupId]);
 
-  const handleAddExpense = (expense: NewExpense) => {
-    setExpenses((prev) => [
-      {
-        id: prev.length + 1,
-        title: expense.title,
-        category: expense.category,
-        paidBy: expense.paidBy,
-        amount: `$${expense.amount.toFixed(2)}`,
-        date: expense.date,
-        status: "Pending",
-      },
-      ...prev,
-    ]);
-  };
+  useEffect(() => {
+    async function loadExpensesForGroup() {
+      if (!groupId) {
+        setExpenses([]);
+        setIsLoadingExpenses(false);
+        return;
+      }
 
-  const categories = ["All", "Food", "Travel", "Entertainment"];
+      try {
+        setIsLoadingExpenses(true);
+        const response = await getExpenses();
+        const groupExpenses = (response.expenses ?? []).filter(
+          (expense) => expense.groupId === groupId,
+        );
+        setExpenses(groupExpenses);
+      } catch (error) {
+        setErrorMessage(
+          error instanceof Error ? error.message : "Unable to load group expenses.",
+        );
+      } finally {
+        setIsLoadingExpenses(false);
+      }
+    }
 
-  const filteredExpenses = activeCategory === "All"
-    ? expenses
-    : expenses.filter((e) => e.category === activeCategory);
+    void loadExpensesForGroup();
+  }, [groupId]);
+
+  const categories = useMemo(() => {
+    const uniqueCategories = Array.from(
+      new Set(expenses.map((expense) => toTitleCase(expense.category))),
+    );
+
+    return ["All", ...uniqueCategories];
+  }, [expenses]);
+
+  const filteredExpenses =
+    activeCategory === "All"
+      ? expenses
+      : expenses.filter(
+          (expense) => toTitleCase(expense.category) === activeCategory,
+        );
 
   const memberCount = group?.members.length ?? 0;
   const canManageMembers = Boolean(group && currentUser?.id === group.createdBy);
+  const totalExpensesAmount = expenses.reduce(
+    (sum, expense) => sum + expense.amount,
+    0,
+  );
+  const yourShareAmount = expenses.reduce((sum, expense) => {
+    const share =
+      expense.participants.find((participant) => participant.userId === currentUser?.id)
+        ?.shareAmount ?? 0;
+
+    return sum + share;
+  }, 0);
+  const youPaidAmount = expenses.reduce((sum, expense) => {
+    return expense.paidByUserId === currentUser?.id ? sum + expense.amount : sum;
+  }, 0);
+  const youAreOwedAmount = Number((youPaidAmount - yourShareAmount).toFixed(2));
+  const groupCurrency = expenses[0]?.currency ?? currentUser?.defaultCurrency ?? "USD";
+
+  async function handleAddExpense(expense: NewExpense) {
+    if (!group || !groupId || !expense.paidByUserId || !expense.participantShares) {
+      throw new Error("Expense details are incomplete.");
+    }
+
+    let receiptId: string | undefined;
+
+    if (expense.receiptFile) {
+      const storedFileName = buildStoredFileName(expense.receiptFile.name);
+      const receiptResponse = await uploadReceipt({
+        groupId,
+        originalFileName: expense.receiptFile.name,
+        storedFileName,
+        storagePath: `uploads/${storedFileName}`,
+        mimeType: getMimeType(expense.receiptFile),
+        sizeInBytes: expense.receiptFile.size,
+      });
+
+      receiptId = receiptResponse.receipt?.id;
+    }
+
+    const response = await createExpense({
+      groupId,
+      paidByUserId: expense.paidByUserId,
+      title: expense.title,
+      description: expense.description,
+      expenseDate: expense.date,
+      category: expense.categoryKey ?? expense.category.toLowerCase(),
+      amount: expense.amount,
+      splitMode: expense.splitMode,
+      participants: expense.participantShares,
+      receiptId,
+    });
+
+    if (response.expense) {
+      setExpenses((prevExpenses) => [response.expense!, ...prevExpenses]);
+    } else {
+      const refreshedExpenses = await getExpenses();
+      setExpenses(
+        (refreshedExpenses.expenses ?? []).filter(
+          (currentExpense) => currentExpense.groupId === groupId,
+        ),
+      );
+    }
+
+    showToast({
+      variant: "success",
+      message: response.message,
+    });
+  }
 
   const handleAddMember = async () => {
     if (!groupId) {
@@ -171,7 +310,6 @@ export function GroupDetailPage() {
   return (
     <div className="lg:pl-60 min-h-screen bg-[#F6FBF8]">
       <div className="max-w-7xl mx-auto px-6 py-8 pt-16 lg:pt-8">
-        {/* Back + header */}
         <div className="mb-6">
           <button
             onClick={() => navigate("/groups")}
@@ -188,7 +326,10 @@ export function GroupDetailPage() {
           )}
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div>
-              <h1 className="text-[#111827] mb-1" style={{ fontSize: "1.5rem", fontWeight: 800 }}>
+              <h1
+                className="text-[#111827] mb-1"
+                style={{ fontSize: "1.5rem", fontWeight: 800 }}
+              >
                 {isLoadingGroup ? "Loading group..." : group?.name ?? t.groupsTitle}
               </h1>
               {!isLoadingGroup && group && (
@@ -197,7 +338,12 @@ export function GroupDetailPage() {
                 </p>
               )}
               <div className="flex items-center gap-3 mt-2">
-                <span className="text-xs bg-[#D1FAE5] text-[#065f46] px-2.5 py-1 rounded-full" style={{ fontWeight: 600 }}>{t.active}</span>
+                <span
+                  className="text-xs bg-[#D1FAE5] text-[#065f46] px-2.5 py-1 rounded-full"
+                  style={{ fontWeight: 600 }}
+                >
+                  {t.active}
+                </span>
               </div>
             </div>
             <button
@@ -211,51 +357,91 @@ export function GroupDetailPage() {
           </div>
         </div>
 
-        {/* Balance summary cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-7">
           {[
-            { label: t.totalExpenses, value: "$0.00", icon: DollarSign, bg: "bg-[#F0FAF5]", iconBg: "bg-[#7EDDBA]" },
-            { label: t.yourShare, value: "$0.00", icon: Users, bg: "bg-[#EFF6FF]", iconBg: "bg-[#93C5FD]" },
-            { label: t.youPaid, value: "$0.00", icon: TrendingUp, bg: "bg-[#FEFCE8]", iconBg: "bg-[#FCD34D]" },
-            { label: t.youAreOwed, value: "$0.00", icon: TrendingUp, bg: "bg-[#F0FDF4]", iconBg: "bg-[#4ADE80]" },
+            {
+              label: t.totalExpenses,
+              value: formatCurrency(totalExpensesAmount, groupCurrency),
+              icon: DollarSign,
+              bg: "bg-[#F0FAF5]",
+              iconBg: "bg-[#7EDDBA]",
+            },
+            {
+              label: t.yourShare,
+              value: formatCurrency(yourShareAmount, groupCurrency),
+              icon: Users,
+              bg: "bg-[#EFF6FF]",
+              iconBg: "bg-[#93C5FD]",
+            },
+            {
+              label: t.youPaid,
+              value: formatCurrency(youPaidAmount, groupCurrency),
+              icon: TrendingUp,
+              bg: "bg-[#FEFCE8]",
+              iconBg: "bg-[#FCD34D]",
+            },
+            {
+              label: t.youAreOwed,
+              value: formatCurrency(youAreOwedAmount, groupCurrency),
+              icon: TrendingUp,
+              bg: "bg-[#F0FDF4]",
+              iconBg: "bg-[#4ADE80]",
+            },
           ].map(({ label, value, icon: Icon, bg, iconBg }) => (
             <div key={label} className={`${bg} rounded-2xl p-4 border border-white`}>
-              <div className={`w-8 h-8 ${iconBg} rounded-xl flex items-center justify-center mb-3`}>
+              <div
+                className={`w-8 h-8 ${iconBg} rounded-xl flex items-center justify-center mb-3`}
+              >
                 <Icon className="w-4 h-4 text-[#065f46]" />
               </div>
-              <p className="text-[#111827]" style={{ fontWeight: 700, fontSize: "1.25rem" }}>{value}</p>
+              <p
+                className="text-[#111827]"
+                style={{ fontWeight: 700, fontSize: "1.25rem" }}
+              >
+                {value}
+              </p>
               <p className="text-[#6B7280] text-xs mt-0.5">{label}</p>
             </div>
           ))}
         </div>
 
-        {/* Main content */}
         <div className="grid lg:grid-cols-3 gap-6">
-          {/* Expenses table */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-2xl border border-[#E5E7EB] overflow-hidden">
               <div className="px-5 py-4 border-b border-[#F3F4F6] flex items-center justify-between flex-wrap gap-3">
-                <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>{t.expenses}</h3>
+                <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
+                  {t.expenses}
+                </h3>
                 <div className="flex items-center gap-1">
-                  {categories.map((c) => (
+                  {categories.map((category) => (
                     <button
-                      key={c}
-                      onClick={() => setActiveCategory(c)}
-                      className={`px-3 py-1 rounded-full text-xs transition-all ${activeCategory === c ? "bg-[#16A34A] text-white" : "bg-[#F3F4F6] text-[#6B7280] hover:bg-[#E5E7EB]"}`}
+                      key={category}
+                      onClick={() => setActiveCategory(category)}
+                      className={`px-3 py-1 rounded-full text-xs transition-all ${
+                        activeCategory === category
+                          ? "bg-[#16A34A] text-white"
+                          : "bg-[#F3F4F6] text-[#6B7280] hover:bg-[#E5E7EB]"
+                      }`}
                       style={{ fontWeight: 500 }}
                     >
-                      {c}
+                      {category}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {filteredExpenses.length === 0 ? (
+              {isLoadingExpenses ? (
+                <div className="px-5 py-8 text-sm text-[#6B7280]">
+                  Loading group expenses...
+                </div>
+              ) : filteredExpenses.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center px-6">
                   <div className="w-12 h-12 bg-[#F0FAF5] rounded-2xl flex items-center justify-center mx-auto mb-3">
                     <Receipt className="w-6 h-6 text-[#7EDDBA]" />
                   </div>
-                  <p className="text-[#374151] text-sm mb-1" style={{ fontWeight: 600 }}>{t.noExpensesInGroup}</p>
+                  <p className="text-[#374151] text-sm mb-1" style={{ fontWeight: 600 }}>
+                    {t.noExpensesInGroup}
+                  </p>
                   <p className="text-[#9CA3AF] text-xs mb-4">{t.addExpensePrompt}</p>
                   <button
                     onClick={() => setShowExpenseModal(true)}
@@ -272,33 +458,73 @@ export function GroupDetailPage() {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-[#F3F4F6]">
-                        {[t.expense, t.category, t.paidBy, t.amount, t.date, t.status].map((h) => (
-                          <th key={h} className="text-left px-5 py-3 text-xs text-[#9CA3AF] uppercase tracking-wider" style={{ fontWeight: 600 }}>{h}</th>
-                        ))}
+                        {[t.expense, t.category, t.paidBy, t.amount, t.date, t.status].map(
+                          (heading) => (
+                            <th
+                              key={heading}
+                              className="text-left px-5 py-3 text-xs text-[#9CA3AF] uppercase tracking-wider"
+                              style={{ fontWeight: 600 }}
+                            >
+                              {heading}
+                            </th>
+                          ),
+                        )}
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredExpenses.map((e) => (
-                        <tr key={e.id} className="border-b border-[#F9FAFB] hover:bg-[#FAFAFA] transition-colors">
+                      {filteredExpenses.map((expense) => (
+                        <tr
+                          key={expense.id}
+                          className="border-b border-[#F9FAFB] hover:bg-[#FAFAFA] transition-colors"
+                        >
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-2.5">
                               <div className="w-7 h-7 bg-[#F0FAF5] rounded-lg flex items-center justify-center">
                                 <Receipt className="w-3.5 h-3.5 text-[#16A34A]" />
                               </div>
-                              <span className="text-sm text-[#111827]" style={{ fontWeight: 500 }}>{e.title}</span>
+                              <span
+                                className="text-sm text-[#111827]"
+                                style={{ fontWeight: 500 }}
+                              >
+                                {expense.title}
+                              </span>
                             </div>
                           </td>
                           <td className="px-5 py-3.5">
-                            <span className={`text-xs px-2.5 py-1 rounded-full ${catColors[e.category] || "bg-[#F3F4F6] text-[#6B7280]"}`} style={{ fontWeight: 500 }}>
-                              {e.category}
+                            <span
+                              className={`text-xs px-2.5 py-1 rounded-full ${
+                                catColors[expense.category] || "bg-[#F3F4F6] text-[#6B7280]"
+                              }`}
+                              style={{ fontWeight: 500 }}
+                            >
+                              {toTitleCase(expense.category)}
                             </span>
                           </td>
-                          <td className="px-5 py-3.5 text-sm text-[#374151]" style={{ fontWeight: 500 }}>{e.paidBy}</td>
-                          <td className="px-5 py-3.5 text-sm text-[#111827]" style={{ fontWeight: 700 }}>{e.amount}</td>
-                          <td className="px-5 py-3.5 text-xs text-[#9CA3AF]">{e.date}</td>
+                          <td
+                            className="px-5 py-3.5 text-sm text-[#374151]"
+                            style={{ fontWeight: 500 }}
+                          >
+                            {group?.members.find((member) => member.id === expense.paidByUserId)
+                              ?.name ?? expense.paidByUserId}
+                          </td>
+                          <td
+                            className="px-5 py-3.5 text-sm text-[#111827]"
+                            style={{ fontWeight: 700 }}
+                          >
+                            {formatCurrency(expense.amount, expense.currency)}
+                          </td>
+                          <td className="px-5 py-3.5 text-xs text-[#9CA3AF]">
+                            {formatDisplayDate(expense.expenseDate)}
+                          </td>
                           <td className="px-5 py-3.5">
-                            <span className={`text-xs px-2.5 py-1 rounded-full ${statusStyles[e.status] || "bg-[#F3F4F6] text-[#6B7280]"}`} style={{ fontWeight: 500 }}>
-                              {e.status}
+                            <span
+                              className={`text-xs px-2.5 py-1 rounded-full ${
+                                statusStyles[expense.settlementStatus] ||
+                                "bg-[#F3F4F6] text-[#6B7280]"
+                              }`}
+                              style={{ fontWeight: 500 }}
+                            >
+                              {toTitleCase(expense.settlementStatus)}
                             </span>
                           </td>
                         </tr>
@@ -310,21 +536,27 @@ export function GroupDetailPage() {
             </div>
           </div>
 
-          {/* Right sidebar */}
           <div className="space-y-5">
-            {/* Member balances */}
             <div className="bg-white rounded-2xl p-5 border border-[#E5E7EB]">
               <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
-                <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>{t.memberBalances}</h3>
+                <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
+                  {t.memberBalances}
+                </h3>
                 {canManageMembers && (
-                  <span className="rounded-full bg-[#F0FAF5] px-3 py-1 text-xs text-[#166534]" style={{ fontWeight: 600 }}>
+                  <span
+                    className="rounded-full bg-[#F0FAF5] px-3 py-1 text-xs text-[#166534]"
+                    style={{ fontWeight: 600 }}
+                  >
                     {t.manageMembers}
                   </span>
                 )}
               </div>
               {canManageMembers && (
                 <div className="mb-4 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-3">
-                  <label className="mb-2 block text-xs text-[#6B7280]" style={{ fontWeight: 600 }}>
+                  <label
+                    className="mb-2 block text-xs text-[#6B7280]"
+                    style={{ fontWeight: 600 }}
+                  >
                     {t.addMemberByEmail}
                   </label>
                   <div className="flex items-center gap-2">
@@ -356,7 +588,10 @@ export function GroupDetailPage() {
                       className="flex items-center justify-between rounded-xl bg-[#F9FAFB] px-3 py-2.5"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-9 h-9 rounded-full bg-[#D1FAE5] flex items-center justify-center text-[#065f46] text-xs" style={{ fontWeight: 700 }}>
+                        <div
+                          className="w-9 h-9 rounded-full bg-[#D1FAE5] flex items-center justify-center text-[#065f46] text-xs"
+                          style={{ fontWeight: 700 }}
+                        >
                           {member.name
                             .split(" ")
                             .map((part) => part.charAt(0))
@@ -368,7 +603,9 @@ export function GroupDetailPage() {
                           <p className="text-sm text-[#111827]" style={{ fontWeight: 600 }}>
                             {member.name}
                           </p>
-                          <p className="text-xs text-[#9CA3AF] truncate">{member.email || member.role}</p>
+                          <p className="text-xs text-[#9CA3AF] truncate">
+                            {member.email || member.role}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -400,9 +637,10 @@ export function GroupDetailPage() {
               )}
             </div>
 
-            {/* Who owes whom */}
             <div className="bg-white rounded-2xl p-5 border border-[#E5E7EB]">
-              <h3 className="text-[#111827] mb-4" style={{ fontWeight: 700 }}>{t.whoOwesWhom}</h3>
+              <h3 className="text-[#111827] mb-4" style={{ fontWeight: 700 }}>
+                {t.whoOwesWhom}
+              </h3>
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <p className="text-[#9CA3AF] text-xs">{t.noDebts}</p>
               </div>
@@ -415,21 +653,33 @@ export function GroupDetailPage() {
               </button>
             </div>
 
-            {/* Receipts */}
             <div className="bg-[#F0FAF5] rounded-2xl p-5 border border-[#D1FAE5]">
               <div className="flex items-center gap-2 mb-2">
                 <Receipt className="w-4 h-4 text-[#16A34A]" />
-                <h3 className="text-[#111827] text-sm" style={{ fontWeight: 700 }}>Receipts</h3>
+                <h3 className="text-[#111827] text-sm" style={{ fontWeight: 700 }}>
+                  Receipts
+                </h3>
               </div>
-              <p className="text-[#6B7280] text-xs">{t.noReceiptsYet}</p>
+              <p className="text-[#6B7280] text-xs">
+                {expenses.some((expense) => expense.receiptId)
+                  ? `${expenses.filter((expense) => expense.receiptId).length} receipt(s) attached.`
+                  : t.noReceiptsYet}
+              </p>
             </div>
           </div>
         </div>
       </div>
 
       {createPortal(
-        <AddExpenseModal isOpen={showExpenseModal} onClose={() => setShowExpenseModal(false)} onAdd={handleAddExpense} />,
-        document.body
+        <AddExpenseModal
+          isOpen={showExpenseModal}
+          onClose={() => setShowExpenseModal(false)}
+          onAdd={handleAddExpense}
+          availableGroups={group ? [group] : []}
+          defaultGroupId={groupId}
+          currentUserId={currentUser?.id ?? null}
+        />,
+        document.body,
       )}
     </div>
   );
