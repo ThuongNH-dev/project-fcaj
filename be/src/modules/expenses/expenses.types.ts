@@ -24,10 +24,10 @@ export interface CreateExpenseInput {
   paidByUserId: string;
   title: string;
   description?: string;
-  category: ExpenseCategory;
-  currency?: SupportedCurrency;
+  category: string;
+  currency?: string;
   amount: number;
-  splitMode?: ExpenseSplitMode;
+  splitMode?: string;
   participants: ExpenseParticipantShare[];
   receiptId?: string | null;
 }

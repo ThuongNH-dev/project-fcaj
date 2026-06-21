@@ -14,7 +14,7 @@ export interface CreateReceiptUploadInput {
   storagePath: string;
   mimeType: string;
   sizeInBytes: number;
-  currency?: SupportedCurrency;
+  currency?: string;
 }
 
 export interface PublicReceiptUpload {

@@ -1,7 +1,10 @@
+import { ObjectId as MongoObjectId } from "mongodb";
 import type { Collection, IndexDescription, ObjectId } from "mongodb";
 import { connectToMongo } from "../../db/mongo.js";
 import type { SupportedCurrency } from "../auth/auth.types.js";
+import { getGroupIdsByUserId } from "../groups/groups.service.js";
 import type {
+  CreateReceiptUploadInput,
   PublicReceiptUpload,
   ReceiptFileKind,
   ReceiptOcrStatus,
@@ -233,6 +236,145 @@ export function normalizeReceiptExtractedAmount(value?: number | null) {
   }
 
   return Number(value.toFixed(2));
+}
+
+export function normalizeReceiptOptionalReferenceId(value?: string | null) {
+  const normalizedValue = value?.trim();
+  return normalizedValue ? normalizedValue : null;
+}
+
+export async function createReceiptUpload(
+  input: CreateReceiptUploadInput,
+): Promise<PublicReceiptUpload> {
+  const receipts = await getReceiptsCollection();
+  const normalizedOriginalFileName = normalizeReceiptOriginalFileName(
+    input.originalFileName,
+  );
+  const normalizedStoredFileName = normalizeReceiptStoredFileName(
+    input.storedFileName,
+  );
+  const normalizedStoragePath = normalizeReceiptStoragePath(input.storagePath);
+  const normalizedMimeType = normalizeReceiptMimeType(input.mimeType);
+  const normalizedFileKind = getReceiptFileKindFromMimeType(normalizedMimeType);
+  const normalizedSizeInBytes = normalizeReceiptSizeInBytes(input.sizeInBytes);
+  const normalizedCurrency = normalizeReceiptCurrency(input.currency);
+  const normalizedGroupId = normalizeReceiptOptionalReferenceId(input.groupId);
+  const normalizedExpenseId = normalizeReceiptOptionalReferenceId(input.expenseId);
+  const createdAt = new Date();
+  const updatedAt = createdAt;
+  const result = await receipts.insertOne({
+    uploadedByUserId: input.uploadedByUserId,
+    groupId: normalizedGroupId,
+    expenseId: normalizedExpenseId,
+    originalFileName: normalizedOriginalFileName,
+    storedFileName: normalizedStoredFileName,
+    storagePath: normalizedStoragePath,
+    mimeType: normalizedMimeType,
+    fileKind: normalizedFileKind,
+    sizeInBytes: normalizedSizeInBytes,
+    processingStatus: "pending",
+    reviewStatus: "pending",
+    ocrStatus: "pending",
+    currency: normalizedCurrency,
+    extractedMerchantName: null,
+    extractedTotalAmount: null,
+    extractedPurchaseDate: null,
+    ocrText: "",
+    errorMessage: null,
+    rejectionReason: null,
+    reviewedBy: null,
+    reviewedAt: null,
+    createdAt,
+    updatedAt,
+  });
+
+  return toPublicReceiptUpload({
+    _id: result.insertedId,
+    uploadedByUserId: input.uploadedByUserId,
+    groupId: normalizedGroupId,
+    expenseId: normalizedExpenseId,
+    originalFileName: normalizedOriginalFileName,
+    storedFileName: normalizedStoredFileName,
+    storagePath: normalizedStoragePath,
+    mimeType: normalizedMimeType,
+    fileKind: normalizedFileKind,
+    sizeInBytes: normalizedSizeInBytes,
+    processingStatus: "pending",
+    reviewStatus: "pending",
+    ocrStatus: "pending",
+    currency: normalizedCurrency,
+    extractedMerchantName: null,
+    extractedTotalAmount: null,
+    extractedPurchaseDate: null,
+    ocrText: "",
+    errorMessage: null,
+    rejectionReason: null,
+    reviewedBy: null,
+    reviewedAt: null,
+    createdAt,
+    updatedAt,
+  });
+}
+
+export async function getReceiptUploadsByUserId(
+  userId: string,
+): Promise<PublicReceiptUpload[]> {
+  const groupIds = await getGroupIdsByUserId(userId);
+  const receipts = await getReceiptsCollection();
+  const filters: Array<Record<string, unknown>> = [
+    {
+      uploadedByUserId: userId,
+    },
+  ];
+
+  if (groupIds.length > 0) {
+    filters.push({
+      groupId: {
+        $in: groupIds,
+      },
+    });
+  }
+
+  const receiptDocuments = await receipts
+    .find({
+      $or: filters,
+    })
+    .sort({ updatedAt: -1 })
+    .toArray();
+
+  return receiptDocuments.map(toPublicReceiptUpload);
+}
+
+export async function getReceiptUploadByIdForUser(
+  receiptId: string,
+  userId: string,
+): Promise<PublicReceiptUpload | null> {
+  if (!MongoObjectId.isValid(receiptId)) {
+    return null;
+  }
+
+  const groupIds = await getGroupIdsByUserId(userId);
+  const receipts = await getReceiptsCollection();
+  const filters: Array<Record<string, unknown>> = [
+    {
+      uploadedByUserId: userId,
+    },
+  ];
+
+  if (groupIds.length > 0) {
+    filters.push({
+      groupId: {
+        $in: groupIds,
+      },
+    });
+  }
+
+  const receiptDocument = await receipts.findOne({
+    _id: new MongoObjectId(receiptId),
+    $or: filters,
+  });
+
+  return receiptDocument ? toPublicReceiptUpload(receiptDocument) : null;
 }
 
 export function toPublicReceiptUpload(

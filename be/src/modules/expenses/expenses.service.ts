@@ -1,7 +1,10 @@
+import { ObjectId as MongoObjectId } from "mongodb";
 import type { Collection, IndexDescription, ObjectId } from "mongodb";
 import { connectToMongo } from "../../db/mongo.js";
 import type { SupportedCurrency } from "../auth/auth.types.js";
+import { getGroupIdsByUserId } from "../groups/groups.service.js";
 import type {
+  CreateExpenseInput,
   ExpenseCategory,
   ExpenseParticipantShare,
   ExpenseReviewStatus,
@@ -204,6 +207,128 @@ export function normalizeExpenseParticipants(
     userId,
     shareAmount,
   }));
+}
+
+export function normalizeExpenseOptionalReferenceId(value?: string | null) {
+  const normalizedValue = value?.trim();
+  return normalizedValue ? normalizedValue : null;
+}
+
+function getParticipantTotalAmount(participants: ExpenseParticipantShare[]) {
+  return Number(
+    participants
+      .reduce((totalAmount, participant) => totalAmount + participant.shareAmount, 0)
+      .toFixed(2),
+  );
+}
+
+export async function createExpense(
+  input: CreateExpenseInput,
+): Promise<PublicExpense> {
+  const expenses = await getExpensesCollection();
+  const normalizedTitle = normalizeExpenseTitle(input.title);
+  const normalizedDescription = normalizeExpenseDescription(input.description);
+  const normalizedCategory = normalizeExpenseCategory(input.category);
+  const normalizedCurrency = normalizeExpenseCurrency(input.currency);
+  const normalizedAmount = normalizeExpenseAmount(input.amount);
+  const normalizedSplitMode = normalizeExpenseSplitMode(input.splitMode);
+  const normalizedParticipants = normalizeExpenseParticipants(input.participants);
+  const normalizedReceiptId = normalizeExpenseOptionalReferenceId(input.receiptId);
+  const participantTotalAmount = getParticipantTotalAmount(normalizedParticipants);
+
+  if (participantTotalAmount !== normalizedAmount) {
+    throw new Error("Expense participant share amounts must equal the total amount.");
+  }
+
+  const createdAt = new Date();
+  const updatedAt = createdAt;
+  const result = await expenses.insertOne({
+    groupId: input.groupId,
+    createdBy: input.createdBy,
+    paidByUserId: input.paidByUserId,
+    title: normalizedTitle,
+    description: normalizedDescription,
+    category: normalizedCategory,
+    currency: normalizedCurrency,
+    amount: normalizedAmount,
+    splitMode: normalizedSplitMode,
+    participants: normalizedParticipants,
+    receiptId: normalizedReceiptId,
+    settlementStatus: "pending",
+    reviewStatus: "pending",
+    rejectionReason: null,
+    reviewedBy: null,
+    reviewedAt: null,
+    createdAt,
+    updatedAt,
+  });
+
+  return toPublicExpense({
+    _id: result.insertedId,
+    groupId: input.groupId,
+    createdBy: input.createdBy,
+    paidByUserId: input.paidByUserId,
+    title: normalizedTitle,
+    description: normalizedDescription,
+    category: normalizedCategory,
+    currency: normalizedCurrency,
+    amount: normalizedAmount,
+    splitMode: normalizedSplitMode,
+    participants: normalizedParticipants,
+    receiptId: normalizedReceiptId,
+    settlementStatus: "pending",
+    reviewStatus: "pending",
+    rejectionReason: null,
+    reviewedBy: null,
+    reviewedAt: null,
+    createdAt,
+    updatedAt,
+  });
+}
+
+export async function getExpensesByUserId(userId: string): Promise<PublicExpense[]> {
+  const groupIds = await getGroupIdsByUserId(userId);
+
+  if (groupIds.length === 0) {
+    return [];
+  }
+
+  const expenses = await getExpensesCollection();
+  const expenseDocuments = await expenses
+    .find({
+      groupId: {
+        $in: groupIds,
+      },
+    })
+    .sort({ updatedAt: -1 })
+    .toArray();
+
+  return expenseDocuments.map(toPublicExpense);
+}
+
+export async function getExpenseByIdForUser(
+  expenseId: string,
+  userId: string,
+): Promise<PublicExpense | null> {
+  if (!MongoObjectId.isValid(expenseId)) {
+    return null;
+  }
+
+  const groupIds = await getGroupIdsByUserId(userId);
+
+  if (groupIds.length === 0) {
+    return null;
+  }
+
+  const expenses = await getExpensesCollection();
+  const expenseDocument = await expenses.findOne({
+    _id: new MongoObjectId(expenseId),
+    groupId: {
+      $in: groupIds,
+    },
+  });
+
+  return expenseDocument ? toPublicExpense(expenseDocument) : null;
 }
 
 export function toPublicExpense(expense: ExpenseDocument): PublicExpense {
