@@ -24,6 +24,7 @@ export interface CreateExpenseInput {
   paidByUserId: string;
   title: string;
   description?: string;
+  expenseDate?: string;
   category: string;
   currency?: string;
   amount: number;
@@ -39,6 +40,7 @@ export interface PublicExpense {
   paidByUserId: string;
   title: string;
   description: string;
+  expenseDate: string;
   category: ExpenseCategory;
   currency: SupportedCurrency;
   amount: number;

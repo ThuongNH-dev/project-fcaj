@@ -118,6 +118,7 @@ export async function createExpenseHandler(req: Request, res: Response) {
     paidByUserId,
     title,
     description,
+    expenseDate,
     category,
     currency,
     amount,
@@ -128,6 +129,7 @@ export async function createExpenseHandler(req: Request, res: Response) {
     paidByUserId?: string;
     title?: string;
     description?: string;
+    expenseDate?: string;
     category?: string;
     currency?: string;
     amount?: number | string;
@@ -259,6 +261,7 @@ export async function createExpenseHandler(req: Request, res: Response) {
       paidByUserId,
       title,
       description,
+      expenseDate,
       category,
       currency,
       amount: numericAmount,
@@ -278,6 +281,7 @@ export async function createExpenseHandler(req: Request, res: Response) {
 
     const statusCode =
       message === "Expense currency must be either USD or VND." ||
+      message === "Expense date is invalid." ||
       message === "Expense category is invalid." ||
       message === "Expense amount must be greater than zero." ||
       message === "Expense split mode is invalid." ||

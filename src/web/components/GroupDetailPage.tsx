@@ -80,7 +80,7 @@ export function GroupDetailPage() {
         title: expense.title,
         category: expense.category,
         paidBy: expense.paidBy,
-        amount: expense.amount,
+        amount: `$${expense.amount.toFixed(2)}`,
         date: expense.date,
         status: "Pending",
       },

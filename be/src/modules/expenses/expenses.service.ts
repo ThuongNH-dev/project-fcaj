@@ -20,6 +20,7 @@ export interface ExpenseDocument {
   paidByUserId: string;
   title: string;
   description: string;
+  expenseDate: Date;
   category: ExpenseCategory;
   currency: SupportedCurrency;
   amount: number;
@@ -101,6 +102,20 @@ export function normalizeExpenseTitle(title: string) {
 
 export function normalizeExpenseDescription(description?: string) {
   return description?.trim() ?? "";
+}
+
+export function normalizeExpenseDate(expenseDate?: string) {
+  if (!expenseDate?.trim()) {
+    return new Date();
+  }
+
+  const normalizedExpenseDate = new Date(expenseDate);
+
+  if (Number.isNaN(normalizedExpenseDate.getTime())) {
+    throw new Error("Expense date is invalid.");
+  }
+
+  return normalizedExpenseDate;
 }
 
 export function normalizeExpenseCurrency(currency?: string): SupportedCurrency {
@@ -228,6 +243,7 @@ export async function createExpense(
   const expenses = await getExpensesCollection();
   const normalizedTitle = normalizeExpenseTitle(input.title);
   const normalizedDescription = normalizeExpenseDescription(input.description);
+  const normalizedExpenseDate = normalizeExpenseDate(input.expenseDate);
   const normalizedCategory = normalizeExpenseCategory(input.category);
   const normalizedCurrency = normalizeExpenseCurrency(input.currency);
   const normalizedAmount = normalizeExpenseAmount(input.amount);
@@ -248,6 +264,7 @@ export async function createExpense(
     paidByUserId: input.paidByUserId,
     title: normalizedTitle,
     description: normalizedDescription,
+    expenseDate: normalizedExpenseDate,
     category: normalizedCategory,
     currency: normalizedCurrency,
     amount: normalizedAmount,
@@ -270,6 +287,7 @@ export async function createExpense(
     paidByUserId: input.paidByUserId,
     title: normalizedTitle,
     description: normalizedDescription,
+    expenseDate: normalizedExpenseDate,
     category: normalizedCategory,
     currency: normalizedCurrency,
     amount: normalizedAmount,
@@ -343,6 +361,7 @@ export function toPublicExpense(expense: ExpenseDocument): PublicExpense {
     paidByUserId: expense.paidByUserId,
     title: expense.title,
     description: expense.description,
+    expenseDate: expense.expenseDate.toISOString(),
     category: expense.category,
     currency: expense.currency,
     amount: expense.amount,
