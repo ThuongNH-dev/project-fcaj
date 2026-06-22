@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { Plus, Search, Receipt } from "lucide-react";
 import { AddExpenseModal, NewExpense } from "./AddExpenseModal";
 import { useLanguage } from "../context/LanguageContext";
+import { uploadReceiptFile } from "../api/receipts";
+import { useFeedback } from "./ui/FeedbackProvider";
 
 interface Expense {
   id: number;
@@ -34,8 +36,15 @@ export function ExpensesPage() {
   const [filter, setFilter] = useState("All");
   const [showModal, setShowModal] = useState(false);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const { showToast } = useFeedback();
 
-  const handleAdd = (expense: NewExpense) => {
+  const handleAdd = async (expense: NewExpense) => {
+    if (expense.receiptFile) {
+      await uploadReceiptFile({
+        file: expense.receiptFile,
+      });
+    }
+
     const splitCount = expense.splitWith.length || 1;
     const raw = parseFloat(expense.amount.replace("$", "")) || 0;
     setExpenses((prev) => [{
@@ -49,6 +58,13 @@ export function ExpensesPage() {
       date: expense.date,
       status: "Pending",
     }, ...prev]);
+
+    showToast({
+      variant: "success",
+      message: expense.receiptFile
+        ? "Expense and receipt added successfully."
+        : "Expense added successfully.",
+    });
   };
 
   const { t } = useLanguage();

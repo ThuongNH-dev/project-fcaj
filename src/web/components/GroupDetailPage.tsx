@@ -6,6 +6,7 @@ import { AddExpenseModal, NewExpense } from "./AddExpenseModal";
 import { useLanguage } from "../context/LanguageContext";
 import { addGroupMember, getGroup, removeGroupMember, type Group } from "../api/groups";
 import { getStoredUser } from "../api/auth";
+import { uploadReceiptFile } from "../api/receipts";
 import { useFeedback } from "./ui/FeedbackProvider";
 
 interface Expense {
@@ -73,7 +74,14 @@ export function GroupDetailPage() {
     void loadGroup();
   }, [groupId]);
 
-  const handleAddExpense = (expense: NewExpense) => {
+  const handleAddExpense = async (expense: NewExpense) => {
+    if (expense.receiptFile) {
+      await uploadReceiptFile({
+        file: expense.receiptFile,
+        groupId: groupId ?? undefined,
+      });
+    }
+
     setExpenses((prev) => [
       {
         id: prev.length + 1,
@@ -86,6 +94,13 @@ export function GroupDetailPage() {
       },
       ...prev,
     ]);
+
+    showToast({
+      variant: "success",
+      message: expense.receiptFile
+        ? "Expense and receipt added successfully."
+        : "Expense added successfully.",
+    });
   };
 
   const categories = ["All", "Food", "Travel", "Entertainment"];
