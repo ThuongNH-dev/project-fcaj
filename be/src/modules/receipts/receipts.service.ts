@@ -276,6 +276,38 @@ export async function getReceiptUploadByIdForUser(
   return receiptDocument ? toPublicReceiptUpload(receiptDocument) : null;
 }
 
+export async function getReceiptUploadsByIdsForUser(
+  receiptIds: string[],
+  userId: string,
+): Promise<Map<string, PublicReceiptUpload>> {
+  const validReceiptIds = Array.from(
+    new Set(
+      receiptIds.filter((receiptId) => MongoObjectId.isValid(receiptId)),
+    ),
+  );
+
+  if (validReceiptIds.length === 0) {
+    return new Map();
+  }
+
+  const receipts = await getReceiptsCollection();
+  const receiptDocuments = await receipts
+    .find({
+      _id: {
+        $in: validReceiptIds.map((receiptId) => new MongoObjectId(receiptId)),
+      },
+      uploadedByUserId: userId,
+    })
+    .toArray();
+
+  return new Map(
+    receiptDocuments.map((receiptDocument) => [
+      receiptDocument._id!.toString(),
+      toPublicReceiptUpload(receiptDocument),
+    ]),
+  );
+}
+
 export function toPublicReceiptUpload(
   receiptUpload: ReceiptUploadDocument,
 ): PublicReceiptUpload {

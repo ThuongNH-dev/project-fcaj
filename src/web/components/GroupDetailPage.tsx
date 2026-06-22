@@ -5,18 +5,22 @@ import { ArrowLeft, Plus, Users, DollarSign, TrendingUp, Receipt, Trash2, UserPl
 import { AddExpenseModal, NewExpense } from "./AddExpenseModal";
 import { useLanguage } from "../context/LanguageContext";
 import { addGroupMember, getGroup, removeGroupMember, type Group } from "../api/groups";
+import {
+  createExpense,
+  getExpenses,
+  type ExpenseRecord,
+} from "../api/expenses";
 import { getStoredUser } from "../api/auth";
-import { uploadReceiptFile } from "../api/receipts";
+import {
+  getReceiptPublicUrl,
+  hasReceiptPublicBaseUrl,
+  uploadReceiptFile,
+  type ReceiptUpload,
+} from "../api/receipts";
 import { useFeedback } from "./ui/FeedbackProvider";
 
-interface Expense {
-  id: number;
-  title: string;
-  category: string;
-  paidBy: string;
-  amount: string;
-  date: string;
-  status: string;
+interface Expense extends ExpenseRecord {
+  receipt: ReceiptUpload | null;
 }
 
 const catColors: Record<string, string> = {
@@ -38,6 +42,7 @@ export function GroupDetailPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [group, setGroup] = useState<Group | null>(null);
   const [isLoadingGroup, setIsLoadingGroup] = useState(true);
+  const [isLoadingExpenses, setIsLoadingExpenses] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
   const [isSubmittingMember, setIsSubmittingMember] = useState(false);
@@ -47,6 +52,7 @@ export function GroupDetailPage() {
   const currentUser = getStoredUser();
   const navigate = useNavigate();
   const { groupId = null } = useParams();
+  const canRenderReceiptPreview = hasReceiptPublicBaseUrl();
 
   useEffect(() => {
     async function loadGroup() {
@@ -74,27 +80,76 @@ export function GroupDetailPage() {
     void loadGroup();
   }, [groupId]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadExpenses() {
+      if (!groupId) {
+        if (isMounted) {
+          setExpenses([]);
+          setIsLoadingExpenses(false);
+        }
+        return;
+      }
+
+      try {
+        if (isMounted) {
+          setIsLoadingExpenses(true);
+        }
+
+        const response = await getExpenses(groupId);
+
+        if (isMounted) {
+          setExpenses(response.expenses ?? []);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setErrorMessage(
+            error instanceof Error ? error.message : "Unable to load group expenses.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingExpenses(false);
+        }
+      }
+    }
+
+    void loadExpenses();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [groupId]);
+
   const handleAddExpense = async (expense: NewExpense) => {
+    let uploadedReceipt: ReceiptUpload | null = null;
+
     if (expense.receiptFile) {
-      await uploadReceiptFile({
+      uploadedReceipt = await uploadReceiptFile({
         file: expense.receiptFile,
         groupId: groupId ?? undefined,
       });
     }
 
-    setExpenses((prev) => [
-      {
-        id: prev.length + 1,
-        title: expense.title,
-        category: expense.category,
-        paidBy: expense.paidBy,
-        amount: expense.amount,
-        date: expense.date,
-        status: "Pending",
-      },
-      ...prev,
-    ]);
+    const createExpenseResponse = await createExpense({
+      title: expense.title,
+      category: expense.category,
+      paidBy: expense.paidBy,
+      amount: expense.amount,
+      yourShare: expense.amount,
+      date: expense.date,
+      status: "Pending",
+      groupId: groupId ?? undefined,
+      groupName: group?.name,
+      receiptId: uploadedReceipt?.id,
+    });
 
+    if (!createExpenseResponse.expense) {
+      throw new Error("Expense record was not returned.");
+    }
+
+    setExpenses((prev) => [createExpenseResponse.expense!, ...prev]);
     showToast({
       variant: "success",
       message: expense.receiptFile
@@ -107,7 +162,7 @@ export function GroupDetailPage() {
 
   const filteredExpenses = activeCategory === "All"
     ? expenses
-    : expenses.filter((e) => e.category === activeCategory);
+    : expenses.filter((expense) => expense.category === activeCategory);
 
   const memberCount = group?.members.length ?? 0;
   const canManageMembers = Boolean(group && currentUser?.id === group.createdBy);
@@ -186,7 +241,6 @@ export function GroupDetailPage() {
   return (
     <div className="lg:pl-60 min-h-screen bg-[#F6FBF8]">
       <div className="max-w-7xl mx-auto px-6 py-8 pt-16 lg:pt-8">
-        {/* Back + header */}
         <div className="mb-6">
           <button
             onClick={() => navigate("/groups")}
@@ -226,7 +280,6 @@ export function GroupDetailPage() {
           </div>
         </div>
 
-        {/* Balance summary cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-7">
           {[
             { label: t.totalExpenses, value: "$0.00", icon: DollarSign, bg: "bg-[#F0FAF5]", iconBg: "bg-[#7EDDBA]" },
@@ -244,28 +297,30 @@ export function GroupDetailPage() {
           ))}
         </div>
 
-        {/* Main content */}
         <div className="grid lg:grid-cols-3 gap-6">
-          {/* Expenses table */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-2xl border border-[#E5E7EB] overflow-hidden">
               <div className="px-5 py-4 border-b border-[#F3F4F6] flex items-center justify-between flex-wrap gap-3">
                 <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>{t.expenses}</h3>
                 <div className="flex items-center gap-1">
-                  {categories.map((c) => (
+                  {categories.map((category) => (
                     <button
-                      key={c}
-                      onClick={() => setActiveCategory(c)}
-                      className={`px-3 py-1 rounded-full text-xs transition-all ${activeCategory === c ? "bg-[#16A34A] text-white" : "bg-[#F3F4F6] text-[#6B7280] hover:bg-[#E5E7EB]"}`}
+                      key={category}
+                      onClick={() => setActiveCategory(category)}
+                      className={`px-3 py-1 rounded-full text-xs transition-all ${activeCategory === category ? "bg-[#16A34A] text-white" : "bg-[#F3F4F6] text-[#6B7280] hover:bg-[#E5E7EB]"}`}
                       style={{ fontWeight: 500 }}
                     >
-                      {c}
+                      {category}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {filteredExpenses.length === 0 ? (
+              {isLoadingExpenses ? (
+                <div className="px-5 py-8 text-sm text-[#6B7280]">
+                  Loading expenses...
+                </div>
+              ) : filteredExpenses.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center px-6">
                   <div className="w-12 h-12 bg-[#F0FAF5] rounded-2xl flex items-center justify-center mx-auto mb-3">
                     <Receipt className="w-6 h-6 text-[#7EDDBA]" />
@@ -287,37 +342,83 @@ export function GroupDetailPage() {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-[#F3F4F6]">
-                        {[t.expense, t.category, t.paidBy, t.amount, t.date, t.status].map((h) => (
-                          <th key={h} className="text-left px-5 py-3 text-xs text-[#9CA3AF] uppercase tracking-wider" style={{ fontWeight: 600 }}>{h}</th>
+                        {[t.expense, t.category, t.paidBy, t.amount, t.date, t.status].map((heading) => (
+                          <th key={heading} className="text-left px-5 py-3 text-xs text-[#9CA3AF] uppercase tracking-wider" style={{ fontWeight: 600 }}>{heading}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredExpenses.map((e) => (
-                        <tr key={e.id} className="border-b border-[#F9FAFB] hover:bg-[#FAFAFA] transition-colors">
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-7 h-7 bg-[#F0FAF5] rounded-lg flex items-center justify-center">
-                                <Receipt className="w-3.5 h-3.5 text-[#16A34A]" />
+                      {filteredExpenses.map((expense) => {
+                        const receiptPublicUrl = getReceiptPublicUrl(expense.receipt);
+
+                        return (
+                          <tr key={expense.id} className="border-b border-[#F9FAFB] hover:bg-[#FAFAFA] transition-colors align-top">
+                            <td className="px-5 py-3.5">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-7 h-7 bg-[#F0FAF5] rounded-lg flex items-center justify-center">
+                                  <Receipt className="w-3.5 h-3.5 text-[#16A34A]" />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-sm text-[#111827]" style={{ fontWeight: 500 }}>
+                                    {expense.title}
+                                  </p>
+                                  {expense.receipt && (
+                                    <div className="mt-2">
+                                      <p className="text-xs text-[#16A34A] truncate" style={{ fontWeight: 500 }}>
+                                        Receipt saved: {expense.receipt.originalFileName}
+                                      </p>
+                                      {expense.receipt.fileKind === "image" && canRenderReceiptPreview && receiptPublicUrl && (
+                                        <a
+                                          href={receiptPublicUrl}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="mt-2 block"
+                                        >
+                                          <img
+                                            src={receiptPublicUrl}
+                                            alt={expense.receipt.originalFileName}
+                                            className="h-20 w-20 rounded-xl border border-[#D1FAE5] object-cover shadow-sm"
+                                            loading="lazy"
+                                          />
+                                        </a>
+                                      )}
+                                      {expense.receipt.fileKind === "pdf" && canRenderReceiptPreview && receiptPublicUrl && (
+                                        <a
+                                          href={receiptPublicUrl}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="mt-1 inline-flex text-xs text-[#16A34A] hover:text-[#15803d]"
+                                          style={{ fontWeight: 600 }}
+                                        >
+                                          Open PDF receipt
+                                        </a>
+                                      )}
+                                      {!canRenderReceiptPreview && (
+                                        <p className="mt-1 text-xs text-[#9CA3AF]">
+                                          Set `VITE_RECEIPTS_PUBLIC_BASE_URL` to preview this receipt.
+                                        </p>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                              <span className="text-sm text-[#111827]" style={{ fontWeight: 500 }}>{e.title}</span>
-                            </div>
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <span className={`text-xs px-2.5 py-1 rounded-full ${catColors[e.category] || "bg-[#F3F4F6] text-[#6B7280]"}`} style={{ fontWeight: 500 }}>
-                              {e.category}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3.5 text-sm text-[#374151]" style={{ fontWeight: 500 }}>{e.paidBy}</td>
-                          <td className="px-5 py-3.5 text-sm text-[#111827]" style={{ fontWeight: 700 }}>{e.amount}</td>
-                          <td className="px-5 py-3.5 text-xs text-[#9CA3AF]">{e.date}</td>
-                          <td className="px-5 py-3.5">
-                            <span className={`text-xs px-2.5 py-1 rounded-full ${statusStyles[e.status] || "bg-[#F3F4F6] text-[#6B7280]"}`} style={{ fontWeight: 500 }}>
-                              {e.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td className="px-5 py-3.5">
+                              <span className={`text-xs px-2.5 py-1 rounded-full ${catColors[expense.category] || "bg-[#F3F4F6] text-[#6B7280]"}`} style={{ fontWeight: 500 }}>
+                                {expense.category}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3.5 text-sm text-[#374151]" style={{ fontWeight: 500 }}>{expense.paidBy}</td>
+                            <td className="px-5 py-3.5 text-sm text-[#111827]" style={{ fontWeight: 700 }}>{expense.amount}</td>
+                            <td className="px-5 py-3.5 text-xs text-[#9CA3AF]">{expense.date}</td>
+                            <td className="px-5 py-3.5">
+                              <span className={`text-xs px-2.5 py-1 rounded-full ${statusStyles[expense.status] || "bg-[#F3F4F6] text-[#6B7280]"}`} style={{ fontWeight: 500 }}>
+                                {expense.status}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -325,9 +426,7 @@ export function GroupDetailPage() {
             </div>
           </div>
 
-          {/* Right sidebar */}
           <div className="space-y-5">
-            {/* Member balances */}
             <div className="bg-white rounded-2xl p-5 border border-[#E5E7EB]">
               <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
                 <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>{t.memberBalances}</h3>
@@ -415,7 +514,6 @@ export function GroupDetailPage() {
               )}
             </div>
 
-            {/* Who owes whom */}
             <div className="bg-white rounded-2xl p-5 border border-[#E5E7EB]">
               <h3 className="text-[#111827] mb-4" style={{ fontWeight: 700 }}>{t.whoOwesWhom}</h3>
               <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -430,13 +528,33 @@ export function GroupDetailPage() {
               </button>
             </div>
 
-            {/* Receipts */}
             <div className="bg-[#F0FAF5] rounded-2xl p-5 border border-[#D1FAE5]">
               <div className="flex items-center gap-2 mb-2">
                 <Receipt className="w-4 h-4 text-[#16A34A]" />
                 <h3 className="text-[#111827] text-sm" style={{ fontWeight: 700 }}>Receipts</h3>
               </div>
-              <p className="text-[#6B7280] text-xs">{t.noReceiptsYet}</p>
+              {expenses.some((expense) => expense.receipt) ? (
+                <div className="space-y-2">
+                  {expenses
+                    .filter((expense) => expense.receipt)
+                    .slice(0, 3)
+                    .map((expense) => (
+                      <div
+                        key={`receipt-${expense.id}`}
+                        className="rounded-xl bg-white/80 px-3 py-2"
+                      >
+                        <p className="text-xs text-[#111827]" style={{ fontWeight: 600 }}>
+                          {expense.title}
+                        </p>
+                        <p className="text-xs text-[#6B7280] truncate">
+                          {expense.receipt?.originalFileName}
+                        </p>
+                      </div>
+                    ))}
+                </div>
+              ) : (
+                <p className="text-[#6B7280] text-xs">{t.noReceiptsYet}</p>
+              )}
             </div>
           </div>
         </div>
@@ -444,7 +562,7 @@ export function GroupDetailPage() {
 
       {createPortal(
         <AddExpenseModal isOpen={showExpenseModal} onClose={() => setShowExpenseModal(false)} onAdd={handleAddExpense} />,
-        document.body
+        document.body,
       )}
     </div>
   );

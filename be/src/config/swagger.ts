@@ -711,6 +711,113 @@ swaggerSpec.paths = {
       },
     },
   },
+  "/api/expenses": {
+    get: {
+      summary: "Get expenses for the current logged-in user",
+      tags: ["Expenses"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "query",
+          name: "groupId",
+          required: false,
+          schema: {
+            type: "string",
+          },
+        },
+      ],
+      responses: {
+        200: {
+          description: "Expenses fetched successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User or group not found",
+        },
+        503: {
+          description: "MongoDB or backend service failed",
+        },
+      },
+    },
+    post: {
+      summary: "Create an expense for the current logged-in user",
+      tags: ["Expenses"],
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["title", "category", "paidBy", "amount", "yourShare", "date"],
+              properties: {
+                title: {
+                  type: "string",
+                  example: "Team dinner",
+                },
+                category: {
+                  type: "string",
+                  example: "Food",
+                },
+                paidBy: {
+                  type: "string",
+                  example: "Jamie",
+                },
+                amount: {
+                  type: "string",
+                  example: "$120.00",
+                },
+                yourShare: {
+                  type: "string",
+                  example: "$30.00",
+                },
+                date: {
+                  type: "string",
+                  example: "Jun 22",
+                },
+                status: {
+                  type: "string",
+                  enum: ["Pending", "Settled"],
+                  example: "Pending",
+                },
+                groupId: {
+                  type: "string",
+                  example: "6855abc1234567890def1234",
+                },
+                groupName: {
+                  type: "string",
+                  example: "Bali Trip 2026",
+                },
+                receiptId: {
+                  type: "string",
+                  example: "6855abc1234567890def5678",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        201: {
+          description: "Expense created successfully",
+        },
+        400: {
+          description: "Missing or invalid expense payload",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User, group, or receipt not found",
+        },
+        503: {
+          description: "MongoDB or backend service failed",
+        },
+      },
+    },
+  },
   "/api/receipts/presign": {
     post: {
       summary: "Create a presigned S3 upload URL for a receipt file",
