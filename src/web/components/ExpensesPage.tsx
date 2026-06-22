@@ -6,7 +6,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { createExpense, getExpenses, type Expense } from "../api/expenses";
 import { getGroups, type Group } from "../api/groups";
 import { getStoredUser } from "../api/auth";
-import { uploadReceipt } from "../api/receipts";
+import { uploadReceiptFile } from "../api/receipts";
 import { useFeedback } from "./ui/FeedbackProvider";
 
 const catColors: Record<string, string> = {
@@ -46,29 +46,6 @@ function toTitleCase(value: string) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
-}
-
-function buildStoredFileName(fileName: string) {
-  const sanitizedFileName = fileName.replace(/\s+/g, "-");
-  return `${Date.now()}-${sanitizedFileName}`;
-}
-
-function getMimeType(file: File) {
-  if (file.type) {
-    return file.type;
-  }
-
-  const normalizedFileName = file.name.toLowerCase();
-
-  if (normalizedFileName.endsWith(".pdf")) {
-    return "application/pdf";
-  }
-
-  if (normalizedFileName.endsWith(".png")) {
-    return "image/png";
-  }
-
-  return "image/jpeg";
 }
 
 export function ExpensesPage() {
@@ -181,17 +158,12 @@ export function ExpensesPage() {
     let receiptId: string | undefined;
 
     if (expense.receiptFile) {
-      const storedFileName = buildStoredFileName(expense.receiptFile.name);
-      const receiptResponse = await uploadReceipt({
+      const uploadedReceipt = await uploadReceiptFile({
+        file: expense.receiptFile,
         groupId: expense.groupId,
-        originalFileName: expense.receiptFile.name,
-        storedFileName,
-        storagePath: `uploads/${storedFileName}`,
-        mimeType: getMimeType(expense.receiptFile),
-        sizeInBytes: expense.receiptFile.size,
       });
 
-      receiptId = receiptResponse.receipt?.id;
+      receiptId = uploadedReceipt.id;
     }
 
     const response = await createExpense({
