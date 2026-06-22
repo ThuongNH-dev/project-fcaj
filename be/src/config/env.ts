@@ -25,6 +25,13 @@ export const env = {
   jwtSecret: process.env.JWT_SECRET || "project-fcaj-dev-secret",
   frontendUrl:
     process.env.FRONTEND_URL?.replace(/\/$/, "") || "http://localhost:5173",
+  awsRegion: process.env.AWS_REGION?.trim() || "",
+  awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID?.trim() || "",
+  awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
+  s3ReceiptsBucket: process.env.S3_RECEIPTS_BUCKET?.trim() || "",
+  s3ReceiptsPrefix: process.env.S3_RECEIPTS_PREFIX?.trim() || "receipts/",
+  s3PresignExpiresSeconds:
+    Number(process.env.S3_PRESIGN_EXPIRES_SECONDS) || 300,
   emailProvider,
   emailFrom: process.env.EMAIL_FROM?.trim() || "",
   gmailSmtpUser: process.env.GMAIL_SMTP_USER?.trim() || "",

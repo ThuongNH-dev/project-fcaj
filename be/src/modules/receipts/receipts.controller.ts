@@ -6,7 +6,14 @@ import {
   createReceiptUpload,
   getReceiptUploadByIdForUser,
   getReceiptUploadsByUserId,
+  normalizeReceiptMimeType,
+  normalizeReceiptOriginalFileName,
+  normalizeReceiptSizeInBytes,
 } from "./receipts.service.js";
+import {
+  createReceiptFileAccessPresign,
+  createReceiptUploadPresign,
+} from "./receipts.storage.js";
 
 export async function getReceiptsHandler(req: Request, res: Response) {
   const userId = req.auth?.userId;
@@ -87,6 +94,166 @@ export async function getReceiptByIdHandler(req: Request, res: Response) {
       error instanceof Error ? error.message : "Unable to fetch receipt.";
 
     return res.status(503).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function getReceiptViewUrlHandler(req: Request, res: Response) {
+  const userId = req.auth?.userId;
+  const receiptId =
+    typeof req.params.receiptId === "string" ? req.params.receiptId : "";
+  const download = req.query.download === "true";
+
+  if (!userId) {
+    return res.status(401).json({
+      ok: false,
+      message: "Authorization token is required.",
+    });
+  }
+
+  try {
+    const currentUser = await getUserById(userId);
+
+    if (!currentUser) {
+      return res.status(404).json({
+        ok: false,
+        message: "User not found.",
+      });
+    }
+
+    const receipt = await getReceiptUploadByIdForUser(receiptId, currentUser.id);
+
+    if (!receipt) {
+      return res.status(404).json({
+        ok: false,
+        message: "Receipt not found.",
+      });
+    }
+
+    const presignResult = await createReceiptFileAccessPresign({
+      objectKey: receipt.storagePath,
+      originalFileName: receipt.originalFileName,
+      mimeType: receipt.mimeType,
+      download,
+    });
+
+    return res.status(200).json({
+      ok: true,
+      message: "Receipt access URL created successfully.",
+      url: presignResult.url,
+      expiresIn: presignResult.expiresIn,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to create receipt access URL.";
+
+    return res.status(503).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function createReceiptPresignHandler(req: Request, res: Response) {
+  const userId = req.auth?.userId;
+  const { groupId, originalFileName, mimeType, sizeInBytes } = req.body as {
+    groupId?: string;
+    originalFileName?: string;
+    mimeType?: string;
+    sizeInBytes?: number | string;
+  };
+
+  if (!userId) {
+    return res.status(401).json({
+      ok: false,
+      message: "Authorization token is required.",
+    });
+  }
+
+  if (!originalFileName?.trim()) {
+    return res.status(400).json({
+      ok: false,
+      message: "Receipt original file name is required.",
+    });
+  }
+
+  if (!mimeType?.trim()) {
+    return res.status(400).json({
+      ok: false,
+      message: "Receipt file type is required.",
+    });
+  }
+
+  const numericSizeInBytes =
+    typeof sizeInBytes === "string" ? Number(sizeInBytes) : sizeInBytes;
+
+  if (
+    typeof numericSizeInBytes !== "number" ||
+    !Number.isFinite(numericSizeInBytes)
+  ) {
+    return res.status(400).json({
+      ok: false,
+      message: "Receipt file size is required.",
+    });
+  }
+
+  try {
+    const currentUser = await getUserById(userId);
+
+    if (!currentUser) {
+      return res.status(404).json({
+        ok: false,
+        message: "User not found.",
+      });
+    }
+
+    const resolvedGroupId = groupId?.trim() || null;
+
+    if (resolvedGroupId) {
+      const group = await getGroupByIdForUser(resolvedGroupId, currentUser.id);
+
+      if (!group) {
+        return res.status(404).json({
+          ok: false,
+          message: "Group not found.",
+        });
+      }
+    }
+
+    const normalizedOriginalFileName =
+      normalizeReceiptOriginalFileName(originalFileName);
+    const normalizedMimeType = normalizeReceiptMimeType(mimeType);
+    normalizeReceiptSizeInBytes(numericSizeInBytes);
+
+    const presignResult = await createReceiptUploadPresign({
+      userId: currentUser.id,
+      originalFileName: normalizedOriginalFileName,
+      mimeType: normalizedMimeType,
+    });
+
+    return res.status(201).json({
+      ok: true,
+      message: "Receipt upload URL created successfully.",
+      uploadUrl: presignResult.uploadUrl,
+      objectKey: presignResult.objectKey,
+      storedFileName: presignResult.storedFileName,
+      expiresIn: presignResult.expiresIn,
+      headers: presignResult.headers,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to create receipt upload URL.";
+
+    const statusCode =
+      message === "Receipt file type must be PNG, JPG, or PDF." ||
+      message === "Receipt file size must be greater than zero." ||
+      message === "Receipt file size must not exceed 10MB."
+        ? 400
+        : 503;
+
+    return res.status(statusCode).json({
       ok: false,
       message,
     });

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Upload, Search, FileText, Plus } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import { getGroups, type Group } from "../api/groups";
-import { getReceipts, uploadReceipt, type ReceiptUpload } from "../api/receipts";
+import { getReceipts, uploadReceiptFile, type ReceiptUpload } from "../api/receipts";
 import { useFeedback } from "./ui/FeedbackProvider";
 
 const statusStyles: Record<string, string> = {
@@ -29,29 +29,6 @@ function formatReceiptDate(dateValue: string) {
     day: "numeric",
     year: "numeric",
   });
-}
-
-function buildStoredFileName(fileName: string) {
-  const sanitizedFileName = fileName.replace(/\s+/g, "-");
-  return `${Date.now()}-${sanitizedFileName}`;
-}
-
-function getMimeType(file: File) {
-  if (file.type) {
-    return file.type;
-  }
-
-  const normalizedFileName = file.name.toLowerCase();
-
-  if (normalizedFileName.endsWith(".pdf")) {
-    return "application/pdf";
-  }
-
-  if (normalizedFileName.endsWith(".png")) {
-    return "image/png";
-  }
-
-  return "image/jpeg";
 }
 
 export function ReceiptsPage() {
@@ -126,31 +103,26 @@ export function ReceiptsPage() {
   const handleUploadFile = async (file: File) => {
     try {
       setIsUploading(true);
+      setErrorMessage("");
 
-      const storedFileName = buildStoredFileName(file.name);
-      const response = await uploadReceipt({
-        originalFileName: file.name,
-        storedFileName,
-        storagePath: `uploads/${storedFileName}`,
-        mimeType: getMimeType(file),
-        sizeInBytes: file.size,
+      const uploadedReceipt = await uploadReceiptFile({
+        file,
       });
 
-      if (response.receipt) {
-        setReceipts((prevReceipts) => [response.receipt!, ...prevReceipts]);
-      } else {
-        await loadReceiptData();
-      }
+      setReceipts((prevReceipts) => [uploadedReceipt, ...prevReceipts]);
 
       showToast({
         variant: "success",
-        message: response.message,
+        message: "Receipt uploaded successfully.",
       });
     } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to upload receipt.";
+
+      setErrorMessage(message);
       showToast({
         variant: "error",
-        message:
-          error instanceof Error ? error.message : "Unable to upload receipt.",
+        message,
       });
     } finally {
       setIsUploading(false);

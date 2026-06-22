@@ -711,6 +711,326 @@ swaggerSpec.paths = {
       },
     },
   },
+  "/api/expenses": {
+    get: {
+      summary: "Get expenses for the current logged-in user",
+      tags: ["Expenses"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "query",
+          name: "groupId",
+          required: false,
+          schema: {
+            type: "string",
+          },
+        },
+      ],
+      responses: {
+        200: {
+          description: "Expenses fetched successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User or group not found",
+        },
+        503: {
+          description: "MongoDB or backend service failed",
+        },
+      },
+    },
+    post: {
+      summary: "Create an expense for the current logged-in user",
+      tags: ["Expenses"],
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["title", "category", "paidBy", "amount", "yourShare", "date"],
+              properties: {
+                title: {
+                  type: "string",
+                  example: "Team dinner",
+                },
+                category: {
+                  type: "string",
+                  example: "Food",
+                },
+                paidBy: {
+                  type: "string",
+                  example: "Jamie",
+                },
+                amount: {
+                  type: "string",
+                  example: "$120.00",
+                },
+                yourShare: {
+                  type: "string",
+                  example: "$30.00",
+                },
+                date: {
+                  type: "string",
+                  example: "Jun 22",
+                },
+                status: {
+                  type: "string",
+                  enum: ["Pending", "Settled"],
+                  example: "Pending",
+                },
+                groupId: {
+                  type: "string",
+                  example: "6855abc1234567890def1234",
+                },
+                groupName: {
+                  type: "string",
+                  example: "Bali Trip 2026",
+                },
+                receiptId: {
+                  type: "string",
+                  example: "6855abc1234567890def5678",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        201: {
+          description: "Expense created successfully",
+        },
+        400: {
+          description: "Missing or invalid expense payload",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User, group, or receipt not found",
+        },
+        503: {
+          description: "MongoDB or backend service failed",
+        },
+      },
+    },
+  },
+  "/api/receipts/presign": {
+    post: {
+      summary: "Create a presigned S3 upload URL for a receipt file",
+      tags: ["Receipts"],
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["originalFileName", "mimeType", "sizeInBytes"],
+              properties: {
+                originalFileName: {
+                  type: "string",
+                  example: "team-dinner-receipt.pdf",
+                },
+                mimeType: {
+                  type: "string",
+                  enum: ["image/jpeg", "image/png", "application/pdf"],
+                  example: "application/pdf",
+                },
+                sizeInBytes: {
+                  type: "integer",
+                  example: 248120,
+                },
+                groupId: {
+                  type: "string",
+                  example: "6855abc1234567890def1234",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Presigned upload URL created successfully",
+        },
+        400: {
+          description: "Missing or invalid receipt upload payload",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User or group not found",
+        },
+        503: {
+          description: "S3 configuration or backend service failed",
+        },
+      },
+    },
+  },
+  "/api/receipts": {
+    get: {
+      summary: "Get receipt uploads for the current logged-in user",
+      tags: ["Receipts"],
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: "Receipts fetched successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB or backend service failed",
+        },
+      },
+    },
+    post: {
+      summary: "Store a receipt upload record after successful S3 upload",
+      tags: ["Receipts"],
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: [
+                "originalFileName",
+                "storedFileName",
+                "storagePath",
+                "mimeType",
+                "sizeInBytes",
+              ],
+              properties: {
+                originalFileName: {
+                  type: "string",
+                  example: "team-dinner-receipt.pdf",
+                },
+                storedFileName: {
+                  type: "string",
+                  example: "1718950000-acde1234-team-dinner-receipt.pdf",
+                },
+                storagePath: {
+                  type: "string",
+                  example:
+                    "receipts/6855abc1234567890def1234/2026/06/1718950000-acde1234-team-dinner-receipt.pdf",
+                },
+                mimeType: {
+                  type: "string",
+                  enum: ["image/jpeg", "image/png", "application/pdf"],
+                  example: "application/pdf",
+                },
+                sizeInBytes: {
+                  type: "integer",
+                  example: 248120,
+                },
+                groupId: {
+                  type: "string",
+                  example: "6855abc1234567890def1234",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        201: {
+          description: "Receipt record stored successfully",
+        },
+        400: {
+          description: "Missing or invalid receipt record payload",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User or group not found",
+        },
+        503: {
+          description: "MongoDB, S3 configuration, or backend service failed",
+        },
+      },
+    },
+  },
+  "/api/receipts/{receiptId}": {
+    get: {
+      summary: "Get a single receipt upload for the current logged-in user",
+      tags: ["Receipts"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "receiptId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+        },
+      ],
+      responses: {
+        200: {
+          description: "Receipt fetched successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User or receipt not found",
+        },
+        503: {
+          description: "MongoDB or backend service failed",
+        },
+      },
+    },
+  },
+  "/api/receipts/{receiptId}/view-url": {
+    get: {
+      summary: "Create a presigned S3 URL to view or download a receipt file",
+      tags: ["Receipts"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "receiptId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+        },
+        {
+          in: "query",
+          name: "download",
+          required: false,
+          schema: {
+            type: "boolean",
+          },
+          description: "Set true to force attachment download instead of inline view.",
+        },
+      ],
+      responses: {
+        200: {
+          description: "Presigned receipt access URL created successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User or receipt not found",
+        },
+        503: {
+          description: "S3 configuration, MongoDB, or backend service failed",
+        },
+      },
+    },
+  },
 };
 
 export default swaggerSpec;

@@ -253,6 +253,13 @@ export async function createExpenseHandler(req: Request, res: Response) {
           message: "Receipt not found.",
         });
       }
+
+      if (receipt.groupId && receipt.groupId !== group.id) {
+        return res.status(400).json({
+          ok: false,
+          message: "Receipt does not belong to the selected group.",
+        });
+      }
     }
 
     const expense = await createExpense({
