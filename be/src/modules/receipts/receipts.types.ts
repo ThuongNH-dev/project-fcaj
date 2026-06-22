@@ -17,6 +17,14 @@ export interface CreateReceiptUploadInput {
   currency?: string;
 }
 
+export interface CreateReceiptPresignInput {
+  userId: string;
+  groupId?: string | null;
+  originalFileName: string;
+  mimeType: string;
+  sizeInBytes: number;
+}
+
 export interface PublicReceiptUpload {
   id: string;
   uploadedByUserId: string;
@@ -42,4 +50,23 @@ export interface PublicReceiptUpload {
   reviewedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CreateReceiptPresignResponse {
+  ok: boolean;
+  message: string;
+  uploadUrl?: string;
+  objectKey?: string;
+  storedFileName?: string;
+  expiresIn?: number;
+  headers?: {
+    "Content-Type": string;
+  };
+}
+
+export interface ReceiptFileAccessResponse {
+  ok: boolean;
+  message: string;
+  url?: string;
+  expiresIn?: number;
 }
