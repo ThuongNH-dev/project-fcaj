@@ -65,3 +65,19 @@ export async function deleteJson<TResponse>(path: string): Promise<TResponse> {
     method: "DELETE",
   });
 }
+
+export async function putFile(
+  url: string,
+  file: File,
+  headers?: Record<string, string>,
+): Promise<void> {
+  const response = await fetch(url, {
+    method: "PUT",
+    headers,
+    body: file,
+  });
+
+  if (!response.ok) {
+    throw new Error("File upload failed.");
+  }
+}
