@@ -40,6 +40,27 @@ export interface UploadReceiptPayload {
   currency?: string;
 }
 
+export type CreateReceiptPayload = UploadReceiptPayload;
+
+export interface CreateReceiptPresignPayload {
+  groupId?: string;
+  originalFileName: string;
+  mimeType: string;
+  sizeInBytes: number;
+}
+
+export interface CreateReceiptPresignResponse {
+  ok: boolean;
+  message: string;
+  uploadUrl?: string;
+  objectKey?: string;
+  storedFileName?: string;
+  expiresIn?: number;
+  headers?: {
+    "Content-Type": string;
+  };
+}
+
 export interface ReceiptsResponse {
   ok: boolean;
   message: string;
@@ -50,4 +71,13 @@ export interface ReceiptResponse {
   ok: boolean;
   message: string;
   receipt?: ReceiptUpload;
+}
+
+export type CreateReceiptResponse = ReceiptResponse;
+
+export interface ReceiptFileAccessResponse {
+  ok: boolean;
+  message: string;
+  url?: string;
+  expiresIn?: number;
 }
