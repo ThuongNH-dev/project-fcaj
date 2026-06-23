@@ -9,6 +9,8 @@ import {
   getAdminActivityLogs,
   getAdminDashboardStats,
   getAdminRejectedRecords,
+  getAdminSettlementRecordById,
+  getAdminSettlementRecords,
   getAdminUploadRecords,
 } from "./admin.service.js";
 
@@ -203,6 +205,75 @@ export async function getAdminActivityLogsHandler(_req: Request, res: Response) 
       error instanceof Error
         ? error.message
         : "Unable to fetch admin activity logs.";
+
+    return res.status(503).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function getAdminSettlementsHandler(req: Request, res: Response) {
+  const status =
+    typeof req.query.status === "string" ? req.query.status.trim().toLowerCase() : "";
+  const search = typeof req.query.search === "string" ? req.query.search : undefined;
+  const groupId = typeof req.query.groupId === "string" ? req.query.groupId : undefined;
+  const paidByUserId =
+    typeof req.query.paidByUserId === "string" ? req.query.paidByUserId : undefined;
+
+  if (status && status !== "pending" && status !== "settled") {
+    return res.status(400).json({
+      ok: false,
+      message: "Settlement status filter must be either pending or settled.",
+    });
+  }
+
+  try {
+    const settlements = await getAdminSettlementRecords({
+      status: status ? (status as "pending" | "settled") : undefined,
+      search,
+      groupId,
+      paidByUserId,
+    });
+
+    return res.status(200).json({
+      ok: true,
+      message: "Admin settlements fetched successfully.",
+      settlements,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to fetch admin settlements.";
+
+    return res.status(503).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function getAdminSettlementByIdHandler(req: Request, res: Response) {
+  const expenseId =
+    typeof req.params.expenseId === "string" ? req.params.expenseId : "";
+
+  try {
+    const settlement = await getAdminSettlementRecordById(expenseId);
+
+    if (!settlement) {
+      return res.status(404).json({
+        ok: false,
+        message: "Settlement not found.",
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message: "Admin settlement fetched successfully.",
+      settlement,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to fetch admin settlement.";
 
     return res.status(503).json({
       ok: false,
