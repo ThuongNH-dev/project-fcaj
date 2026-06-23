@@ -1,8 +1,9 @@
-import { getJson, postJson } from "../client";
+import { getJson, patchJson, postJson } from "../client";
 import type {
   CreateExpensePayload,
   ExpenseResponse,
   ExpensesResponse,
+  SettleExpensePayload,
 } from "./expenses.types";
 
 export function getExpenses() {
@@ -15,4 +16,14 @@ export function getExpense(expenseId: string) {
 
 export function createExpense(payload: CreateExpensePayload) {
   return postJson<CreateExpensePayload, ExpenseResponse>("/api/expenses", payload);
+}
+
+export function settleExpense(
+  expenseId: string,
+  payload: SettleExpensePayload = {},
+) {
+  return patchJson<SettleExpensePayload, ExpenseResponse>(
+    `/api/expenses/${expenseId}/settlement`,
+    payload,
+  );
 }

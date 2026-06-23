@@ -585,7 +585,7 @@ export function AddExpenseModal({
                 <input
                   type="file"
                   className="hidden"
-                  accept="image/*,.pdf"
+                  accept=".png,.jpg,.jpeg,.pdf"
                   onChange={(e) => {
                     if (e.target.files?.[0]) {
                       setUploadedFile(e.target.files[0]);

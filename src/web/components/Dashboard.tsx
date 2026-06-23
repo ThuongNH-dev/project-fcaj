@@ -12,13 +12,32 @@ import {
 } from "lucide-react";
 import { useLanguage } from "../context/LanguageContext";
 import { getStoredUser, getUserInitials } from "../api/auth";
+import { getExpenses, type Expense } from "../api/expenses";
 import { getGroups, type Group } from "../api/groups";
 import { useNavigate } from "react-router";
+
+function formatCurrency(amount: number, currency: string) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency || "USD",
+    minimumFractionDigits: 2,
+  }).format(amount);
+}
+
+function toTitleCase(value: string) {
+  return value
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
 export function Dashboard() {
   const [search, setSearch] = useState("");
   const [groups, setGroups] = useState<Group[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
+  const [isLoadingExpenses, setIsLoadingExpenses] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const { t } = useLanguage();
   const user = useMemo(() => getStoredUser(), []);
@@ -30,22 +49,29 @@ export function Dashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    async function loadGroups() {
+    async function loadDashboardData() {
       try {
         setErrorMessage("");
         setIsLoadingGroups(true);
-        const response = await getGroups();
-        setGroups(response.groups ?? []);
+        setIsLoadingExpenses(true);
+        const [groupsResponse, expensesResponse] = await Promise.all([
+          getGroups(),
+          getExpenses(),
+        ]);
+
+        setGroups(groupsResponse.groups ?? []);
+        setExpenses(expensesResponse.expenses ?? []);
       } catch (error) {
         setErrorMessage(
-          error instanceof Error ? error.message : "Unable to load groups.",
+          error instanceof Error ? error.message : "Unable to load dashboard.",
         );
       } finally {
         setIsLoadingGroups(false);
+        setIsLoadingExpenses(false);
       }
     }
 
-    void loadGroups();
+    void loadDashboardData();
   }, []);
 
   const filteredGroups = groups.filter((group) => {
@@ -61,10 +87,72 @@ export function Dashboard() {
     );
   });
 
+  const currency = user?.defaultCurrency ?? expenses[0]?.currency ?? "USD";
+  const totalExpensesAmount = expenses.reduce(
+    (sum, expense) => sum + expense.amount,
+    0,
+  );
+  const youOweAmount = expenses
+    .filter(
+      (expense) =>
+        expense.settlementStatus === "pending" &&
+        expense.paidByUserId !== user?.id,
+    )
+    .reduce((sum, expense) => {
+      const currentUserShare =
+        expense.participants.find((participant) => participant.userId === user?.id)
+          ?.shareAmount ?? 0;
+
+      return sum + currentUserShare;
+    }, 0);
+  const youAreOwedAmount = expenses
+    .filter(
+      (expense) =>
+        expense.settlementStatus === "pending" &&
+        expense.paidByUserId === user?.id,
+    )
+    .reduce((sum, expense) => {
+      const owedByOthers = expense.participants
+        .filter((participant) => participant.userId !== user?.id)
+        .reduce((participantSum, participant) => participantSum + participant.shareAmount, 0);
+
+      return sum + owedByOthers;
+    }, 0);
+  const currentMonthExpenses = expenses.filter((expense) => {
+    const expenseDate = new Date(expense.expenseDate);
+    const today = new Date();
+
+    return (
+      expenseDate.getFullYear() === today.getFullYear() &&
+      expenseDate.getMonth() === today.getMonth()
+    );
+  });
+  const categorySummaries = Array.from(
+    currentMonthExpenses
+      .reduce((categoryMap, expense) => {
+        const categoryKey = expense.category || "other";
+        const currentAmount = categoryMap.get(categoryKey) ?? 0;
+
+        categoryMap.set(categoryKey, currentAmount + expense.amount);
+        return categoryMap;
+      }, new Map<string, number>()),
+    ([category, amount]) => ({
+      category,
+      label:
+        t.categories[category as keyof typeof t.categories] ??
+        toTitleCase(category),
+      amount,
+    }),
+  ).sort((leftCategory, rightCategory) => rightCategory.amount - leftCategory.amount);
+  const totalCategoryAmount = categorySummaries.reduce(
+    (sum, categorySummary) => sum + categorySummary.amount,
+    0,
+  );
+
   const summaryCards = [
     {
       label: t.totalExpenses,
-      value: "$0.00",
+      value: isLoadingExpenses ? "--" : formatCurrency(totalExpensesAmount, currency),
       icon: DollarSign,
       bg: "bg-[#F0FAF5]",
       iconBg: "bg-[#7EDDBA]",
@@ -72,7 +160,7 @@ export function Dashboard() {
     },
     {
       label: t.youOwe,
-      value: "$0.00",
+      value: isLoadingExpenses ? "--" : formatCurrency(youOweAmount, currency),
       icon: TrendingDown,
       bg: "bg-[#FEF2F2]",
       iconBg: "bg-[#FCA5A5]",
@@ -80,7 +168,7 @@ export function Dashboard() {
     },
     {
       label: t.youAreOwed,
-      value: "$0.00",
+      value: isLoadingExpenses ? "--" : formatCurrency(youAreOwedAmount, currency),
       icon: TrendingUp,
       bg: "bg-[#EFF6FF]",
       iconBg: "bg-[#93C5FD]",
@@ -231,12 +319,52 @@ export function Dashboard() {
               {t.byCategory}
             </h3>
             <p className="text-[#9CA3AF] text-xs mb-4">{t.thisMonth}</p>
-            <div className="flex flex-col items-center justify-center h-36 text-center">
-              <div className="w-10 h-10 bg-[#F0FAF5] rounded-2xl flex items-center justify-center mx-auto mb-2">
-                <DollarSign className="w-5 h-5 text-[#7EDDBA]" />
+            {isLoadingExpenses ? (
+              <div className="flex flex-col items-center justify-center h-36 text-center">
+                <div className="w-10 h-10 bg-[#F0FAF5] rounded-2xl flex items-center justify-center mx-auto mb-2">
+                  <DollarSign className="w-5 h-5 text-[#7EDDBA]" />
+                </div>
+                <p className="text-[#9CA3AF] text-xs">Loading expenses...</p>
               </div>
-              <p className="text-[#9CA3AF] text-xs">{t.noCategoryData}</p>
-            </div>
+            ) : categorySummaries.length > 0 ? (
+              <div className="space-y-4">
+                {categorySummaries.slice(0, 5).map((categorySummary) => {
+                  const percent =
+                    totalCategoryAmount > 0
+                      ? Math.round((categorySummary.amount / totalCategoryAmount) * 100)
+                      : 0;
+
+                  return (
+                    <div key={categorySummary.category}>
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <span
+                          className="text-sm text-[#111827] truncate"
+                          style={{ fontWeight: 600 }}
+                        >
+                          {categorySummary.label}
+                        </span>
+                        <span className="text-xs text-[#6B7280] flex-shrink-0">
+                          {formatCurrency(categorySummary.amount, currency)}
+                        </span>
+                      </div>
+                      <div className="h-2 rounded-full bg-[#F3F4F6] overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-[#7EDDBA]"
+                          style={{ width: `${percent}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-36 text-center">
+                <div className="w-10 h-10 bg-[#F0FAF5] rounded-2xl flex items-center justify-center mx-auto mb-2">
+                  <DollarSign className="w-5 h-5 text-[#7EDDBA]" />
+                </div>
+                <p className="text-[#9CA3AF] text-xs">{t.noCategoryData}</p>
+              </div>
+            )}
           </div>
         </div>
 

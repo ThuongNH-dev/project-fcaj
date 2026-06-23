@@ -7,6 +7,8 @@ import {
   getAdminGroupByIdHandler,
   getAdminGroupsHandler,
   getAdminRejectedHandler,
+  getAdminSettlementByIdHandler,
+  getAdminSettlementsHandler,
   getAdminSessionHandler,
   getAdminUploadsHandler,
 } from "./admin.controller.js";
@@ -19,6 +21,13 @@ adminRouter.get("/groups/:groupId", authMiddleware, requireAdmin, getAdminGroupB
 adminRouter.delete("/groups/:groupId", authMiddleware, requireAdmin, deleteAdminGroupHandler);
 adminRouter.get("/uploads", authMiddleware, requireAdmin, getAdminUploadsHandler);
 adminRouter.get("/rejected", authMiddleware, requireAdmin, getAdminRejectedHandler);
+adminRouter.get("/settlements", authMiddleware, requireAdmin, getAdminSettlementsHandler);
+adminRouter.get(
+  "/settlements/:expenseId",
+  authMiddleware,
+  requireAdmin,
+  getAdminSettlementByIdHandler,
+);
 adminRouter.get("/activity", authMiddleware, requireAdmin, getAdminActivityLogsHandler);
 adminRouter.get("/session", authMiddleware, requireAdmin, getAdminSessionHandler);
 

@@ -49,8 +49,52 @@ export interface AdminActivityLog {
     | "user_registered"
     | "group_created"
     | "expense_created"
+    | "expense_settled"
     | "receipt_uploaded";
   title: string;
   description: string;
   createdAt: string;
+}
+
+export interface AdminSettlementFilters {
+  status?: "pending" | "settled";
+  search?: string;
+  groupId?: string;
+  paidByUserId?: string;
+}
+
+export interface AdminSettlementRecord {
+  id: string;
+  title: string;
+  groupId: string;
+  groupName: string | null;
+  createdByUserId: string;
+  createdByName: string;
+  paidByUserId: string;
+  paidByName: string;
+  participantCount: number;
+  amount: number;
+  currency: string;
+  expenseDate: string;
+  settlementStatus: "pending" | "settled";
+  settlementNote: string | null;
+  settledAt: string | null;
+  settledByUserId: string | null;
+  settledByName: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminSettlementParticipant {
+  userId: string;
+  name: string;
+  email: string;
+  shareAmount: number;
+}
+
+export interface AdminSettlementDetail extends AdminSettlementRecord {
+  description: string;
+  receiptId: string | null;
+  reviewStatus: "pending" | "approved" | "rejected";
+  participants: AdminSettlementParticipant[];
 }

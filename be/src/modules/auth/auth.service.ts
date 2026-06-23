@@ -41,22 +41,34 @@ export async function getUsersCollection(): Promise<Collection<UserDocument>> {
   return db.collection<UserDocument>("users");
 }
 
+function normalizeDocumentDate(
+  value: Date | string | undefined,
+  fallbackDate: Date,
+) {
+  const normalizedDate = value instanceof Date ? value : value ? new Date(value) : fallbackDate;
+
+  return Number.isNaN(normalizedDate.getTime()) ? fallbackDate : normalizedDate;
+}
+
 export function toPublicUser(user: UserDocument): PublicUser {
   if (!user._id) {
     throw new Error("User document is missing an id.");
   }
 
+  const createdAt = normalizeDocumentDate(user.createdAt, user._id.getTimestamp());
+  const updatedAt = normalizeDocumentDate(user.updatedAt, createdAt);
+
   return {
     id: user._id.toString(),
-    firstName: user.firstName,
-    lastName: user.lastName,
+    firstName: user.firstName ?? "",
+    lastName: user.lastName ?? "",
     email: user.email,
-    bio: user.bio,
-    avatarUrl: user.avatarUrl,
-    defaultCurrency: user.defaultCurrency,
-    role: user.role,
-    createdAt: user.createdAt.toISOString(),
-    updatedAt: user.updatedAt.toISOString(),
+    bio: user.bio ?? "",
+    avatarUrl: user.avatarUrl ?? "",
+    defaultCurrency: user.defaultCurrency ?? "USD",
+    role: user.role ?? "user",
+    createdAt: createdAt.toISOString(),
+    updatedAt: updatedAt.toISOString(),
   };
 }
 

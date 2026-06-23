@@ -18,6 +18,10 @@ import type {
   AdminActivityLog,
   AdminDashboardStats,
   AdminRejectedRecord,
+  AdminSettlementDetail,
+  AdminSettlementFilters,
+  AdminSettlementParticipant,
+  AdminSettlementRecord,
   AdminUploadRecord,
 } from "./admin.types.js";
 
@@ -38,6 +42,13 @@ interface GroupDocument {
 async function getGroupsCollection(): Promise<Collection<GroupDocument>> {
   const db = await connectToMongo();
   return db.collection<GroupDocument>("groups");
+}
+
+function getUserDisplayName(user: UserDocument) {
+  const publicUser = toPublicUser(user);
+  const fullName = `${publicUser.firstName} ${publicUser.lastName}`.trim();
+
+  return fullName || publicUser.email || "Unknown user";
 }
 
 async function buildReferenceMaps(params: {
@@ -91,7 +102,7 @@ async function buildReferenceMaps(params: {
       .map((user) => [
         user._id!.toString(),
         {
-          name: `${user.firstName} ${user.lastName}`.trim(),
+          name: getUserDisplayName(user),
           email: user.email,
         },
       ]),
@@ -117,6 +128,38 @@ async function buildReferenceMaps(params: {
     usersById,
     groupsById,
     expensesById,
+  };
+}
+
+function toAdminSettlementRecord(params: {
+  expenseDocument: ExpenseDocument;
+  usersById: Map<string, { name: string; email: string }>;
+  groupsById: Map<string, string>;
+}): AdminSettlementRecord {
+  const { expenseDocument, usersById, groupsById } = params;
+
+  return {
+    id: expenseDocument._id!.toString(),
+    title: expenseDocument.title,
+    groupId: expenseDocument.groupId,
+    groupName: groupsById.get(expenseDocument.groupId) ?? null,
+    createdByUserId: expenseDocument.createdBy,
+    createdByName: usersById.get(expenseDocument.createdBy)?.name ?? "Unknown user",
+    paidByUserId: expenseDocument.paidByUserId,
+    paidByName: usersById.get(expenseDocument.paidByUserId)?.name ?? "Unknown user",
+    participantCount: expenseDocument.participants.length,
+    amount: expenseDocument.amount,
+    currency: expenseDocument.currency,
+    expenseDate: expenseDocument.expenseDate.toISOString(),
+    settlementStatus: expenseDocument.settlementStatus,
+    settlementNote: expenseDocument.settlementNote ?? null,
+    settledAt: expenseDocument.settledAt?.toISOString() ?? null,
+    settledByUserId: expenseDocument.settledBy ?? null,
+    settledByName: expenseDocument.settledBy
+      ? usersById.get(expenseDocument.settledBy)?.name ?? "Unknown user"
+      : null,
+    createdAt: expenseDocument.createdAt.toISOString(),
+    updatedAt: expenseDocument.updatedAt.toISOString(),
   };
 }
 
@@ -318,24 +361,39 @@ export async function getAdminActivityLogs(): Promise<AdminActivityLog[]> {
   const groups = await getGroupsCollection();
   const expenses = await getExpensesCollection();
   const receipts = await getReceiptsCollection();
-  const [recentUsers, recentGroups, recentExpenses, recentReceipts] = await Promise.all([
+  const [recentUsers, recentGroups, recentExpenses, recentSettledExpenses, recentReceipts] =
+    await Promise.all([
     users.find({}).sort({ createdAt: -1 }).limit(15).toArray(),
     groups.find({}).sort({ createdAt: -1 }).limit(15).toArray(),
     expenses.find({}).sort({ createdAt: -1 }).limit(15).toArray(),
+    expenses
+      .find({
+        settlementStatus: "settled",
+        settledAt: {
+          $ne: null,
+        },
+      })
+      .sort({ settledAt: -1, updatedAt: -1 })
+      .limit(15)
+      .toArray(),
     receipts.find({}).sort({ createdAt: -1 }).limit(15).toArray(),
-  ]);
+    ]);
 
   const referenceMaps = await buildReferenceMaps({
     userIds: Array.from(
       new Set([
         ...recentGroups.map((groupDocument) => groupDocument.createdBy),
         ...recentExpenses.map((expenseDocument) => expenseDocument.createdBy),
+        ...recentSettledExpenses
+          .map((expenseDocument) => expenseDocument.settledBy)
+          .filter((userId): userId is string => Boolean(userId)),
         ...recentReceipts.map((receiptDocument) => receiptDocument.uploadedByUserId),
       ]),
     ).filter((userId) => MongoObjectId.isValid(userId)),
     groupIds: Array.from(
       new Set([
         ...recentExpenses.map((expenseDocument) => expenseDocument.groupId),
+        ...recentSettledExpenses.map((expenseDocument) => expenseDocument.groupId),
         ...recentReceipts
           .map((receiptDocument) => receiptDocument.groupId)
           .filter((groupId): groupId is string => Boolean(groupId)),
@@ -349,8 +407,8 @@ export async function getAdminActivityLogs(): Promise<AdminActivityLog[]> {
       id: `user-${userDocument._id!.toString()}`,
       eventType: "user_registered" as const,
       title: "New user registered",
-      description: `${userDocument.firstName} ${userDocument.lastName}`.trim(),
-      createdAt: userDocument.createdAt.toISOString(),
+      description: getUserDisplayName(userDocument),
+      createdAt: toPublicUser(userDocument).createdAt,
     })),
     ...recentGroups.map((groupDocument: GroupDocument) => ({
       id: `group-${groupDocument._id!.toString()}`,
@@ -369,6 +427,19 @@ export async function getAdminActivityLogs(): Promise<AdminActivityLog[]> {
         referenceMaps.groupsById.get(expenseDocument.groupId) ?? "Unknown group"
       }`,
       createdAt: expenseDocument.createdAt.toISOString(),
+    })),
+    ...recentSettledExpenses.map((expenseDocument: ExpenseDocument) => ({
+      id: `expense-settled-${expenseDocument._id!.toString()}`,
+      eventType: "expense_settled" as const,
+      title: "Expense settled",
+      description: `${expenseDocument.title} settled by ${
+        expenseDocument.settledBy
+          ? referenceMaps.usersById.get(expenseDocument.settledBy)?.name ?? "Unknown user"
+          : "Unknown user"
+      } in ${referenceMaps.groupsById.get(expenseDocument.groupId) ?? "Unknown group"}`,
+      createdAt:
+        expenseDocument.settledAt?.toISOString() ??
+        expenseDocument.updatedAt.toISOString(),
     })),
     ...recentReceipts.map((receiptDocument: ReceiptUploadDocument) => ({
       id: `receipt-${receiptDocument._id!.toString()}`,
@@ -389,4 +460,124 @@ export async function getAdminActivityLogs(): Promise<AdminActivityLog[]> {
         new Date(leftLog.createdAt).getTime(),
     )
     .slice(0, 40);
+}
+
+export async function getAdminSettlementRecords(
+  filters: AdminSettlementFilters = {},
+): Promise<AdminSettlementRecord[]> {
+  const expenses = await getExpensesCollection();
+  const query: Partial<Pick<ExpenseDocument, "groupId" | "paidByUserId" | "settlementStatus">> =
+    {};
+  const normalizedSearch = filters.search?.trim().toLowerCase();
+
+  if (filters.status) {
+    query.settlementStatus = filters.status;
+  }
+
+  if (filters.groupId) {
+    query.groupId = filters.groupId;
+  }
+
+  if (filters.paidByUserId) {
+    query.paidByUserId = filters.paidByUserId;
+  }
+
+  const expenseCursor = expenses.find(query).sort({ updatedAt: -1 });
+
+  if (!normalizedSearch) {
+    expenseCursor.limit(200);
+  }
+
+  const expenseDocuments = await expenseCursor.toArray();
+
+  const referenceMaps = await buildReferenceMaps({
+    userIds: Array.from(
+      new Set(
+        expenseDocuments.flatMap((expenseDocument) => [
+          expenseDocument.createdBy,
+          expenseDocument.paidByUserId,
+          expenseDocument.settledBy ?? "",
+        ]),
+      ),
+    ).filter((userId) => MongoObjectId.isValid(userId)),
+    groupIds: Array.from(
+      new Set(expenseDocuments.map((expenseDocument) => expenseDocument.groupId)),
+    ).filter((groupId) => MongoObjectId.isValid(groupId)),
+    expenseIds: [],
+  });
+
+  const records = expenseDocuments.map((expenseDocument: ExpenseDocument) =>
+    toAdminSettlementRecord({
+      expenseDocument,
+      usersById: referenceMaps.usersById,
+      groupsById: referenceMaps.groupsById,
+    }),
+  );
+
+  if (!normalizedSearch) {
+    return records;
+  }
+
+  return records
+    .filter((record) => {
+      return (
+        record.title.toLowerCase().includes(normalizedSearch) ||
+        record.groupName?.toLowerCase().includes(normalizedSearch) === true ||
+        record.createdByName.toLowerCase().includes(normalizedSearch) ||
+        record.paidByName.toLowerCase().includes(normalizedSearch) ||
+        record.settledByName?.toLowerCase().includes(normalizedSearch) === true
+      );
+    })
+    .slice(0, 200);
+}
+
+export async function getAdminSettlementRecordById(
+  expenseId: string,
+): Promise<AdminSettlementDetail | null> {
+  if (!MongoObjectId.isValid(expenseId)) {
+    return null;
+  }
+
+  const expenses = await getExpensesCollection();
+  const expenseDocument = await expenses.findOne({
+    _id: new MongoObjectId(expenseId),
+  });
+
+  if (!expenseDocument?._id) {
+    return null;
+  }
+
+  const referenceMaps = await buildReferenceMaps({
+    userIds: Array.from(
+      new Set([
+        expenseDocument.createdBy,
+        expenseDocument.paidByUserId,
+        expenseDocument.settledBy ?? "",
+        ...expenseDocument.participants.map((participant) => participant.userId),
+      ]),
+    ).filter((userId) => MongoObjectId.isValid(userId)),
+    groupIds: [expenseDocument.groupId].filter((groupId) => MongoObjectId.isValid(groupId)),
+    expenseIds: [],
+  });
+
+  const participants: AdminSettlementParticipant[] = expenseDocument.participants.map(
+    (participant) => ({
+      userId: participant.userId,
+      name: referenceMaps.usersById.get(participant.userId)?.name ?? "Unknown user",
+      email: referenceMaps.usersById.get(participant.userId)?.email ?? "",
+      shareAmount: participant.shareAmount,
+    }),
+  );
+
+  return {
+    ...toAdminSettlementRecord({
+      expenseDocument,
+      usersById: referenceMaps.usersById,
+      groupsById: referenceMaps.groupsById,
+    }),
+    description: expenseDocument.description,
+    receiptId: expenseDocument.receiptId,
+    reviewStatus: expenseDocument.reviewStatus,
+    participants,
+  };
 }
