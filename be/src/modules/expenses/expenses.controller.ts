@@ -6,6 +6,7 @@ import {
   createExpense,
   getExpenseByIdForUser,
   getExpensesByUserId,
+  markExpenseAsSettled,
 } from "./expenses.service.js";
 import type { ExpenseParticipantShare } from "./expenses.types.js";
 
@@ -297,6 +298,70 @@ export async function createExpenseHandler(req: Request, res: Response) {
       message === "Expense participant share amounts must equal the total amount."
         ? 400
         : 503;
+
+    return res.status(statusCode).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function settleExpenseHandler(req: Request, res: Response) {
+  const userId = req.auth?.userId;
+  const expenseId =
+    typeof req.params.expenseId === "string" ? req.params.expenseId : "";
+  const { settlementNote } = req.body as {
+    settlementNote?: string | null;
+  };
+
+  if (!userId) {
+    return res.status(401).json({
+      ok: false,
+      message: "Authorization token is required.",
+    });
+  }
+
+  try {
+    const currentUser = await getUserById(userId);
+
+    if (!currentUser) {
+      return res.status(404).json({
+        ok: false,
+        message: "User not found.",
+      });
+    }
+
+    const expense = await markExpenseAsSettled({
+      expenseId,
+      userId: currentUser.id,
+      userRole: currentUser.role,
+      settlementNote,
+    });
+
+    if (!expense) {
+      return res.status(404).json({
+        ok: false,
+        message: "Expense not found.",
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message: "Expense marked as settled successfully.",
+      expense,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to settle expense.";
+
+    const statusCode =
+      message === "Expense is already settled."
+        ? 409
+        : message === "You are not allowed to settle this expense."
+          ? 403
+        : message === "Expense settlement could not be updated."
+          ? 409
+          : 503;
 
     return res.status(statusCode).json({
       ok: false,

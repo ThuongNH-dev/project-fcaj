@@ -2,7 +2,7 @@ import { ObjectId as MongoObjectId } from "mongodb";
 import type { Collection, IndexDescription, ObjectId } from "mongodb";
 import { connectToMongo } from "../../db/mongo.js";
 import type { SupportedCurrency } from "../auth/auth.types.js";
-import { getGroupIdsByUserId } from "../groups/groups.service.js";
+import { getGroupByIdForUser, getGroupIdsByUserId } from "../groups/groups.service.js";
 import type {
   CreateExpenseInput,
   ExpenseCategory,
@@ -11,6 +11,7 @@ import type {
   ExpenseSettlementStatus,
   ExpenseSplitMode,
   PublicExpense,
+  SettleExpenseInput,
 } from "./expenses.types.js";
 
 export interface ExpenseDocument {
@@ -28,6 +29,9 @@ export interface ExpenseDocument {
   participants: ExpenseParticipantShare[];
   receiptId: string | null;
   settlementStatus: ExpenseSettlementStatus;
+  settledAt: Date | null;
+  settledBy: string | null;
+  settlementNote: string | null;
   reviewStatus: ExpenseReviewStatus;
   rejectionReason: string | null;
   reviewedBy: string | null;
@@ -229,6 +233,11 @@ export function normalizeExpenseOptionalReferenceId(value?: string | null) {
   return normalizedValue ? normalizedValue : null;
 }
 
+export function normalizeExpenseSettlementNote(value?: string | null) {
+  const normalizedValue = value?.trim();
+  return normalizedValue ? normalizedValue : null;
+}
+
 function getParticipantTotalAmount(participants: ExpenseParticipantShare[]) {
   return Number(
     participants
@@ -272,6 +281,9 @@ export async function createExpense(
     participants: normalizedParticipants,
     receiptId: normalizedReceiptId,
     settlementStatus: "pending",
+    settledAt: null,
+    settledBy: null,
+    settlementNote: null,
     reviewStatus: "pending",
     rejectionReason: null,
     reviewedBy: null,
@@ -295,6 +307,9 @@ export async function createExpense(
     participants: normalizedParticipants,
     receiptId: normalizedReceiptId,
     settlementStatus: "pending",
+    settledAt: null,
+    settledBy: null,
+    settlementNote: null,
     reviewStatus: "pending",
     rejectionReason: null,
     reviewedBy: null,
@@ -349,6 +364,70 @@ export async function getExpenseByIdForUser(
   return expenseDocument ? toPublicExpense(expenseDocument) : null;
 }
 
+export async function markExpenseAsSettled(
+  input: SettleExpenseInput,
+): Promise<PublicExpense | null> {
+  if (!MongoObjectId.isValid(input.expenseId)) {
+    return null;
+  }
+
+  const expenses = await getExpensesCollection();
+  const expenseDocument = await expenses.findOne({
+    _id: new MongoObjectId(input.expenseId),
+  });
+
+  if (!expenseDocument?._id) {
+    return null;
+  }
+
+  if (expenseDocument.settlementStatus === "settled") {
+    throw new Error("Expense is already settled.");
+  }
+
+  if (input.userRole !== "admin") {
+    const group = await getGroupByIdForUser(expenseDocument.groupId, input.userId);
+
+    if (!group) {
+      return null;
+    }
+
+    const currentMember = group.members.find((member) => member.id === input.userId);
+    const canSettleExpense =
+      expenseDocument.paidByUserId === input.userId ||
+      currentMember?.role === "owner";
+
+    if (!canSettleExpense) {
+      throw new Error("You are not allowed to settle this expense.");
+    }
+  }
+
+  const updatedAt = new Date();
+  const result = await expenses.findOneAndUpdate(
+    {
+      _id: new MongoObjectId(input.expenseId),
+      settlementStatus: "pending",
+    },
+    {
+      $set: {
+        settlementStatus: "settled",
+        settledAt: updatedAt,
+        settledBy: input.userId,
+        settlementNote: normalizeExpenseSettlementNote(input.settlementNote),
+        updatedAt,
+      },
+    },
+    {
+      returnDocument: "after",
+    },
+  );
+
+  if (!result) {
+    throw new Error("Expense settlement could not be updated.");
+  }
+
+  return toPublicExpense(result);
+}
+
 export function toPublicExpense(expense: ExpenseDocument): PublicExpense {
   if (!expense._id) {
     throw new Error("Expense document is missing an id.");
@@ -372,6 +451,9 @@ export function toPublicExpense(expense: ExpenseDocument): PublicExpense {
     })),
     receiptId: expense.receiptId,
     settlementStatus: expense.settlementStatus,
+    settledAt: expense.settledAt?.toISOString() ?? null,
+    settledBy: expense.settledBy ?? null,
+    settlementNote: expense.settlementNote ?? null,
     reviewStatus: expense.reviewStatus,
     rejectionReason: expense.rejectionReason,
     reviewedBy: expense.reviewedBy,
