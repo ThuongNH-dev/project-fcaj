@@ -153,7 +153,7 @@ export function ReceiptsPage() {
             <input
               type="file"
               className="hidden"
-              accept="image/*,.pdf"
+              accept=".png,.jpg,.jpeg,.pdf"
               disabled={isUploading}
               onChange={(e) => {
                 const file = e.target.files?.[0];
@@ -276,7 +276,7 @@ export function ReceiptsPage() {
                   <input
                     type="file"
                     className="hidden"
-                    accept="image/*,.pdf"
+                    accept=".png,.jpg,.jpeg,.pdf"
                     disabled={isUploading}
                     onChange={(e) => {
                       const file = e.target.files?.[0];
