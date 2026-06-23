@@ -40,6 +40,13 @@ async function getGroupsCollection(): Promise<Collection<GroupDocument>> {
   return db.collection<GroupDocument>("groups");
 }
 
+function getUserDisplayName(user: UserDocument) {
+  const publicUser = toPublicUser(user);
+  const fullName = `${publicUser.firstName} ${publicUser.lastName}`.trim();
+
+  return fullName || publicUser.email || "Unknown user";
+}
+
 async function buildReferenceMaps(params: {
   userIds: string[];
   groupIds: string[];
@@ -91,7 +98,7 @@ async function buildReferenceMaps(params: {
       .map((user) => [
         user._id!.toString(),
         {
-          name: `${user.firstName} ${user.lastName}`.trim(),
+          name: getUserDisplayName(user),
           email: user.email,
         },
       ]),
@@ -349,8 +356,8 @@ export async function getAdminActivityLogs(): Promise<AdminActivityLog[]> {
       id: `user-${userDocument._id!.toString()}`,
       eventType: "user_registered" as const,
       title: "New user registered",
-      description: `${userDocument.firstName} ${userDocument.lastName}`.trim(),
-      createdAt: userDocument.createdAt.toISOString(),
+      description: getUserDisplayName(userDocument),
+      createdAt: toPublicUser(userDocument).createdAt,
     })),
     ...recentGroups.map((groupDocument: GroupDocument) => ({
       id: `group-${groupDocument._id!.toString()}`,
