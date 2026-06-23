@@ -3,6 +3,7 @@ import {
   Users,
   Receipt,
   Activity,
+  TrendingUp,
   Download,
   Shield,
   Search,
@@ -19,10 +20,14 @@ import {
   getAdminGroup,
   getAdminGroups,
   getAdminRejected,
+  getAdminSettlement,
+  getAdminSettlements,
   getAdminUploads,
   type AdminActivityLog,
   type AdminDashboardStats,
   type AdminRejectedRecord,
+  type AdminSettlementDetail,
+  type AdminSettlementRecord,
   type AdminUploadRecord,
 } from "../api/admin";
 import type { Group } from "../api/groups";
@@ -44,10 +49,20 @@ function formatDateTime(dateValue: string) {
   return new Date(dateValue).toLocaleString();
 }
 
+function formatCurrency(amount: number, currency: string) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency || "USD",
+    minimumFractionDigits: 2,
+  }).format(amount);
+}
+
 function getSearchPlaceholder(activeTab: string, t: ReturnType<typeof useLanguage>["t"]) {
   switch (activeTab) {
     case "groups":
       return t.searchGroups;
+    case "settlements":
+      return "Search settlements...";
     case "uploads":
       return "Search uploads...";
     case "rejected":
@@ -71,6 +86,10 @@ function getUploadStatusLabel(upload: AdminUploadRecord, t: ReturnType<typeof us
   return t.pendingReview;
 }
 
+function getSettlementStatusLabel(status: AdminSettlementRecord["settlementStatus"]) {
+  return status === "settled" ? "Settled" : "Pending";
+}
+
 function getLogTypeLabel(eventType: AdminActivityLog["eventType"]) {
   switch (eventType) {
     case "user_registered":
@@ -79,6 +98,8 @@ function getLogTypeLabel(eventType: AdminActivityLog["eventType"]) {
       return "Group";
     case "expense_created":
       return "Expense";
+    case "expense_settled":
+      return "Settlement";
     case "receipt_uploaded":
       return "Receipt";
     default:
@@ -96,12 +117,21 @@ export function AdminPage() {
   const [uploads, setUploads] = useState<AdminUploadRecord[]>([]);
   const [rejectedItems, setRejectedItems] = useState<AdminRejectedRecord[]>([]);
   const [activityLogs, setActivityLogs] = useState<AdminActivityLog[]>([]);
+  const [settlementFilter, setSettlementFilter] = useState<"all" | "pending" | "settled">(
+    "all",
+  );
+  const [settlements, setSettlements] = useState<AdminSettlementRecord[]>([]);
+  const [selectedSettlement, setSelectedSettlement] =
+    useState<AdminSettlementDetail | null>(null);
+  const [selectedSettlementId, setSelectedSettlementId] = useState<string | null>(null);
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
   const [isLoadingGroupDetail, setIsLoadingGroupDetail] = useState(false);
   const [isLoadingUploads, setIsLoadingUploads] = useState(true);
   const [isLoadingRejected, setIsLoadingRejected] = useState(true);
   const [isLoadingActivity, setIsLoadingActivity] = useState(true);
+  const [isLoadingSettlements, setIsLoadingSettlements] = useState(true);
+  const [isLoadingSettlementDetail, setIsLoadingSettlementDetail] = useState(false);
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const { t } = useLanguage();
@@ -110,6 +140,7 @@ export function AdminPage() {
   const tabs = [
     { id: "users", label: t.users, icon: Users },
     { id: "groups", label: t.groups, icon: Activity },
+    { id: "settlements", label: t.settlements, icon: TrendingUp },
     { id: "uploads", label: t.uploads, icon: Receipt },
     { id: "rejected", label: t.rejectedTx, icon: XCircle },
     { id: "logs", label: t.activityLogs, icon: Activity },
@@ -195,6 +226,37 @@ export function AdminPage() {
     }
   }
 
+  async function loadSettlements(nextFilter: "all" | "pending" | "settled") {
+    try {
+      setIsLoadingSettlements(true);
+      const response = await getAdminSettlements({
+        status: nextFilter === "all" ? undefined : nextFilter,
+      });
+      const loadedSettlements = response.settlements ?? [];
+
+      setSettlements(loadedSettlements);
+      if (loadedSettlements.length > 0) {
+        setSelectedSettlementId((currentSelectedSettlementId) =>
+          currentSelectedSettlementId &&
+          loadedSettlements.some(
+            (currentSettlement) => currentSettlement.id === currentSelectedSettlementId,
+          )
+            ? currentSelectedSettlementId
+            : loadedSettlements[0].id,
+        );
+      } else {
+        setSelectedSettlementId(null);
+        setSelectedSettlement(null);
+      }
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Unable to load settlements.",
+      );
+    } finally {
+      setIsLoadingSettlements(false);
+    }
+  }
+
   useEffect(() => {
     setErrorMessage("");
     void Promise.all([
@@ -205,6 +267,10 @@ export function AdminPage() {
       loadActivity(),
     ]);
   }, []);
+
+  useEffect(() => {
+    void loadSettlements(settlementFilter);
+  }, [settlementFilter]);
 
   useEffect(() => {
     if (!selectedGroupId || activeTab !== "groups") {
@@ -242,6 +308,43 @@ export function AdminPage() {
       isMounted = false;
     };
   }, [activeTab, selectedGroupId]);
+
+  useEffect(() => {
+    if (!selectedSettlementId || activeTab !== "settlements") {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadSettlementDetail() {
+      try {
+        setIsLoadingSettlementDetail(true);
+        const response = await getAdminSettlement(selectedSettlementId);
+
+        if (isMounted) {
+          setSelectedSettlement(response.settlement ?? null);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setErrorMessage(
+            error instanceof Error
+              ? error.message
+              : "Unable to load settlement detail.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingSettlementDetail(false);
+        }
+      }
+    }
+
+    void loadSettlementDetail();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTab, selectedSettlementId]);
 
   const filteredUsers = (stats?.recentUsers ?? []).filter((user) => {
     const keyword = search.trim().toLowerCase();
@@ -320,6 +423,62 @@ export function AdminPage() {
       activityLog.description.toLowerCase().includes(keyword)
     );
   });
+
+  const filteredSettlements = settlements.filter((settlement) => {
+    const keyword = search.trim().toLowerCase();
+
+    if (!keyword) {
+      return true;
+    }
+
+    return (
+      settlement.title.toLowerCase().includes(keyword) ||
+      settlement.groupName?.toLowerCase().includes(keyword) === true ||
+      settlement.createdByName.toLowerCase().includes(keyword) ||
+      settlement.paidByName.toLowerCase().includes(keyword) ||
+      settlement.settledByName?.toLowerCase().includes(keyword) === true ||
+      getSettlementStatusLabel(settlement.settlementStatus).toLowerCase().includes(keyword)
+    );
+  });
+
+  const settlementSummary = useMemo(() => {
+    return filteredSettlements.reduce(
+      (summary, settlement) => {
+        summary.totalAmount += settlement.amount;
+
+        if (settlement.settlementStatus === "pending") {
+          summary.pendingCount += 1;
+          summary.pendingAmount += settlement.amount;
+          summary.pendingAmountsByCurrency.set(
+            settlement.currency,
+            (summary.pendingAmountsByCurrency.get(settlement.currency) ?? 0) +
+              settlement.amount,
+          );
+        } else {
+          summary.settledCount += 1;
+        }
+
+        return summary;
+      },
+      {
+        totalAmount: 0,
+        pendingAmount: 0,
+        pendingCount: 0,
+        pendingAmountsByCurrency: new Map<string, number>(),
+        settledCount: 0,
+      },
+    );
+  }, [filteredSettlements]);
+
+  const pendingAmountSummaryLabel = useMemo(() => {
+    if (settlementSummary.pendingAmountsByCurrency.size === 0) {
+      return "--";
+    }
+
+    return Array.from(settlementSummary.pendingAmountsByCurrency.entries())
+      .map(([currency, amount]) => formatCurrency(amount, currency))
+      .join(" · ");
+  }, [settlementSummary.pendingAmountsByCurrency]);
 
   async function handleDeleteGroup(group: Group) {
     const confirmed = await confirm({
@@ -530,6 +689,34 @@ export function AdminPage() {
             />
           </div>
         </div>
+
+        {activeTab === "settlements" && (
+          <div className="mb-5 flex items-center gap-2 flex-wrap">
+            {[
+              { key: "all", label: "All" },
+              { key: "pending", label: "Pending" },
+              { key: "settled", label: "Settled" },
+            ].map((filterOption) => (
+              <button
+                key={filterOption.key}
+                type="button"
+                onClick={() =>
+                  setSettlementFilter(
+                    filterOption.key as "all" | "pending" | "settled",
+                  )
+                }
+                className={`rounded-xl px-4 py-2 text-sm transition-all ${
+                  settlementFilter === filterOption.key
+                    ? "bg-[#16A34A] text-white shadow-sm"
+                    : "bg-white border border-[#E5E7EB] text-[#6B7280] hover:text-[#111827]"
+                }`}
+                style={{ fontWeight: 600 }}
+              >
+                {filterOption.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {activeTab === "users" && (
           <div className="bg-white rounded-2xl border border-[#E5E7EB] overflow-hidden">
@@ -742,6 +929,262 @@ export function AdminPage() {
               ) : (
                 <p className="text-sm text-[#6B7280]">Select a group to see details.</p>
               )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === "settlements" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {[
+                {
+                  label: "Visible Settlements",
+                  value: filteredSettlements.length.toString(),
+                  bg: "bg-[#F0FAF5]",
+                  valueClassName: "text-[#166534]",
+                },
+                {
+                  label: "Pending Items",
+                  value: settlementSummary.pendingCount.toString(),
+                  bg: "bg-[#FEF3C7]",
+                  valueClassName: "text-[#92400e]",
+                },
+                {
+                  label: "Pending Amount",
+                  value: pendingAmountSummaryLabel,
+                  bg: "bg-[#FEF2F2]",
+                  valueClassName: "text-[#B91C1C]",
+                },
+                {
+                  label: "Settled Items",
+                  value: settlementSummary.settledCount.toString(),
+                  bg: "bg-[#EFF6FF]",
+                  valueClassName: "text-[#1d4ed8]",
+                },
+              ].map((item) => (
+                <div key={item.label} className={`${item.bg} rounded-2xl p-5 border border-white`}>
+                  <p className={`text-2xl ${item.valueClassName}`} style={{ fontWeight: 800 }}>
+                    {item.value}
+                  </p>
+                  <p className="text-[#6B7280] text-xs mt-1">{item.label}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+              <div className="bg-white rounded-2xl border border-[#E5E7EB] overflow-hidden">
+                {isLoadingSettlements ? (
+                  <div className="px-5 py-8 text-sm text-[#6B7280]">
+                    Loading settlements...
+                  </div>
+                ) : filteredSettlements.length > 0 ? (
+                  <div className="divide-y divide-[#F3F4F6]">
+                    <div className="px-5 py-4">
+                      <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
+                        Settlement Queue
+                      </h3>
+                      <p className="text-sm text-[#6B7280] mt-1">
+                        Review pending and settled expenses across all groups.
+                      </p>
+                    </div>
+                    {filteredSettlements.map((settlement) => {
+                      const isSelected = selectedSettlementId === settlement.id;
+                      const statusClassName =
+                        settlement.settlementStatus === "settled"
+                          ? "bg-[#D1FAE5] text-[#065f46]"
+                          : "bg-[#FEF3C7] text-[#92400e]";
+
+                      return (
+                        <button
+                          key={settlement.id}
+                          type="button"
+                          onClick={() => setSelectedSettlementId(settlement.id)}
+                          className={`w-full px-5 py-4 text-left transition-colors ${
+                            isSelected ? "bg-[#F0FAF5]" : "hover:bg-[#FAFAFA]"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-[#111827]" style={{ fontWeight: 700 }}>
+                                  {settlement.title}
+                                </p>
+                                <span
+                                  className={`rounded-full px-2.5 py-1 text-xs ${statusClassName}`}
+                                  style={{ fontWeight: 600 }}
+                                >
+                                  {getSettlementStatusLabel(settlement.settlementStatus)}
+                                </span>
+                              </div>
+                              <p className="text-sm text-[#6B7280] mt-1">
+                                {settlement.groupName ?? "Unknown group"} · Paid by{" "}
+                                {settlement.paidByName}
+                              </p>
+                              <p className="text-xs text-[#9CA3AF] mt-2">
+                                {settlement.participantCount} participants ·{" "}
+                                {formatCurrency(settlement.amount, settlement.currency)}
+                              </p>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <p className="text-xs text-[#9CA3AF]">
+                                Expense date
+                              </p>
+                              <p className="text-sm text-[#111827]" style={{ fontWeight: 600 }}>
+                                {new Date(settlement.expenseDate).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <EmptyState
+                    icon={TrendingUp}
+                    title={t.allClear}
+                    desc={t.noSettlementsDesc}
+                  />
+                )}
+              </div>
+
+              <div className="bg-white rounded-2xl border border-[#E5E7EB] p-5">
+                <div className="mb-4">
+                  <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
+                    Settlement Detail
+                  </h3>
+                  <p className="text-sm text-[#6B7280] mt-1">
+                    Inspect allocation, notes, and settlement history.
+                  </p>
+                </div>
+
+                {isLoadingSettlementDetail ? (
+                  <p className="text-sm text-[#6B7280]">Loading settlement detail...</p>
+                ) : selectedSettlement ? (
+                  <div className="space-y-5">
+                    <div className="rounded-2xl bg-[#F9FAFB] px-4 py-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[#111827]" style={{ fontWeight: 700 }}>
+                            {selectedSettlement.title}
+                          </p>
+                          <p className="text-sm text-[#6B7280] mt-1">
+                            {selectedSettlement.groupName ?? "Unknown group"}
+                          </p>
+                        </div>
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs ${
+                            selectedSettlement.settlementStatus === "settled"
+                              ? "bg-[#D1FAE5] text-[#065f46]"
+                              : "bg-[#FEF3C7] text-[#92400e]"
+                          }`}
+                          style={{ fontWeight: 700 }}
+                        >
+                          {getSettlementStatusLabel(selectedSettlement.settlementStatus)}
+                        </span>
+                      </div>
+                      <p className="text-2xl text-[#111827] mt-4" style={{ fontWeight: 800 }}>
+                        {formatCurrency(
+                          selectedSettlement.amount,
+                          selectedSettlement.currency,
+                        )}
+                      </p>
+                      <p className="text-xs text-[#9CA3AF] mt-1">
+                        Created by {selectedSettlement.createdByName}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-[#F9FAFB] px-4 py-3">
+                        <p className="text-xs text-[#9CA3AF] uppercase">Paid By</p>
+                        <p className="text-sm text-[#111827] mt-1" style={{ fontWeight: 600 }}>
+                          {selectedSettlement.paidByName}
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-[#F9FAFB] px-4 py-3">
+                        <p className="text-xs text-[#9CA3AF] uppercase">Review Status</p>
+                        <p className="text-sm text-[#111827] mt-1" style={{ fontWeight: 600 }}>
+                          {selectedSettlement.reviewStatus}
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-[#F9FAFB] px-4 py-3">
+                        <p className="text-xs text-[#9CA3AF] uppercase">Expense Date</p>
+                        <p className="text-sm text-[#111827] mt-1" style={{ fontWeight: 600 }}>
+                          {formatDateTime(selectedSettlement.expenseDate)}
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-[#F9FAFB] px-4 py-3">
+                        <p className="text-xs text-[#9CA3AF] uppercase">Receipt Link</p>
+                        <p className="text-sm text-[#111827] mt-1 break-all" style={{ fontWeight: 600 }}>
+                          {selectedSettlement.receiptId ?? "Not linked"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-sm text-[#111827] mb-2" style={{ fontWeight: 700 }}>
+                        Description
+                      </p>
+                      <p className="text-sm text-[#6B7280]">
+                        {selectedSettlement.description || "No description provided."}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="text-sm text-[#111827] mb-3" style={{ fontWeight: 700 }}>
+                        Participants
+                      </p>
+                      <div className="space-y-3">
+                        {selectedSettlement.participants.map((participant) => (
+                          <div
+                            key={`${selectedSettlement.id}-${participant.userId}`}
+                            className="flex items-center justify-between gap-3 rounded-xl bg-[#F9FAFB] px-4 py-3"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-[#111827]" style={{ fontWeight: 600 }}>
+                                {participant.name}
+                              </p>
+                              <p className="text-sm text-[#6B7280] truncate">
+                                {participant.email}
+                              </p>
+                            </div>
+                            <span className="text-sm text-[#111827]" style={{ fontWeight: 700 }}>
+                              {formatCurrency(
+                                participant.shareAmount,
+                                selectedSettlement.currency,
+                              )}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-[#E5E7EB] px-4 py-4">
+                      <p className="text-sm text-[#111827] mb-3" style={{ fontWeight: 700 }}>
+                        Settlement History
+                      </p>
+                      <div className="space-y-2 text-sm text-[#6B7280]">
+                        <p>
+                          Note: {selectedSettlement.settlementNote ?? "No settlement note."}
+                        </p>
+                        <p>
+                          Settled at:{" "}
+                          {selectedSettlement.settledAt
+                            ? formatDateTime(selectedSettlement.settledAt)
+                            : "Not settled yet"}
+                        </p>
+                        <p>
+                          Settled by: {selectedSettlement.settledByName ?? "Not settled yet"}
+                        </p>
+                        <p>Last updated: {formatDateTime(selectedSettlement.updatedAt)}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-[#6B7280]">
+                    Select a settlement to see details.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         )}
