@@ -21,6 +21,9 @@ export interface Expense {
   participants: ExpenseParticipantShare[];
   receiptId: string | null;
   settlementStatus: ExpenseSettlementStatus;
+  settledAt: string | null;
+  settledBy: string | null;
+  settlementNote: string | null;
   reviewStatus: ExpenseReviewStatus;
   rejectionReason: string | null;
   reviewedBy: string | null;
@@ -41,6 +44,10 @@ export interface CreateExpensePayload {
   splitMode?: string;
   participants: ExpenseParticipantShare[];
   receiptId?: string;
+}
+
+export interface SettleExpensePayload {
+  settlementNote?: string | null;
 }
 
 export interface ExpensesResponse {
