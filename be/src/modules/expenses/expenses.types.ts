@@ -1,4 +1,4 @@
-import type { SupportedCurrency } from "../auth/auth.types.js";
+import type { SupportedCurrency, UserRole } from "../auth/auth.types.js";
 
 export type ExpenseCategory =
   | "food"
@@ -33,6 +33,13 @@ export interface CreateExpenseInput {
   receiptId?: string | null;
 }
 
+export interface SettleExpenseInput {
+  expenseId: string;
+  userId: string;
+  userRole: UserRole;
+  settlementNote?: string | null;
+}
+
 export interface PublicExpense {
   id: string;
   groupId: string;
@@ -48,6 +55,9 @@ export interface PublicExpense {
   participants: ExpenseParticipantShare[];
   receiptId: string | null;
   settlementStatus: ExpenseSettlementStatus;
+  settledAt: string | null;
+  settledBy: string | null;
+  settlementNote: string | null;
   reviewStatus: ExpenseReviewStatus;
   rejectionReason: string | null;
   reviewedBy: string | null;

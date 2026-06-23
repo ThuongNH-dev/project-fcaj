@@ -85,12 +85,68 @@ export interface AdminRejectedResponse {
   rejectedItems?: AdminRejectedRecord[];
 }
 
+export interface AdminSettlementRecord {
+  id: string;
+  title: string;
+  groupId: string;
+  groupName: string | null;
+  createdByUserId: string;
+  createdByName: string;
+  paidByUserId: string;
+  paidByName: string;
+  participantCount: number;
+  amount: number;
+  currency: string;
+  expenseDate: string;
+  settlementStatus: "pending" | "settled";
+  settlementNote: string | null;
+  settledAt: string | null;
+  settledByUserId: string | null;
+  settledByName: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminSettlementParticipant {
+  userId: string;
+  name: string;
+  email: string;
+  shareAmount: number;
+}
+
+export interface AdminSettlementDetail extends AdminSettlementRecord {
+  description: string;
+  receiptId: string | null;
+  reviewStatus: "pending" | "approved" | "rejected";
+  participants: AdminSettlementParticipant[];
+}
+
+export interface AdminSettlementsQuery {
+  status?: "pending" | "settled";
+  search?: string;
+  groupId?: string;
+  paidByUserId?: string;
+}
+
+export interface AdminSettlementsResponse {
+  ok: boolean;
+  message: string;
+  settlements?: AdminSettlementRecord[];
+}
+
+export interface AdminSettlementResponse {
+  ok: boolean;
+  message: string;
+  settlement?: AdminSettlementDetail;
+}
+
 export interface AdminActivityLog {
   id: string;
   eventType:
     | "user_registered"
     | "group_created"
     | "expense_created"
+    | "expense_settled"
     | "receipt_uploaded";
   title: string;
   description: string;
