@@ -4,15 +4,13 @@ export {
   registerUser,
   resetPassword,
   verifyResetOtp,
-} from "./auth.api";
-export {
   clearStoredUser,
   getStoredToken,
   getStoredUser,
   getUserInitials,
   setStoredToken,
   setStoredUser,
-} from "./auth.storage";
+} from "../../domains/auth";
 export type {
   AuthResponse,
   AuthUser,
@@ -25,4 +23,4 @@ export type {
   UserRole,
   VerifyResetOtpPayload,
   VerifyResetOtpResponse,
-} from "./auth.types";
+} from "../../domains/auth";

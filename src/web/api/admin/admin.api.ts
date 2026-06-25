@@ -1,4 +1,4 @@
-import { deleteJson, getJson } from "../client";
+import { deleteJson, getJson } from "../../shared/api/client";
 import type {
   AdminActivityResponse,
   AdminDashboardResponse,
@@ -74,3 +74,4 @@ export function getAdminActivityLogs() {
 export function getAdminSession() {
   return getJson<AdminSessionResponse>("/api/admin/session");
 }
+
