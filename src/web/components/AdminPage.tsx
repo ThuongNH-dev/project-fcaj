@@ -12,7 +12,7 @@ import {
   Trash2,
   XCircle,
 } from "lucide-react";
-import { useLanguage } from "../context/LanguageContext";
+import { useLanguage } from "../shared/providers/LanguageProvider";
 import {
   deleteAdminGroup,
   getAdminActivityLogs,
@@ -30,8 +30,8 @@ import {
   type AdminSettlementRecord,
   type AdminUploadRecord,
 } from "../api/admin";
-import type { Group } from "../api/groups";
-import { useFeedback } from "./ui/FeedbackProvider";
+import type { Group } from "../domains/groups";
+import { useFeedback } from "../shared/providers/FeedbackProvider";
 
 function formatFileSize(sizeInBytes: number) {
   if (sizeInBytes < 1024) {
@@ -1386,3 +1386,4 @@ export function AdminPage() {
     </div>
   );
 }
+
