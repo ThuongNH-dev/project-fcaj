@@ -1031,6 +1031,170 @@ swaggerSpec.paths = {
       },
     },
   },
+  "/api/admin/users": {
+    get: {
+      summary: "Get all users for admin management",
+      tags: ["Admin"],
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: "Admin users fetched successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        403: {
+          description: "Admin access required",
+        },
+        503: {
+          description: "MongoDB or backend service failed",
+        },
+      },
+    },
+  },
+  "/api/admin/users/export": {
+    get: {
+      summary: "Export all admin user records as CSV",
+      tags: ["Admin"],
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: "CSV export generated successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        403: {
+          description: "Admin access required",
+        },
+        503: {
+          description: "MongoDB or backend service failed",
+        },
+      },
+    },
+  },
+  "/api/admin/users/{userId}": {
+    get: {
+      summary: "Get admin detail for a specific user",
+      tags: ["Admin"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "userId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+        },
+      ],
+      responses: {
+        200: {
+          description: "Admin user fetched successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        403: {
+          description: "Admin access required",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB or backend service failed",
+        },
+      },
+    },
+    patch: {
+      summary: "Update a user's role from the admin area",
+      tags: ["Admin"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "userId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+        },
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["role"],
+              properties: {
+                role: {
+                  type: "string",
+                  enum: ["admin", "user"],
+                  example: "admin",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "User role updated successfully",
+        },
+        400: {
+          description: "Invalid role or protected self-update attempt",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        403: {
+          description: "Admin access required",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB or backend service failed",
+        },
+      },
+    },
+    delete: {
+      summary: "Delete a user from the admin area when no linked data remains",
+      tags: ["Admin"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "userId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+        },
+      ],
+      responses: {
+        200: {
+          description: "User deleted successfully",
+        },
+        400: {
+          description: "Protected user or linked data still exists",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        403: {
+          description: "Admin access required",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB or backend service failed",
+        },
+      },
+    },
+  },
 };
 
 export default swaggerSpec;
