@@ -1,8 +1,8 @@
 import { Navigate } from "react-router";
-import { getStoredUser } from "../../../domains/auth";
+import { useStoredUser } from "../../../domains/auth";
 
 export function AdminRoute({ children }: { children: JSX.Element }) {
-  const user = getStoredUser();
+  const user = useStoredUser();
 
   if (!user) {
     return <Navigate to="/login" replace />;
