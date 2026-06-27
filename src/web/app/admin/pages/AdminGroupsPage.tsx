@@ -6,6 +6,7 @@ import {
   getAdminGroups,
 } from "../../../domains/admin-reporting";
 import type { Group } from "../../../domains/groups";
+import { formatLocalDate } from "../../../shared/lib/formatters";
 import { useFeedback } from "../../../shared/providers/FeedbackProvider";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
 import { AdminEmptyState } from "../components/AdminEmptyState";
@@ -253,7 +254,7 @@ export function AdminGroupsPage() {
                           View
                         </div>
                         <p className="mt-2 text-xs text-[#9CA3AF]">
-                          Updated {new Date(group.updatedAt).toLocaleDateString()}
+                          Updated {formatLocalDate(group.updatedAt)}
                         </p>
                       </div>
                     </div>

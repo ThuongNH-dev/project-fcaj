@@ -12,6 +12,7 @@ import { AdminSearchInput } from "../components/AdminSearchInput";
 import {
   formatCurrency,
   formatDateTime,
+  formatLocalDate,
   getSettlementStatusLabel,
 } from "../lib/admin.utils";
 
@@ -304,7 +305,7 @@ export function AdminSettlementsPage() {
                         <div className="shrink-0 text-right">
                           <p className="text-xs text-[#9CA3AF]">Expense date</p>
                           <p className="text-sm text-[#111827]" style={{ fontWeight: 600 }}>
-                            {new Date(settlement.expenseDate).toLocaleDateString()}
+                            {formatLocalDate(settlement.expenseDate)}
                           </p>
                         </div>
                       </div>
