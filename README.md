@@ -188,6 +188,7 @@ Core API groups:
 - `POST /api/groups/:groupId/members`
 - `DELETE /api/groups/:groupId/members/:memberId`
 - `GET /api/admin/users`
+- `GET /api/admin/users/export`
 - `GET/PATCH/DELETE /api/admin/users/:userId`
 - `GET /api/admin/*`
 

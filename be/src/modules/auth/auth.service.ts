@@ -34,6 +34,7 @@ export interface UserDocument {
 }
 
 const SUPPORTED_CURRENCIES = new Set<SupportedCurrency>(["USD", "VND"]);
+const SUPPORTED_USER_ROLES = new Set<UserDocument["role"]>(["admin", "user"]);
 const PASSWORD_RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
 
 export async function getUsersCollection(): Promise<Collection<UserDocument>> {
@@ -84,6 +85,20 @@ function normalizeDefaultCurrency(defaultCurrency?: string): SupportedCurrency {
   }
 
   return normalizedDefaultCurrency as SupportedCurrency;
+}
+
+export function normalizeUserRole(role?: string): UserDocument["role"] {
+  const normalizedRole = role?.trim().toLowerCase();
+
+  if (!normalizedRole) {
+    throw new Error("User role is required.");
+  }
+
+  if (!SUPPORTED_USER_ROLES.has(normalizedRole as UserDocument["role"])) {
+    throw new Error("User role must be either admin or user.");
+  }
+
+  return normalizedRole as UserDocument["role"];
 }
 
 function hashPasswordResetToken(token: string) {
@@ -307,6 +322,51 @@ export async function getUserById(userId: string): Promise<PublicUser | null> {
   const user = await users.findOne({ _id: new MongoObjectId(userId) });
 
   return user ? toPublicUser(user) : null;
+}
+
+export async function countUsersByRole(role: UserDocument["role"]) {
+  const users = await getUsersCollection();
+  return users.countDocuments({ role });
+}
+
+export async function updateUserRoleById(
+  userId: string,
+  role: string,
+): Promise<PublicUser | null> {
+  if (!MongoObjectId.isValid(userId)) {
+    return null;
+  }
+
+  const normalizedRole = normalizeUserRole(role);
+  const users = await getUsersCollection();
+  const userObjectId = new MongoObjectId(userId);
+
+  await users.updateOne(
+    { _id: userObjectId },
+    {
+      $set: {
+        role: normalizedRole,
+        updatedAt: new Date(),
+      },
+    },
+  );
+
+  const updatedUser = await users.findOne({ _id: userObjectId });
+
+  return updatedUser ? toPublicUser(updatedUser) : null;
+}
+
+export async function deleteUserById(userId: string): Promise<boolean | null> {
+  if (!MongoObjectId.isValid(userId)) {
+    return null;
+  }
+
+  const users = await getUsersCollection();
+  const result = await users.deleteOne({
+    _id: new MongoObjectId(userId),
+  });
+
+  return result.deletedCount > 0;
 }
 
 export async function updateCurrentUserProfile(
