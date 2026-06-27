@@ -1,6 +1,11 @@
 import type { Collection, ObjectId } from "mongodb";
 import { ObjectId as MongoObjectId } from "mongodb";
 import { connectToMongo } from "../../db/mongo.js";
+import {
+  canManageGroup,
+  canManageGroupMembers,
+  getGroupPermission,
+} from "../../policies/group.policy.js";
 import { getUsersCollection } from "../auth/auth.service.js";
 import type {
   AddGroupMemberInput,
@@ -26,6 +31,17 @@ interface GroupDocument {
 async function getGroupsCollection(): Promise<Collection<GroupDocument>> {
   const db = await connectToMongo();
   return db.collection<GroupDocument>("groups");
+}
+
+async function getGroupDocumentById(groupId: string): Promise<GroupDocument | null> {
+  if (!MongoObjectId.isValid(groupId)) {
+    return null;
+  }
+
+  const groups = await getGroupsCollection();
+  return groups.findOne({
+    _id: new MongoObjectId(groupId),
+  });
 }
 
 function toPublicGroup(group: GroupDocument): PublicGroup {
@@ -195,17 +211,17 @@ export async function getGroupByIdForUser(
   groupId: string,
   userId: string,
 ): Promise<PublicGroup | null> {
-  if (!MongoObjectId.isValid(groupId)) {
+  const groupDocument = await getGroupDocumentById(groupId);
+
+  if (!groupDocument) {
     return null;
   }
 
-  const groups = await getGroupsCollection();
-  const groupDocument = await groups.findOne({
-    _id: new MongoObjectId(groupId),
-    "members.userId": userId,
-  });
+  if (getGroupPermission(groupDocument.members, userId) === "non-member") {
+    return null;
+  }
 
-  return groupDocument ? toPublicGroupWithMembers(groupDocument) : null;
+  return toPublicGroupWithMembers(groupDocument);
 }
 
 export async function getGroupById(groupId: string): Promise<PublicGroup | null> {
@@ -222,7 +238,15 @@ export async function getGroupById(groupId: string): Promise<PublicGroup | null>
 }
 
 export async function updateGroup(input: UpdateGroupInput): Promise<PublicGroup | null> {
-  if (!MongoObjectId.isValid(input.groupId)) {
+  const groupDocument = await getGroupDocumentById(input.groupId);
+
+  if (!groupDocument) {
+    return null;
+  }
+
+  const groupPermission = getGroupPermission(groupDocument.members, input.userId);
+
+  if (!canManageGroup(groupPermission)) {
     return null;
   }
 
@@ -236,7 +260,6 @@ export async function updateGroup(input: UpdateGroupInput): Promise<PublicGroup 
   const result = await groups.findOneAndUpdate(
     {
       _id: groupObjectId,
-      createdBy: input.userId,
     },
     {
       $set: {
@@ -255,14 +278,21 @@ export async function updateGroup(input: UpdateGroupInput): Promise<PublicGroup 
 }
 
 export async function deleteGroup(groupId: string, userId: string): Promise<boolean> {
-  if (!MongoObjectId.isValid(groupId)) {
+  const groupDocument = await getGroupDocumentById(groupId);
+
+  if (!groupDocument) {
+    return false;
+  }
+
+  const groupPermission = getGroupPermission(groupDocument.members, userId);
+
+  if (!canManageGroup(groupPermission)) {
     return false;
   }
 
   const groups = await getGroupsCollection();
   const result = await groups.deleteOne({
     _id: new MongoObjectId(groupId),
-    createdBy: userId,
   });
 
   return result.deletedCount > 0;
@@ -282,7 +312,9 @@ export async function deleteGroupById(groupId: string): Promise<boolean> {
 }
 
 export async function addGroupMember(input: AddGroupMemberInput): Promise<PublicGroup | null> {
-  if (!MongoObjectId.isValid(input.groupId)) {
+  const group = await getGroupDocumentById(input.groupId);
+
+  if (!group) {
     return null;
   }
 
@@ -295,12 +327,7 @@ export async function addGroupMember(input: AddGroupMemberInput): Promise<Public
     throw new Error("Member email is required.");
   }
 
-  const group = await groups.findOne({
-    _id: groupObjectId,
-    createdBy: input.userId,
-  });
-
-  if (!group) {
+  if (!canManageGroupMembers(getGroupPermission(group.members, input.userId))) {
     return null;
   }
 
@@ -325,7 +352,7 @@ export async function addGroupMember(input: AddGroupMemberInput): Promise<Public
   ];
 
   await groups.updateOne(
-    { _id: groupObjectId, createdBy: input.userId },
+    { _id: groupObjectId },
     {
       $set: {
         members: updatedMembers,
@@ -342,22 +369,20 @@ export async function addGroupMember(input: AddGroupMemberInput): Promise<Public
 }
 
 export async function removeGroupMember(input: RemoveGroupMemberInput): Promise<PublicGroup | null> {
-  if (!MongoObjectId.isValid(input.groupId)) {
-    return null;
-  }
-
-  const groups = await getGroupsCollection();
-  const groupObjectId = new MongoObjectId(input.groupId);
-  const group = await groups.findOne({
-    _id: groupObjectId,
-    createdBy: input.userId,
-  });
+  const group = await getGroupDocumentById(input.groupId);
 
   if (!group) {
     return null;
   }
 
-  if (input.memberId === input.userId) {
+  const groups = await getGroupsCollection();
+  const groupObjectId = new MongoObjectId(input.groupId);
+
+  if (!canManageGroupMembers(getGroupPermission(group.members, input.userId))) {
+    return null;
+  }
+
+  if (getGroupPermission(group.members, input.memberId) === "owner") {
     throw new Error("The group owner cannot be removed.");
   }
 
@@ -370,7 +395,7 @@ export async function removeGroupMember(input: RemoveGroupMemberInput): Promise<
   }
 
   await groups.updateOne(
-    { _id: groupObjectId, createdBy: input.userId },
+    { _id: groupObjectId },
     {
       $set: {
         members: updatedMembers,
