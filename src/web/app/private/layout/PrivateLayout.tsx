@@ -1,11 +1,12 @@
 import { Navigate, Outlet, useLocation } from "react-router";
-import { getStoredUser } from "../../../domains/auth";
+import { useStoredUser } from "../../../domains/auth";
 import { Sidebar } from "./Sidebar";
 
 export function PrivateLayout() {
   const location = useLocation();
+  const user = useStoredUser();
 
-  if (!getStoredUser()) {
+  if (!user) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
