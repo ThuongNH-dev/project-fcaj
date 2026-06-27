@@ -1,103 +1,132 @@
 # Splitly
 
-Splitly là ứng dụng quản lý chi tiêu nhóm: tạo nhóm, thêm thành viên, theo dõi chi phí, xem dashboard và hỗ trợ luồng đăng nhập/đăng ký/quên mật khẩu bằng OTP qua email.
+Splitly is a group expense management app for shared trips, households, and team spending. The project includes a React/Vite frontend and an Express/MongoDB backend with JWT auth, admin reporting, and password reset via OTP.
 
-## Tính năng chính
+## Main Features
 
-- Đăng ký, đăng nhập và lưu phiên người dùng bằng JWT.
-- Quên mật khẩu theo flow OTP: nhập email, nhận OTP qua email, xác thực OTP, đặt mật khẩu mới và đăng nhập lại bằng mật khẩu mới.
-- Quản lý profile cá nhân và đổi mật khẩu khi đã đăng nhập.
-- Quản lý nhóm: tạo nhóm, xem danh sách nhóm, xem chi tiết nhóm, cập nhật/xóa nhóm, thêm/xóa thành viên.
-- Giao diện web React/Vite cho landing page, dashboard, groups, expenses, settlement, receipts, admin và settings.
-- Backend Express + MongoDB có Swagger UI để kiểm thử API.
+- User registration and login with JWT session storage
+- Password reset flow with email OTP verification
+- Profile update and password change for authenticated users
+- Group management: create, edit, delete, add members, remove members
+- Expense tracking, receipts, settlements, dashboard, and admin reporting
+- Swagger/OpenAPI docs on the backend
 
-## Tech stack
+## Tech Stack
 
-- Frontend: React, Vite, React Router, Tailwind CSS, Radix UI, Lucide Icons.
-- Backend: Node.js, Express, TypeScript, MongoDB native driver.
-- Auth/Security: bcryptjs, JWT, password reset OTP được hash trước khi lưu DB.
-- Email: Nodemailer Gmail SMTP cho local/dev, Resend cho production khi đã verify domain.
-- Dev tools: Docker Compose cho MongoDB local, Swagger UI cho API docs.
+- Frontend: React, Vite, React Router, Tailwind CSS, Radix UI, Lucide
+- Backend: Node.js, Express, TypeScript, MongoDB native driver
+- Auth/Security: bcryptjs, JWT, hashed password reset OTP/token
+- Email: console, Gmail SMTP, or Resend
+- Tests: Vitest + Testing Library for frontend behavior and route/auth guards
 
-## Cấu trúc dự án
+## Frontend Architecture
 
 ```text
-project-fcaj/
-├─ src/                  # Frontend React/Vite
-│  ├─ main.tsx
-│  ├─ styles/
-│  └─ web/
-│     ├─ api/            # API client cho auth, users, groups
-│     ├─ components/     # Pages và UI components
-│     └─ context/
-├─ be/                   # Backend Express/TypeScript
-│  ├─ src/
-│  │  ├─ config/         # env + swagger config
-│  │  ├─ db/             # MongoDB connection
-│  │  ├─ middleware/     # auth/error middleware
-│  │  ├─ modules/        # auth, users, groups, system
-│  │  └─ server.ts
-│  └─ package.json
-├─ docker-compose.yml
-└─ package.json
+src/
+  main.tsx
+  styles/
+  test/
+    setup.ts
+  web/
+    App.tsx
+    app/
+      admin/
+      guards/
+      private/
+      public/
+      routes/
+    domains/
+      admin-reporting/
+      auth/
+      expenses/
+      groups/
+      receipts/
+      settlements/
+      users/
+    shared/
+      api/
+      providers/
+      ui/
 ```
 
-## Yêu cầu môi trường
+Key conventions:
 
-- Node.js 20+ khuyến nghị.
-- npm.
-- MongoDB Atlas hoặc MongoDB local qua Docker.
-- Nếu muốn gửi OTP thật bằng Gmail: tài khoản Gmail đã bật 2-Step Verification và App Password.
+- App shells and route composition live in `src/web/app/*`
+- Feature logic lives in `src/web/domains/*`
+- Shared API helpers, providers, and UI primitives live in `src/web/shared/*`
+- Route composition is centralized in `src/web/app/routes/AppRoutes.tsx`
+- Auth session is treated as valid only when both stored `user` and `token` exist
 
-## Cài đặt local
+## Backend Architecture
 
-1. Cài dependencies frontend:
+```text
+be/src/
+  config/
+  db/
+  middleware/
+  modules/
+    admin/
+      queries/
+    auth/
+    expenses/
+    groups/
+    receipts/
+    users/
+  policies/
+  server.ts
+```
+
+Key conventions:
+
+- Thin controllers, domain logic in module services
+- Shared permission rules live in `be/src/policies/*`
+- Admin reporting queries are split under `be/src/modules/admin/queries/*`
+
+## Local Setup
+
+1. Install frontend dependencies:
 
 ```powershell
 npm install
 ```
 
-2. Cài dependencies backend:
+2. Install backend dependencies:
 
 ```powershell
 npm --prefix be install
 ```
 
-3. Tạo file môi trường backend:
+3. Create backend env file:
 
 ```powershell
 Copy-Item .\be\.env.example .\be\.env
 ```
 
-4. Mở `be/.env` và điền thông tin MongoDB, JWT secret, email provider.
+4. Fill `be/.env` with MongoDB, JWT, frontend URL, and email provider settings.
 
-5. Chạy MongoDB local bằng Docker nếu không dùng MongoDB Atlas:
+5. Start MongoDB locally with Docker if you are not using MongoDB Atlas:
 
 ```powershell
 npm run db:up
 ```
 
-6. Chạy backend:
+6. Start the backend:
 
 ```powershell
 npm run backend
 ```
 
-Backend mặc định chạy tại `http://localhost:5000`.
+Backend default URL: `http://localhost:5000`
 
-7. Chạy frontend ở terminal khác:
+7. Start the frontend in another terminal:
 
 ```powershell
 npm run dev
 ```
 
-Frontend mặc định chạy tại `http://localhost:5173`.
+Frontend default URL: `http://localhost:5173`
 
-## Cấu hình `.env`
-
-Không commit `be/.env` lên Git. File này chứa secret riêng của từng máy/dev.
-
-Ví dụ cơ bản:
+## Example `.env`
 
 ```env
 PORT=5000
@@ -108,17 +137,15 @@ FRONTEND_URL=http://localhost:5173
 EMAIL_PROVIDER=console
 ```
 
-### Email OTP bằng console
+### Console Email
 
-Dùng cho dev nhanh, OTP và reset link sẽ hiện trong terminal backend:
+For quick local development, OTP and reset links are printed in backend logs:
 
 ```env
 EMAIL_PROVIDER=console
 ```
 
-### Email OTP bằng Gmail SMTP
-
-Dùng khi muốn gửi OTP thật tới nhiều email khác nhau trong lúc chạy local:
+### Gmail SMTP
 
 ```env
 EMAIL_PROVIDER=gmail
@@ -127,11 +154,7 @@ GMAIL_APP_PASSWORD=your_16_character_google_app_password
 EMAIL_FROM=Splitly <your-gmail@gmail.com>
 ```
 
-Lưu ý: `GMAIL_APP_PASSWORD` không phải mật khẩu Gmail thường. Hãy bật 2-Step Verification trong Google Account rồi tạo App Password.
-
-### Email OTP bằng Resend
-
-Dùng tốt cho production hoặc khi đã verify domain trong Resend:
+### Resend
 
 ```env
 EMAIL_PROVIDER=resend
@@ -140,30 +163,16 @@ RESEND_API_URL=https://api.resend.com/emails
 EMAIL_FROM=Splitly <no-reply@your-verified-domain.com>
 ```
 
-Nếu dùng `onboarding@resend.dev`, Resend chỉ cho gửi test tới email chủ tài khoản Resend.
+## API Docs
 
-## Luồng quên mật khẩu
-
-1. User bấm `Forgot password` ở trang login.
-2. User nhập email tài khoản.
-3. Backend tạo OTP 6 số, hash OTP và lưu vào MongoDB kèm thời hạn.
-4. Backend gửi OTP qua email provider đang cấu hình.
-5. Frontend chuyển user sang trang nhập OTP.
-6. Nếu OTP sai hoặc hết hạn, backend trả lỗi và user vẫn đứng ở trang OTP.
-7. Nếu OTP đúng, frontend chuyển sang form đặt mật khẩu mới.
-8. Backend hash mật khẩu mới, cập nhật DB và xóa các field reset token/OTP.
-9. Frontend chuyển user về trang login.
-
-## API docs
-
-Khi backend đang chạy:
+When the backend is running:
 
 - Swagger UI: `http://localhost:5000`
 - OpenAPI JSON: `http://localhost:5000/docs.json`
 - Health check: `GET http://localhost:5000/health`
 - MongoDB test: `GET http://localhost:5000/api/test`
 
-Các nhóm API chính:
+Core API groups:
 
 - `POST /api/auth/register`
 - `POST /api/auth/login`
@@ -176,18 +185,21 @@ Các nhóm API chính:
 - `GET/PATCH/DELETE /api/groups/:groupId`
 - `POST /api/groups/:groupId/members`
 - `DELETE /api/groups/:groupId/members/:memberId`
+- `GET /api/admin/*`
 
 ## Scripts
 
-Frontend/root:
+Root:
 
 ```powershell
-npm run dev              # Chạy Vite frontend
-npm run build            # Build frontend production
-npm run backend          # Chạy backend dev từ root
-npm run backend:start    # Chạy backend dist sau khi build backend
-npm run db:up            # Chạy MongoDB local bằng Docker
-npm run db:down          # Tắt Docker Compose
+npm run dev
+npm run build
+npm run test
+npm run test:watch
+npm run backend
+npm run backend:start
+npm run db:up
+npm run db:down
 ```
 
 Backend:
@@ -198,25 +210,41 @@ npm --prefix be run build
 npm --prefix be run start
 ```
 
-## Kiểm tra trước khi mở Pull Request
+## Automated Tests
+
+Current frontend automated tests cover:
+
+- auth storage behavior
+- session synchronization in the private sidebar
+- private/admin route guards
+- token invalidation handling in the shared API client
+
+Run them with:
 
 ```powershell
+npm test
+```
+
+## Suggested Verification Before PR
+
+```powershell
+npm test
 npm run build
 npm --prefix be run build
 ```
 
-Nếu có thay đổi liên quan auth/email, nên test lại flow:
+If auth or email behavior changed, also manually verify:
 
-- Register user mới.
-- Login bằng mật khẩu ban đầu.
-- Forgot password để nhận OTP.
-- Nhập OTP sai và kiểm tra vẫn đứng ở trang OTP.
-- Nhập OTP đúng, đặt mật khẩu mới.
-- Login lại bằng mật khẩu mới.
+- register a new user
+- log in
+- request password reset
+- try an invalid OTP
+- verify a valid OTP and set a new password
+- log in again with the new password
 
-## Ghi chú bảo mật
+## Security Notes
 
-- Không commit `be/.env`, Gmail App Password, Resend API key, MongoDB URI thật hoặc JWT secret.
-- OTP/reset token chỉ lưu dạng hash trong MongoDB.
-- Sau khi reset mật khẩu thành công, backend xóa OTP/reset token khỏi user document.
-- Với production, nên dùng domain email đã verify và JWT secret đủ dài/ngẫu nhiên.
+- Do not commit `be/.env`, real MongoDB URIs, JWT secrets, Gmail app passwords, or Resend keys
+- Password reset OTPs and reset tokens are stored hashed in MongoDB
+- Frontend clears the local auth session when the backend reports a missing or expired token
+- Group ownership is treated as a domain permission, not a global system role
