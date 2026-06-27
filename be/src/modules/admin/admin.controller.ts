@@ -1,5 +1,10 @@
 import type { Request, Response } from "express";
-import { getUserById } from "../auth/auth.service.js";
+import {
+  countUsersByRole,
+  deleteUserById,
+  getUserById,
+  updateUserRoleById,
+} from "../auth/auth.service.js";
 import {
   deleteGroupById,
   getAllGroups,
@@ -12,6 +17,9 @@ import {
   getAdminSettlementRecordById,
   getAdminSettlementRecords,
   getAdminUploadRecords,
+  getAdminUserById,
+  getAdminUserDependencySummary,
+  getAdminUsers,
 } from "./admin.service.js";
 
 export async function getAdminSessionHandler(req: Request, res: Response) {
@@ -62,6 +70,205 @@ export async function getAdminDashboardHandler(_req: Request, res: Response) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to fetch admin dashboard.";
+
+    return res.status(503).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function getAdminUsersHandler(_req: Request, res: Response) {
+  try {
+    const users = await getAdminUsers();
+
+    return res.status(200).json({
+      ok: true,
+      message: "Admin users fetched successfully.",
+      users,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to fetch admin users.";
+
+    return res.status(503).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function getAdminUserByIdHandler(req: Request, res: Response) {
+  const userId = typeof req.params.userId === "string" ? req.params.userId : "";
+
+  try {
+    const user = await getAdminUserById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        ok: false,
+        message: "User not found.",
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message: "Admin user fetched successfully.",
+      user,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to fetch admin user.";
+
+    return res.status(503).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function updateAdminUserRoleHandler(req: Request, res: Response) {
+  const userId = typeof req.params.userId === "string" ? req.params.userId : "";
+  const role = typeof req.body?.role === "string" ? req.body.role : "";
+  const currentAdminUserId = req.auth?.userId ?? null;
+
+  if (!role) {
+    return res.status(400).json({
+      ok: false,
+      message: "User role is required.",
+    });
+  }
+
+  try {
+    const existingUser = await getUserById(userId);
+
+    if (!existingUser) {
+      return res.status(404).json({
+        ok: false,
+        message: "User not found.",
+      });
+    }
+
+    if (currentAdminUserId && currentAdminUserId === userId && role.trim().toLowerCase() !== "admin") {
+      return res.status(400).json({
+        ok: false,
+        message: "You cannot remove your own admin role.",
+      });
+    }
+
+    if (existingUser.role === "admin" && role.trim().toLowerCase() !== "admin") {
+      const totalAdmins = await countUsersByRole("admin");
+
+      if (totalAdmins <= 1) {
+        return res.status(400).json({
+          ok: false,
+          message: "At least one admin account must remain.",
+        });
+      }
+    }
+
+    const user = await updateUserRoleById(userId, role);
+
+    if (!user) {
+      return res.status(404).json({
+        ok: false,
+        message: "User not found.",
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message: "User role updated successfully.",
+      user,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to update user role.";
+    const statusCode =
+      message === "User role is required." ||
+      message === "User role must be either admin or user."
+        ? 400
+        : 503;
+
+    return res.status(statusCode).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function deleteAdminUserHandler(req: Request, res: Response) {
+  const userId = typeof req.params.userId === "string" ? req.params.userId : "";
+  const currentAdminUserId = req.auth?.userId ?? null;
+
+  if (currentAdminUserId && currentAdminUserId === userId) {
+    return res.status(400).json({
+      ok: false,
+      message: "You cannot delete your own admin account.",
+    });
+  }
+
+  try {
+    const existingUser = await getUserById(userId);
+
+    if (!existingUser) {
+      return res.status(404).json({
+        ok: false,
+        message: "User not found.",
+      });
+    }
+
+    if (existingUser.role === "admin") {
+      const totalAdmins = await countUsersByRole("admin");
+
+      if (totalAdmins <= 1) {
+        return res.status(400).json({
+          ok: false,
+          message: "At least one admin account must remain.",
+        });
+      }
+    }
+
+    const dependencies = await getAdminUserDependencySummary(userId);
+
+    if (!dependencies) {
+      return res.status(404).json({
+        ok: false,
+        message: "User not found.",
+      });
+    }
+
+    if (
+      dependencies.groupCount > 0 ||
+      dependencies.ownedGroupCount > 0 ||
+      dependencies.expenseCount > 0 ||
+      dependencies.receiptUploadCount > 0
+    ) {
+      return res.status(400).json({
+        ok: false,
+        message:
+          `Cannot delete user while linked data still exists ` +
+          `(groups: ${dependencies.groupCount}, owned groups: ${dependencies.ownedGroupCount}, ` +
+          `expenses: ${dependencies.expenseCount}, receipts: ${dependencies.receiptUploadCount}).`,
+      });
+    }
+
+    const deleted = await deleteUserById(userId);
+
+    if (!deleted) {
+      return res.status(404).json({
+        ok: false,
+        message: "User not found.",
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message: "User deleted successfully.",
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to delete admin user.";
 
     return res.status(503).json({
       ok: false,
