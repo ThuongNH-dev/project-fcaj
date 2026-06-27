@@ -10,4 +10,5 @@ export {
   getAdminUserById,
   getAdminUserDependencySummary,
   getAdminUsers,
+  serializeAdminUsersCsv,
 } from "./queries/users.query.js";

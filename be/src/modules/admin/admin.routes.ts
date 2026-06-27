@@ -4,6 +4,7 @@ import {
   getAdminActivityLogsHandler,
   deleteAdminUserHandler,
   deleteAdminGroupHandler,
+  exportAdminUsersHandler,
   getAdminDashboardHandler,
   getAdminGroupByIdHandler,
   getAdminGroupsHandler,
@@ -20,6 +21,7 @@ import {
 const adminRouter = Router();
 
 adminRouter.get("/dashboard", authMiddleware, requireAdmin, getAdminDashboardHandler);
+adminRouter.get("/users/export", authMiddleware, requireAdmin, exportAdminUsersHandler);
 adminRouter.get("/users", authMiddleware, requireAdmin, getAdminUsersHandler);
 adminRouter.get("/users/:userId", authMiddleware, requireAdmin, getAdminUserByIdHandler);
 adminRouter.patch("/users/:userId", authMiddleware, requireAdmin, updateAdminUserRoleHandler);

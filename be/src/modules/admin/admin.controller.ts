@@ -20,6 +20,7 @@ import {
   getAdminUserById,
   getAdminUserDependencySummary,
   getAdminUsers,
+  serializeAdminUsersCsv,
 } from "./admin.service.js";
 
 export async function getAdminSessionHandler(req: Request, res: Response) {
@@ -90,6 +91,30 @@ export async function getAdminUsersHandler(_req: Request, res: Response) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to fetch admin users.";
+
+    return res.status(503).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function exportAdminUsersHandler(_req: Request, res: Response) {
+  try {
+    const users = await getAdminUsers();
+    const csv = serializeAdminUsersCsv(users);
+    const dateStamp = new Date().toISOString().slice(0, 10);
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="admin-users-${dateStamp}.csv"`,
+    );
+
+    return res.status(200).send(csv);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to export admin users.";
 
     return res.status(503).json({
       ok: false,
