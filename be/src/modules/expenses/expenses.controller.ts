@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { areUsersInGroup, isUserInGroup } from "../../policies/group.policy.js";
 import { getUserById } from "../auth/auth.service.js";
 import { getGroupByIdForUser } from "../groups/groups.service.js";
 import { getReceiptUploadByIdForUser } from "../receipts/receipts.service.js";
@@ -215,9 +216,7 @@ export async function createExpenseHandler(req: Request, res: Response) {
       });
     }
 
-    const groupMemberIds = new Set(group.members.map((member) => member.id));
-
-    if (!groupMemberIds.has(paidByUserId)) {
+    if (!isUserInGroup(group.members, paidByUserId)) {
       return res.status(400).json({
         ok: false,
         message: "Paid by user must be a member of the selected group.",
@@ -235,8 +234,9 @@ export async function createExpenseHandler(req: Request, res: Response) {
     );
 
     if (
-      !participants.every((participant: ExpenseParticipantShare) =>
-        groupMemberIds.has(participant.userId),
+      !areUsersInGroup(
+        group.members,
+        participants.map((participant: ExpenseParticipantShare) => participant.userId),
       )
     ) {
       return res.status(400).json({
