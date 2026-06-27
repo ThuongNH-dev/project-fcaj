@@ -6,3 +6,8 @@ export {
   getAdminSettlementRecords,
 } from "./queries/settlements.query.js";
 export { getAdminUploadRecords } from "./queries/uploads.query.js";
+export {
+  getAdminUserById,
+  getAdminUserDependencySummary,
+  getAdminUsers,
+} from "./queries/users.query.js";

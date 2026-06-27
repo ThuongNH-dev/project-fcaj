@@ -8,7 +8,7 @@ Splitly is a group expense management app for shared trips, households, and team
 - Password reset flow with email OTP verification
 - Profile update and password change for authenticated users
 - Group management: create, edit, delete, add members, remove members
-- Expense tracking, receipts, settlements, dashboard, and admin reporting
+- Expense tracking, receipts, settlements, dashboard, and admin reporting with user role management
 - Swagger/OpenAPI docs on the backend
 
 ## Tech Stack
@@ -45,6 +45,7 @@ src/
       users/
     shared/
       api/
+      lib/
       providers/
       ui/
 ```
@@ -54,6 +55,7 @@ Key conventions:
 - App shells and route composition live in `src/web/app/*`
 - Feature logic lives in `src/web/domains/*`
 - Shared API helpers, providers, and UI primitives live in `src/web/shared/*`
+- Shared display helpers live in `src/web/shared/lib/*`
 - Route composition is centralized in `src/web/app/routes/AppRoutes.tsx`
 - Auth session is treated as valid only when both stored `user` and `token` exist
 
@@ -185,6 +187,8 @@ Core API groups:
 - `GET/PATCH/DELETE /api/groups/:groupId`
 - `POST /api/groups/:groupId/members`
 - `DELETE /api/groups/:groupId/members/:memberId`
+- `GET /api/admin/users`
+- `GET/PATCH/DELETE /api/admin/users/:userId`
 - `GET /api/admin/*`
 
 ## Scripts
@@ -218,6 +222,8 @@ Current frontend automated tests cover:
 - session synchronization in the private sidebar
 - private/admin route guards
 - token invalidation handling in the shared API client
+- group permission policies
+- settlement domain calculations
 
 Run them with:
 
@@ -248,3 +254,5 @@ If auth or email behavior changed, also manually verify:
 - Password reset OTPs and reset tokens are stored hashed in MongoDB
 - Frontend clears the local auth session when the backend reports a missing or expired token
 - Group ownership is treated as a domain permission, not a global system role
+- Frontend `npm audit` findings were addressed by patching `react-router` and `vite`
+- Backend `npm audit` findings were addressed by pinning the patched `esbuild` release through `overrides`
