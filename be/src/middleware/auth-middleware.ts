@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { verifyAuthToken } from "../modules/auth/auth.token.js";
+import { isAdminUserRole } from "../policies/auth.policy.js";
 
 declare module "express-serve-static-core" {
   interface Request {
@@ -59,7 +60,7 @@ export function requireAdmin(
     });
   }
 
-  if (req.auth.role !== "admin") {
+  if (!isAdminUserRole(req.auth.role)) {
     return res.status(403).json({
       ok: false,
       message: "Admin access is required.",
