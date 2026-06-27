@@ -12,6 +12,12 @@ import type {
   AdminSettlementRecord,
   AdminUploadRecord,
 } from "../../../domains/admin-reporting";
+import {
+  formatCurrency,
+  formatDateTime,
+  formatFileSize,
+  formatLocalDate,
+} from "../../../shared/lib/formatters";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
 
 type Translator = ReturnType<typeof useLanguage>["t"];
@@ -23,33 +29,11 @@ export interface AdminTabDefinition {
   path: string;
 }
 
-export function formatFileSize(sizeInBytes: number) {
-  if (sizeInBytes < 1024) {
-    return `${sizeInBytes} B`;
-  }
-
-  if (sizeInBytes < 1024 * 1024) {
-    return `${(sizeInBytes / 1024).toFixed(1)} KB`;
-  }
-
-  return `${(sizeInBytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-export function formatDateTime(dateValue: string) {
-  return new Date(dateValue).toLocaleString();
-}
-
-export function formatCurrency(amount: number, currency: string) {
-  return new Intl.NumberFormat("en-US", {
-    currency: currency || "USD",
-    minimumFractionDigits: 2,
-    style: "currency",
-  }).format(amount);
-}
+export { formatCurrency, formatDateTime, formatFileSize, formatLocalDate };
 
 export function getAdminTabs(t: Translator): AdminTabDefinition[] {
   return [
-    { key: "dashboard", label: t.users, icon: Users, path: "/admin" },
+    { key: "users", label: t.users, icon: Users, path: "/admin/users" },
     { key: "groups", label: t.groups, icon: Activity, path: "/admin/groups" },
     {
       key: "settlements",

@@ -3,7 +3,11 @@ import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useOutletContext } from "react-router";
 import { AdminRoute } from "../guards/AdminRoute";
 import type { AdminDashboardStats } from "../../../domains/admin-reporting";
-import { getAdminDashboard } from "../../../domains/admin-reporting";
+import {
+  downloadAdminUsersExport,
+  getAdminDashboard,
+} from "../../../domains/admin-reporting";
+import { useFeedback } from "../../../shared/providers/FeedbackProvider";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
 import { getAdminStatCards, getAdminTabs } from "../lib/admin.utils";
 
@@ -19,9 +23,11 @@ export function useAdminLayoutContext() {
 
 export function AdminLayout() {
   const [errorMessage, setErrorMessage] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const location = useLocation();
+  const { showToast } = useFeedback();
   const { t } = useLanguage();
 
   async function loadDashboard() {
@@ -55,6 +61,31 @@ export function AdminLayout() {
     t,
   );
   const tabs = getAdminTabs(t);
+  const isUsersPage =
+    location.pathname === "/admin" || location.pathname.startsWith("/admin/users");
+
+  async function handleExportData() {
+    if (!isUsersPage) {
+      return;
+    }
+
+    try {
+      setIsExporting(true);
+      await downloadAdminUsersExport();
+      showToast({
+        variant: "success",
+        message: "User export started successfully.",
+      });
+    } catch (error) {
+      showToast({
+        variant: "error",
+        message:
+          error instanceof Error ? error.message : "Unable to export users.",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  }
 
   return (
     <AdminRoute>
@@ -76,11 +107,15 @@ export function AdminLayout() {
               </div>
             </div>
             <button
-              className="flex items-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 py-2.5 text-sm text-[#374151] transition-all hover:border-[#7EDDBA] hover:bg-[#F0FAF5]"
+              type="button"
+              onClick={() => void handleExportData()}
+              disabled={!isUsersPage || isExporting}
+              className="flex items-center gap-2 rounded-xl border border-[#E5E7EB] bg-white px-4 py-2.5 text-sm text-[#374151] transition-all hover:border-[#7EDDBA] hover:bg-[#F0FAF5] disabled:cursor-not-allowed disabled:opacity-60"
               style={{ fontWeight: 600 }}
+              title={isUsersPage ? t.exportData : "User export is available on the Users tab."}
             >
               <Download className="h-4 w-4" />
-              {t.exportData}
+              {isExporting ? "Exporting..." : t.exportData}
             </button>
           </div>
 
