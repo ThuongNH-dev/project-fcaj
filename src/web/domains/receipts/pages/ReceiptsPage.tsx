@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Upload, Search, FileText, Plus } from "lucide-react";
+import {
+  formatFileSize,
+  formatShortDate,
+} from "../../../shared/lib/formatters";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
 import { getGroups, type Group } from "../../groups";
 import { useFeedback } from "../../../shared/providers/FeedbackProvider";
@@ -10,26 +14,6 @@ const statusStyles: Record<string, string> = {
   pending: "bg-[#FEF3C7] text-[#92400e]",
   failed: "bg-[#FEE2E2] text-[#991b1b]",
 };
-
-function formatFileSize(sizeInBytes: number) {
-  if (sizeInBytes < 1024) {
-    return `${sizeInBytes} B`;
-  }
-
-  if (sizeInBytes < 1024 * 1024) {
-    return `${(sizeInBytes / 1024).toFixed(1)} KB`;
-  }
-
-  return `${(sizeInBytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatReceiptDate(dateValue: string) {
-  return new Date(dateValue).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
 
 export function ReceiptsPage() {
   const [search, setSearch] = useState("");
@@ -129,6 +113,17 @@ export function ReceiptsPage() {
     }
   };
 
+  const handleFileSelection = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+
+    if (file) {
+      void handleUploadFile(file);
+      event.target.value = "";
+    }
+  };
+
   return (
     <div className="lg:pl-60 min-h-screen bg-[#F6FBF8]">
       <div className="max-w-7xl mx-auto px-6 py-8 pt-16 lg:pt-8">
@@ -155,19 +150,12 @@ export function ReceiptsPage() {
               className="hidden"
               accept=".png,.jpg,.jpeg,.pdf"
               disabled={isUploading}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-
-                if (file) {
-                  void handleUploadFile(file);
-                  event.target.value = "";
-                }
-              }}
+              onChange={handleFileSelection}
             />
           </label>
         </div>
 
-        <div
+        <label
           className={`border-2 border-dashed rounded-2xl p-10 mb-7 text-center transition-all cursor-pointer ${
             dragOver
               ? "border-[#7EDDBA] bg-[#F0FAF5]"
@@ -195,7 +183,14 @@ export function ReceiptsPage() {
             {t.dragDrop}
           </p>
           <p className="text-[#9CA3AF] text-sm">{t.dragDropHint}</p>
-        </div>
+          <input
+            type="file"
+            className="hidden"
+            accept=".png,.jpg,.jpeg,.pdf"
+            disabled={isUploading}
+            onChange={handleFileSelection}
+          />
+        </label>
 
         {errorMessage && (
           <div className="mb-6 rounded-2xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C]">
@@ -278,14 +273,7 @@ export function ReceiptsPage() {
                     className="hidden"
                     accept=".png,.jpg,.jpeg,.pdf"
                     disabled={isUploading}
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-
-                      if (file) {
-                        void handleUploadFile(file);
-                        event.target.value = "";
-                      }
-                    }}
+                    onChange={handleFileSelection}
                   />
                 </label>
               )}
@@ -360,7 +348,7 @@ export function ReceiptsPage() {
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-xs text-[#9CA3AF] whitespace-nowrap">
-                        {formatReceiptDate(receipt.createdAt)}
+                        {formatShortDate(receipt.createdAt)}
                       </td>
                     </tr>
                   ))}
