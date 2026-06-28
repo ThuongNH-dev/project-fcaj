@@ -1,12 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Plus, Search, Receipt } from "lucide-react";
+import {
+  formatCurrency,
+  formatShortDate,
+  toTitleCase,
+} from "../../../shared/lib/formatters";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
-import { getStoredUser } from "../../auth";
+import { useStoredUser } from "../../auth";
 import { getGroups, type Group } from "../../groups";
 import { uploadReceiptFile } from "../../receipts";
 import { useFeedback } from "../../../shared/providers/FeedbackProvider";
-import { AddExpenseModal, type NewExpense } from "../components/AddExpenseModal";
+import { AddExpenseDialog, type NewExpense } from "../components/AddExpenseDialog";
 import { createExpense, getExpenses, type Expense } from "..";
 
 const catColors: Record<string, string> = {
@@ -24,30 +29,6 @@ const statusStyles: Record<string, string> = {
   pending: "bg-[#FEF3C7] text-[#92400e]",
 };
 
-function formatCurrency(amount: number, currency: string) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currency || "USD",
-    minimumFractionDigits: 2,
-  }).format(amount);
-}
-
-function formatDisplayDate(dateValue: string) {
-  return new Date(dateValue).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function toTitleCase(value: string) {
-  return value
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
 export function ExpensesPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
@@ -58,7 +39,7 @@ export function ExpensesPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const { t } = useLanguage();
   const { showToast } = useFeedback();
-  const currentUser = getStoredUser();
+  const currentUser = useStoredUser();
   const filters = [
     { key: "All", label: t.all },
     { key: "Pending", label: t.pending },
@@ -379,7 +360,7 @@ export function ExpensesPage() {
                         )}
                       </td>
                       <td className="px-5 py-3.5 text-xs text-[#9CA3AF] whitespace-nowrap">
-                        {formatDisplayDate(expense.expenseDate)}
+                        {formatShortDate(expense.expenseDate)}
                       </td>
                       <td className="px-5 py-3.5">
                         <span
@@ -402,7 +383,7 @@ export function ExpensesPage() {
       </div>
 
       {createPortal(
-        <AddExpenseModal
+        <AddExpenseDialog
           isOpen={showModal}
           onClose={() => setShowModal(false)}
           onAdd={handleAdd}
