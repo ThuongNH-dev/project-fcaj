@@ -2,6 +2,8 @@ import { getJson, patchJson } from "../../../shared/api/client";
 import type {
   ChangeCurrentUserPasswordPayload,
   CurrentUserResponse,
+  NotificationPreferencesResponse,
+  UpdateNotificationPreferencesPayload,
   UpdateCurrentUserPayload,
 } from "../models/users.types";
 
@@ -23,4 +25,17 @@ export function changeCurrentUserPassword(
     ChangeCurrentUserPasswordPayload,
     { ok: boolean; message: string }
   >("/api/users/me/password", payload);
+}
+
+export function getCurrentUserNotificationPreferences() {
+  return getJson<NotificationPreferencesResponse>("/api/users/me/notifications");
+}
+
+export function updateCurrentUserNotificationPreferences(
+  payload: UpdateNotificationPreferencesPayload,
+) {
+  return patchJson<
+    UpdateNotificationPreferencesPayload,
+    NotificationPreferencesResponse
+  >("/api/users/me/notifications", payload);
 }

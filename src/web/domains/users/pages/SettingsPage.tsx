@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTheme } from "next-themes";
 import { useNavigate } from "react-router";
 import {
   User,
@@ -14,6 +15,10 @@ import {
 } from "lucide-react";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
 import {
+  type AccentColor,
+  useAppearance,
+} from "../../../shared/providers/AppearanceProvider";
+import {
   clearStoredUser,
   getUserInitials,
   setStoredUser,
@@ -22,19 +27,43 @@ import {
 import {
   changeCurrentUserPassword,
   getCurrentUser,
+  getCurrentUserNotificationPreferences,
+  type NotificationPreferences,
   updateCurrentUser,
+  updateCurrentUserNotificationPreferences,
 } from "..";
 
+const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
+  expenseAdded: false,
+  paymentReceived: false,
+  settlementReminder: false,
+  weeklyDigest: false,
+  groupInvites: false,
+  marketingEmails: false,
+};
+
+const ACCENT_COLOR_OPTIONS: { color: string; value: AccentColor }[] = [
+  { color: "#16A34A", value: "green" },
+  { color: "#2563EB", value: "blue" },
+  { color: "#7C3AED", value: "violet" },
+  { color: "#DB2777", value: "pink" },
+  { color: "#D97706", value: "amber" },
+  { color: "#DC2626", value: "red" },
+];
+
 export function SettingsPage() {
-  const isLocalhost =
-    typeof window !== "undefined" &&
-    ["localhost", "127.0.0.1"].includes(window.location.hostname);
   const [activeTab, setActiveTab] = useState("profile");
   const [saved, setSaved] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isLoadingNotifications, setIsLoadingNotifications] = useState(true);
+  const [isSavingNotifications, setIsSavingNotifications] = useState(false);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const [isAppearanceReady, setIsAppearanceReady] = useState(false);
+  const [appearanceSaved, setAppearanceSaved] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [notificationErrorMessage, setNotificationErrorMessage] = useState("");
+  const [notificationSuccessMessage, setNotificationSuccessMessage] = useState("");
   const [passwordErrorMessage, setPasswordErrorMessage] = useState("");
   const [passwordSuccessMessage, setPasswordSuccessMessage] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -51,15 +80,12 @@ export function SettingsPage() {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const currentUser = useStoredUser();
+  const { setTheme, theme } = useTheme();
+  const { accentColor, density, setAccentColor, setDensity } = useAppearance();
 
-  const [notifs, setNotifs] = useState({
-    expenseAdded: false,
-    paymentReceived: false,
-    settlementReminder: false,
-    weeklyDigest: false,
-    groupInvites: false,
-    marketingEmails: false,
-  });
+  const [notifs, setNotifs] = useState<NotificationPreferences>(
+    DEFAULT_NOTIFICATION_PREFERENCES,
+  );
 
   useEffect(() => {
     if (currentUser) {
@@ -73,25 +99,50 @@ export function SettingsPage() {
   }, [currentUser]);
 
   useEffect(() => {
+    setIsAppearanceReady(true);
+  }, []);
+
+  useEffect(() => {
     async function loadProfile() {
       try {
-        const response = await getCurrentUser();
+        const [profileResult, notificationsResult] = await Promise.allSettled([
+          getCurrentUser(),
+          getCurrentUserNotificationPreferences(),
+        ]);
 
-        if (response.user) {
-          setFirstName(response.user.firstName);
-          setLastName(response.user.lastName);
-          setEmail(response.user.email);
-          setBio(response.user.bio);
-          setAvatarUrl(response.user.avatarUrl);
-          setCurrency(response.user.defaultCurrency === "VND" ? "VND" : "USD");
-          setStoredUser(response.user);
+        if (profileResult.status === "fulfilled" && profileResult.value.user) {
+          setFirstName(profileResult.value.user.firstName);
+          setLastName(profileResult.value.user.lastName);
+          setEmail(profileResult.value.user.email);
+          setBio(profileResult.value.user.bio);
+          setAvatarUrl(profileResult.value.user.avatarUrl);
+          setCurrency(
+            profileResult.value.user.defaultCurrency === "VND" ? "VND" : "USD",
+          );
+          setStoredUser(profileResult.value.user);
+        } else if (profileResult.status === "rejected") {
+          setErrorMessage(
+            profileResult.reason instanceof Error
+              ? profileResult.reason.message
+              : "Unable to load your profile.",
+          );
         }
-      } catch (error) {
-        setErrorMessage(
-          error instanceof Error ? error.message : "Unable to load your profile.",
-        );
+
+        if (
+          notificationsResult.status === "fulfilled" &&
+          notificationsResult.value.notificationPreferences
+        ) {
+          setNotifs(notificationsResult.value.notificationPreferences);
+        } else if (notificationsResult.status === "rejected") {
+          setNotificationErrorMessage(
+            notificationsResult.reason instanceof Error
+              ? notificationsResult.reason.message
+              : "Unable to load your notification preferences.",
+          );
+        }
       } finally {
         setIsLoadingProfile(false);
+        setIsLoadingNotifications(false);
       }
     }
 
@@ -184,6 +235,56 @@ export function SettingsPage() {
     }
   };
 
+  const handleNotificationSave = async () => {
+    setNotificationErrorMessage("");
+    setNotificationSuccessMessage("");
+
+    try {
+      setIsSavingNotifications(true);
+
+      const response = await updateCurrentUserNotificationPreferences({
+        notificationPreferences: notifs,
+      });
+
+      if (response.notificationPreferences) {
+        setNotifs(response.notificationPreferences);
+      }
+
+      setNotificationSuccessMessage(response.message);
+      window.setTimeout(() => setNotificationSuccessMessage(""), 2000);
+    } catch (error) {
+      setNotificationErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to save notification preferences.",
+      );
+    } finally {
+      setIsSavingNotifications(false);
+    }
+  };
+
+  const showAppearanceSavedState = () => {
+    setAppearanceSaved(true);
+    window.setTimeout(() => setAppearanceSaved(false), 1500);
+  };
+
+  const handleThemeChange = (nextTheme: "light" | "dark" | "system") => {
+    setTheme(nextTheme);
+    showAppearanceSavedState();
+  };
+
+  const handleAccentColorChange = (nextAccentColor: AccentColor) => {
+    setAccentColor(nextAccentColor);
+    showAppearanceSavedState();
+  };
+
+  const handleDensityChange = (
+    nextDensity: "compact" | "default" | "comfortable",
+  ) => {
+    setDensity(nextDensity);
+    showAppearanceSavedState();
+  };
+
   const initials = avatarUrl.trim()
     ? ""
     : getUserInitials({
@@ -193,9 +294,7 @@ export function SettingsPage() {
 
   const tabs = [
     { id: "profile", label: t.profile, icon: User },
-    ...(!isLocalhost
-      ? [{ id: "notifications", label: t.notifications, icon: Bell }]
-      : []),
+    { id: "notifications", label: t.notifications, icon: Bell },
     { id: "security", label: t.security, icon: Shield },
     { id: "billing", label: t.billing, icon: CreditCard },
     { id: "appearance", label: t.appearance, icon: Palette },
@@ -446,6 +545,21 @@ export function SettingsPage() {
                 >
                   {t.notificationPrefs}
                 </h2>
+                {notificationErrorMessage && (
+                  <div className="rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C] mb-5">
+                    {notificationErrorMessage}
+                  </div>
+                )}
+                {notificationSuccessMessage && (
+                  <div className="rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 text-sm text-[#166534] mb-5">
+                    {notificationSuccessMessage}
+                  </div>
+                )}
+                {isLoadingNotifications && (
+                  <div className="rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 text-sm text-[#166534] mb-5">
+                    Loading your notification preferences...
+                  </div>
+                )}
                 <div>
                   {([
                     {
@@ -500,6 +614,7 @@ export function SettingsPage() {
                         onClick={() =>
                           setNotifs((prev) => ({ ...prev, [key]: !prev[key] }))
                         }
+                        disabled={isLoadingNotifications || isSavingNotifications}
                         className={`w-11 h-6 rounded-full transition-colors flex-shrink-0 relative ${notifs[key] ? "bg-[#16A34A]" : "bg-[#D1D5DB]"}`}
                       >
                         <div
@@ -509,6 +624,14 @@ export function SettingsPage() {
                     </div>
                   ))}
                 </div>
+                <button
+                  onClick={() => void handleNotificationSave()}
+                  disabled={isLoadingNotifications || isSavingNotifications}
+                  className="mt-5 bg-[#16A34A] text-white px-6 py-2.5 rounded-xl text-sm hover:bg-[#15803d] transition-colors shadow-sm disabled:cursor-not-allowed disabled:opacity-70"
+                  style={{ fontWeight: 600 }}
+                >
+                  {isSavingNotifications ? "Saving..." : t.saveChanges}
+                </button>
               </div>
             )}
 
@@ -711,6 +834,11 @@ export function SettingsPage() {
                 >
                   {t.appearanceTitle}
                 </h2>
+                {appearanceSaved && (
+                  <div className="rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 text-sm text-[#166534] mb-5">
+                    {t.saved}
+                  </div>
+                )}
                 <div className="mb-6">
                   <p
                     className="text-sm text-[#374151] mb-3"
@@ -720,17 +848,22 @@ export function SettingsPage() {
                   </p>
                   <div className="grid grid-cols-3 gap-3 max-w-xs">
                     {[
-                      { label: t.light, bg: "#F6FBF8", selected: true },
-                      { label: t.dark, bg: "#111827", selected: false },
+                      { label: t.light, bg: "#F6FBF8", value: "light" as const },
+                      { label: t.dark, bg: "#111827", value: "dark" as const },
                       {
                         label: t.system,
                         bg: "linear-gradient(135deg, #F6FBF8 50%, #111827 50%)",
-                        selected: false,
+                        value: "system" as const,
                       },
-                    ].map(({ label, bg, selected }) => (
+                    ].map(({ label, bg, value }) => {
+                      const selected = (theme ?? "system") === value;
+
+                      return (
                       <button
                         key={label}
+                        onClick={() => handleThemeChange(value)}
                         className={`rounded-xl border-2 p-3 text-center transition-all ${selected ? "border-[#16A34A]" : "border-[#E5E7EB] hover:border-[#7EDDBA]"}`}
+                        disabled={!isAppearanceReady}
                       >
                         <div
                           className="w-full h-10 rounded-lg mb-2"
@@ -746,7 +879,8 @@ export function SettingsPage() {
                           <Check className="w-3.5 h-3.5 text-[#16A34A] mx-auto mt-1" />
                         )}
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
                 <div className="mb-6">
@@ -757,17 +891,11 @@ export function SettingsPage() {
                     {t.accentColor}
                   </p>
                   <div className="flex items-center gap-3">
-                    {[
-                      "#16A34A",
-                      "#2563EB",
-                      "#7C3AED",
-                      "#DB2777",
-                      "#D97706",
-                      "#DC2626",
-                    ].map((color) => (
+                    {ACCENT_COLOR_OPTIONS.map(({ color, value }) => (
                       <button
                         key={color}
-                        className={`w-8 h-8 rounded-full transition-transform hover:scale-110 ${color === "#16A34A" ? "ring-2 ring-offset-2 ring-[#16A34A]" : ""}`}
+                        onClick={() => handleAccentColorChange(value)}
+                        className={`w-8 h-8 rounded-full transition-transform hover:scale-110 ${accentColor === value ? "ring-2 ring-offset-2 ring-[#16A34A]" : ""}`}
                         style={{ background: color }}
                       />
                     ))}
@@ -781,13 +909,18 @@ export function SettingsPage() {
                     {t.density}
                   </p>
                   <div className="flex items-center gap-2">
-                    {[t.compact, t.default, t.comfortable].map((density) => (
+                    {[
+                      { label: t.compact, value: "compact" as const },
+                      { label: t.default, value: "default" as const },
+                      { label: t.comfortable, value: "comfortable" as const },
+                    ].map(({ label, value }) => (
                       <button
-                        key={density}
-                        className={`px-4 py-2 rounded-xl border text-sm transition-all ${density === t.default ? "bg-[#F0FAF5] border-[#7EDDBA] text-[#16A34A]" : "border-[#E5E7EB] text-[#6B7280] hover:border-[#7EDDBA]"}`}
+                        key={label}
+                        onClick={() => handleDensityChange(value)}
+                        className={`px-4 py-2 rounded-xl border text-sm transition-all ${density === value ? "bg-[#F0FAF5] border-[#7EDDBA] text-[#16A34A]" : "border-[#E5E7EB] text-[#6B7280] hover:border-[#7EDDBA]"}`}
                         style={{ fontWeight: 500 }}
                       >
-                        {density}
+                        {label}
                       </button>
                     ))}
                   </div>
