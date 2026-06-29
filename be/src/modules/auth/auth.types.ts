@@ -1,6 +1,15 @@
 export type UserRole = "admin" | "user";
 export type SupportedCurrency = "USD" | "VND";
 
+export interface NotificationPreferences {
+  expenseAdded: boolean;
+  paymentReceived: boolean;
+  settlementReminder: boolean;
+  weeklyDigest: boolean;
+  groupInvites: boolean;
+  marketingEmails: boolean;
+}
+
 export interface RegisterUserInput {
   firstName: string;
   lastName: string;
@@ -63,4 +72,13 @@ export interface UpdateCurrentUserInput {
 export interface ChangeCurrentUserPasswordInput {
   currentPassword: string;
   newPassword: string;
+}
+
+export interface UpdateNotificationPreferencesInput {
+  expenseAdded?: boolean;
+  paymentReceived?: boolean;
+  settlementReminder?: boolean;
+  weeklyDigest?: boolean;
+  groupInvites?: boolean;
+  marketingEmails?: boolean;
 }

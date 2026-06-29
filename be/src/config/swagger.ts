@@ -430,6 +430,91 @@ swaggerSpec.paths = {
       },
     },
   },
+  "/api/users/me/notifications": {
+    get: {
+      summary: "Get the current logged-in user's notification preferences",
+      tags: ["Users"],
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: "Notification preferences fetched successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+    patch: {
+      summary: "Update the current logged-in user's notification preferences",
+      tags: ["Users"],
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["notificationPreferences"],
+              properties: {
+                notificationPreferences: {
+                  type: "object",
+                  properties: {
+                    expenseAdded: {
+                      type: "boolean",
+                      example: true,
+                    },
+                    paymentReceived: {
+                      type: "boolean",
+                      example: false,
+                    },
+                    settlementReminder: {
+                      type: "boolean",
+                      example: true,
+                    },
+                    weeklyDigest: {
+                      type: "boolean",
+                      example: false,
+                    },
+                    groupInvites: {
+                      type: "boolean",
+                      example: true,
+                    },
+                    marketingEmails: {
+                      type: "boolean",
+                      example: false,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Notification preferences updated successfully",
+        },
+        400: {
+          description: "Invalid notification preferences payload",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
   "/api/groups": {
     get: {
       summary: "Get groups for the current logged-in user",
