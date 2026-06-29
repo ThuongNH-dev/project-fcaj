@@ -2,6 +2,12 @@
 
 :root {
   --font-size: 16px;
+  --brand-50: #F0FAF5;
+  --brand-100: #D1FAE5;
+  --brand-400: #7EDDBA;
+  --brand-500: #16A34A;
+  --brand-600: #15803D;
+  --brand-700: #065F46;
   --background: #F6FBF8;
   --foreground: #111827;
   --card: #ffffff;
@@ -46,6 +52,11 @@
 }
 
 .dark {
+  --brand-50: color-mix(in srgb, var(--brand-500) 16%, #0f172a);
+  --brand-100: color-mix(in srgb, var(--brand-500) 24%, #111827);
+}
+
+.dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.145 0 0);
@@ -80,6 +91,16 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.269 0 0);
   --sidebar-ring: oklch(0.439 0 0);
+}
+
+html[data-density="compact"] {
+  --font-size: 15px;
+  --radius: 0.875rem;
+}
+
+html[data-density="comfortable"] {
+  --font-size: 17px;
+  --radius: 1.125rem;
 }
 
 @theme inline {
@@ -181,5 +202,100 @@
     font-size: var(--text-base);
     font-weight: var(--font-weight-normal);
     line-height: 1.5;
+  }
+}
+
+@layer utilities {
+  .bg-\[\#16A34A\] {
+    background-color: var(--brand-500) !important;
+  }
+
+  .bg-\[\#7EDDBA\] {
+    background-color: var(--brand-400) !important;
+  }
+
+  .bg-\[\#D1FAE5\] {
+    background-color: var(--brand-100) !important;
+  }
+
+  .bg-\[\#F0FAF5\] {
+    background-color: var(--brand-50) !important;
+  }
+
+  .text-\[\#16A34A\] {
+    color: var(--brand-500) !important;
+  }
+
+  .text-\[\#7EDDBA\] {
+    color: var(--brand-400) !important;
+  }
+
+  .text-\[\#065f46\] {
+    color: var(--brand-700) !important;
+  }
+
+  .border-\[\#16A34A\] {
+    border-color: var(--brand-500) !important;
+  }
+
+  .border-\[\#7EDDBA\] {
+    border-color: var(--brand-400) !important;
+  }
+
+  .ring-\[\#16A34A\] {
+    --tw-ring-color: var(--brand-500) !important;
+  }
+
+  .focus\:ring-\[\#7EDDBA\]:focus {
+    --tw-ring-color: var(--brand-400) !important;
+  }
+
+  .hover\:bg-\[\#15803d\]:hover,
+  .hover\:bg-\[\#15803D\]:hover {
+    background-color: var(--brand-600) !important;
+  }
+
+  .hover\:border-\[\#7EDDBA\]:hover {
+    border-color: var(--brand-400) !important;
+  }
+
+  .dark .bg-\[\#F6FBF8\] {
+    background-color: #07131c !important;
+  }
+
+  .dark .bg-white {
+    background-color: #0f172a !important;
+  }
+
+  .dark .bg-\[\#F9FAFB\],
+  .dark .bg-\[\#F3F4F6\] {
+    background-color: #111827 !important;
+  }
+
+  .dark .text-\[\#111827\] {
+    color: #f8fafc !important;
+  }
+
+  .dark .text-\[\#374151\] {
+    color: #e5e7eb !important;
+  }
+
+  .dark .text-\[\#6B7280\],
+  .dark .text-\[\#9CA3AF\] {
+    color: #94a3b8 !important;
+  }
+
+  .dark .border-\[\#E5E7EB\],
+  .dark .border-\[\#F3F4F6\],
+  .dark .border-\[\#BBF7D0\] {
+    border-color: #334155 !important;
+  }
+
+  .dark .hover\:bg-\[\#F9FAFB\]:hover {
+    background-color: #1f2937 !important;
+  }
+
+  .dark .hover\:text-\[\#111827\]:hover {
+    color: #f8fafc !important;
   }
 }

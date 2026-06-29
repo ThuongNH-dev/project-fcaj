@@ -303,47 +303,15 @@ export function MyGroupsPage() {
               const userCanManageGroup = canManageGroup(currentUser, group);
 
               return (
-                <button
+                <article
                   key={group.id}
-                  onClick={() => {
-                    navigate(`/groups/${group.id}`);
-                  }}
-                  className="bg-white rounded-2xl p-5 border border-[#E5E7EB] hover:shadow-md hover:-translate-y-0.5 transition-all text-left group"
+                  className="bg-white rounded-2xl border border-[#E5E7EB] p-5 transition-all hover:shadow-md hover:-translate-y-0.5 group"
                 >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div
-                        className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
-                        style={{ background: group.color }}
-                      >
-                        {group.icon}
-                      </div>
-                      <div className="min-w-0">
-                        <h3
-                          className="text-[#111827] leading-tight truncate"
-                          style={{ fontWeight: 700 }}
-                        >
-                          {group.name}
-                        </h3>
-                        <p className="text-xs text-[#9CA3AF] mt-0.5">
-                          {formatRelativeTime(group.createdAt)}
-                        </p>
-                      </div>
-                    </div>
-                    <span
-                      className={`text-xs px-2.5 py-1 rounded-full ${statusStyles[status]}`}
-                      style={{ fontWeight: 600 }}
-                    >
-                      {status}
-                    </span>
-                  </div>
-
                   {userCanManageGroup && (
                     <div className="mb-4 flex items-center justify-end gap-2">
                       <button
                         type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
+                        onClick={() => {
                           setGroupToEdit(group);
                           setShowCreateModal(true);
                         }}
@@ -355,8 +323,7 @@ export function MyGroupsPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
+                        onClick={() => {
                           void handleDeleteGroup(group);
                         }}
                         disabled={deletingGroupId === group.id}
@@ -369,63 +336,99 @@ export function MyGroupsPage() {
                     </div>
                   )}
 
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="flex -space-x-2">
-                      {buildMemberBadges(group).map((member, index) => (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigate(`/groups/${group.id}`);
+                    }}
+                    className="w-full text-left"
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div
-                          key={member.key}
-                          className="w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[10px]"
-                          style={{
-                            background: member.color,
-                            color: "#065f46",
-                            fontWeight: 700,
-                            zIndex: 4 - index,
-                          }}
+                          className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
+                          style={{ background: group.color }}
                         >
-                          {member.label[0]}
+                          {group.icon}
                         </div>
-                      ))}
-                    </div>
-                    <span className="text-xs text-[#9CA3AF]">
-                      {group.members.length} {t.members}
-                    </span>
-                  </div>
-
-                  <div className="flex items-end justify-between">
-                    <div>
-                      <p className="text-xs text-[#9CA3AF] mb-0.5">
-                        {t.totalExpensesLabel}
-                      </p>
-                      <p className="text-[#111827]" style={{ fontWeight: 700 }}>
-                        {formattedTotalExpenses}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-[#9CA3AF] mb-0.5">
-                        {t.yourBalance}
-                      </p>
-                      <p
-                        style={{ fontWeight: 700 }}
-                        className={
-                          isZero
-                            ? "text-[#6B7280]"
-                            : isPositive
-                              ? "text-[#16A34A]"
-                              : "text-[#EF4444]"
-                        }
+                        <div className="min-w-0">
+                          <h3
+                            className="text-[#111827] leading-tight truncate"
+                            style={{ fontWeight: 700 }}
+                          >
+                            {group.name}
+                          </h3>
+                          <p className="text-xs text-[#9CA3AF] mt-0.5">
+                            {formatRelativeTime(group.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+                      <span
+                        className={`text-xs px-2.5 py-1 rounded-full ${statusStyles[status]}`}
+                        style={{ fontWeight: 600 }}
                       >
-                        {yourBalance}
-                      </p>
+                        {status}
+                      </span>
                     </div>
-                  </div>
 
-                  <div className="mt-4 pt-3 border-t border-[#F3F4F6] flex items-center justify-between">
-                    <span className="text-xs text-[#9CA3AF]" style={{ fontWeight: 500 }}>
-                      {t.viewExpenses}
-                    </span>
-                    <ChevronRight className="w-4 h-4 text-[#9CA3AF] group-hover:text-[#16A34A] transition-colors" />
-                  </div>
-                </button>
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="flex -space-x-2">
+                        {buildMemberBadges(group).map((member, index) => (
+                          <div
+                            key={member.key}
+                            className="w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[10px]"
+                            style={{
+                              background: member.color,
+                              color: "#065f46",
+                              fontWeight: 700,
+                              zIndex: 4 - index,
+                            }}
+                          >
+                            {member.label[0]}
+                          </div>
+                        ))}
+                      </div>
+                      <span className="text-xs text-[#9CA3AF]">
+                        {group.members.length} {t.members}
+                      </span>
+                    </div>
+
+                    <div className="flex items-end justify-between">
+                      <div>
+                        <p className="text-xs text-[#9CA3AF] mb-0.5">
+                          {t.totalExpensesLabel}
+                        </p>
+                        <p className="text-[#111827]" style={{ fontWeight: 700 }}>
+                          {formattedTotalExpenses}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-[#9CA3AF] mb-0.5">
+                          {t.yourBalance}
+                        </p>
+                        <p
+                          style={{ fontWeight: 700 }}
+                          className={
+                            isZero
+                              ? "text-[#6B7280]"
+                              : isPositive
+                                ? "text-[#16A34A]"
+                                : "text-[#EF4444]"
+                          }
+                        >
+                          {yourBalance}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-[#F3F4F6] flex items-center justify-between">
+                      <span className="text-xs text-[#9CA3AF]" style={{ fontWeight: 500 }}>
+                        {t.viewExpenses}
+                      </span>
+                      <ChevronRight className="w-4 h-4 text-[#9CA3AF] group-hover:text-[#16A34A] transition-colors" />
+                    </div>
+                  </button>
+                </article>
               );
             })}
           </div>
