@@ -382,6 +382,28 @@ swaggerSpec.paths = {
         },
       },
     },
+    delete: {
+      summary: "Delete the current logged-in user's account",
+      tags: ["Users"],
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: "Account deleted successfully",
+        },
+        400: {
+          description: "Account cannot be deleted because linked data still exists or the final admin would be removed",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
   },
   "/api/users/me/password": {
     patch: {
@@ -420,6 +442,152 @@ swaggerSpec.paths = {
         },
         401: {
           description: "Missing or invalid bearer token, or current password is incorrect",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
+  "/api/users/me/notifications": {
+    get: {
+      summary: "Get the current logged-in user's notification preferences",
+      tags: ["Users"],
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: "Notification preferences fetched successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+    patch: {
+      summary: "Update the current logged-in user's notification preferences",
+      tags: ["Users"],
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["notificationPreferences"],
+              properties: {
+                notificationPreferences: {
+                  type: "object",
+                  properties: {
+                    expenseAdded: {
+                      type: "boolean",
+                      example: true,
+                    },
+                    paymentReceived: {
+                      type: "boolean",
+                      example: false,
+                    },
+                    settlementReminder: {
+                      type: "boolean",
+                      example: true,
+                    },
+                    weeklyDigest: {
+                      type: "boolean",
+                      example: false,
+                    },
+                    groupInvites: {
+                      type: "boolean",
+                      example: true,
+                    },
+                    marketingEmails: {
+                      type: "boolean",
+                      example: false,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Notification preferences updated successfully",
+        },
+        400: {
+          description: "Invalid notification preferences payload",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
+  "/api/users/me/billing": {
+    get: {
+      summary: "Get the current logged-in user's billing summary",
+      tags: ["Users"],
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: "Billing summary fetched successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+    patch: {
+      summary: "Update the current logged-in user's billing plan",
+      tags: ["Users"],
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["plan"],
+              properties: {
+                plan: {
+                  type: "string",
+                  enum: ["free", "pro"],
+                  example: "pro",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Billing plan updated successfully",
+        },
+        400: {
+          description: "Missing or invalid billing plan payload",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
         },
         404: {
           description: "User not found",
@@ -1027,6 +1195,170 @@ swaggerSpec.paths = {
         },
         503: {
           description: "S3 configuration, MongoDB, or backend service failed",
+        },
+      },
+    },
+  },
+  "/api/admin/users": {
+    get: {
+      summary: "Get all users for admin management",
+      tags: ["Admin"],
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: "Admin users fetched successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        403: {
+          description: "Admin access required",
+        },
+        503: {
+          description: "MongoDB or backend service failed",
+        },
+      },
+    },
+  },
+  "/api/admin/users/export": {
+    get: {
+      summary: "Export all admin user records as CSV",
+      tags: ["Admin"],
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: "CSV export generated successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        403: {
+          description: "Admin access required",
+        },
+        503: {
+          description: "MongoDB or backend service failed",
+        },
+      },
+    },
+  },
+  "/api/admin/users/{userId}": {
+    get: {
+      summary: "Get admin detail for a specific user",
+      tags: ["Admin"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "userId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+        },
+      ],
+      responses: {
+        200: {
+          description: "Admin user fetched successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        403: {
+          description: "Admin access required",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB or backend service failed",
+        },
+      },
+    },
+    patch: {
+      summary: "Update a user's role from the admin area",
+      tags: ["Admin"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "userId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+        },
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["role"],
+              properties: {
+                role: {
+                  type: "string",
+                  enum: ["admin", "user"],
+                  example: "admin",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "User role updated successfully",
+        },
+        400: {
+          description: "Invalid role or protected self-update attempt",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        403: {
+          description: "Admin access required",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB or backend service failed",
+        },
+      },
+    },
+    delete: {
+      summary: "Delete a user from the admin area when no linked data remains",
+      tags: ["Admin"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "userId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+        },
+      ],
+      responses: {
+        200: {
+          description: "User deleted successfully",
+        },
+        400: {
+          description: "Protected user or linked data still exists",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        403: {
+          description: "Admin access required",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB or backend service failed",
         },
       },
     },

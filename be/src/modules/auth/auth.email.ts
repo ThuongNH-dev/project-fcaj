@@ -82,12 +82,21 @@ async function sendWithGmail(
     },
   });
 
-  await transporter.sendMail({
+  const info = await transporter.sendMail({
     from: getEmailFrom(),
     to: input.email,
     subject: email.subject,
     html: email.html,
     text: email.text,
+  });
+
+  console.info("Password reset email accepted by Gmail SMTP.", {
+    provider: "gmail",
+    to: input.email,
+    accepted: info.accepted,
+    rejected: info.rejected,
+    response: info.response,
+    messageId: info.messageId,
   });
 }
 
@@ -118,6 +127,15 @@ async function sendWithResend(
     const responseText = await response.text().catch(() => "");
     throw new Error(responseText || "Unable to send password reset email.");
   }
+
+  const responseText = await response.text().catch(() => "");
+
+  console.info("Password reset email accepted by Resend API.", {
+    provider: "resend",
+    to: input.email,
+    status: response.status,
+    response: responseText,
+  });
 }
 
 export async function sendPasswordResetEmail(

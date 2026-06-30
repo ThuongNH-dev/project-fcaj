@@ -1,4 +1,5 @@
 import type { PublicUser } from "../auth/auth.types.js";
+import type { UserRole } from "../auth/auth.types.js";
 
 export interface AdminDashboardStats {
   totalUsers: number;
@@ -8,6 +9,32 @@ export interface AdminDashboardStats {
   totalReceiptUploads: number;
   newUsersLast7Days: number;
   recentUsers: PublicUser[];
+}
+
+export interface AdminUserRecord extends PublicUser {
+  fullName: string;
+  groupCount: number;
+  ownedGroupCount: number;
+  expenseCount: number;
+  receiptUploadCount: number;
+  pendingSettlementCount: number;
+  settledExpenseCount: number;
+  totalPaidAmount: number;
+}
+
+export interface AdminUserGroupMembership {
+  id: string;
+  name: string;
+  role: "owner" | "member";
+  updatedAt: string;
+}
+
+export interface AdminUserDetail extends AdminUserRecord {
+  groups: AdminUserGroupMembership[];
+}
+
+export interface UpdateAdminUserRoleInput {
+  role: UserRole;
 }
 
 export interface AdminUploadRecord {

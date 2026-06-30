@@ -4,14 +4,20 @@ import type { Collection, ObjectId } from "mongodb";
 import { ObjectId as MongoObjectId } from "mongodb";
 import { connectToMongo } from "../../db/mongo.js";
 import type {
+  BillingPlan,
   ChangeCurrentUserPasswordInput,
+  CurrentUserBillingSummary,
   ForgotPasswordInput,
   LoginUserInput,
+  NotificationPreferences,
   PublicUser,
   RegisterUserInput,
   ResetPasswordInput,
   SupportedCurrency,
+  UpdateCurrentUserBillingInput,
+  UpdateNotificationPreferencesInput,
   UpdateCurrentUserInput,
+  UserBillingProfile,
   VerifyResetOtpInput,
 } from "./auth.types.js";
 
@@ -24,6 +30,12 @@ export interface UserDocument {
   bio: string;
   avatarUrl: string;
   defaultCurrency: SupportedCurrency;
+  notificationPreferences?: NotificationPreferences;
+  billingProfile?: {
+    plan: BillingPlan;
+    status: "active";
+    updatedAt: Date;
+  };
   role: "admin" | "user";
   passwordResetTokenHash?: string;
   passwordResetOtpHash?: string;
@@ -34,6 +46,16 @@ export interface UserDocument {
 }
 
 const SUPPORTED_CURRENCIES = new Set<SupportedCurrency>(["USD", "VND"]);
+const SUPPORTED_BILLING_PLANS = new Set<BillingPlan>(["free", "pro"]);
+const SUPPORTED_USER_ROLES = new Set<UserDocument["role"]>(["admin", "user"]);
+const NOTIFICATION_PREFERENCE_KEYS = [
+  "expenseAdded",
+  "paymentReceived",
+  "settlementReminder",
+  "weeklyDigest",
+  "groupInvites",
+  "marketingEmails",
+] as const;
 const PASSWORD_RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
 
 export async function getUsersCollection(): Promise<Collection<UserDocument>> {
@@ -48,6 +70,120 @@ function normalizeDocumentDate(
   const normalizedDate = value instanceof Date ? value : value ? new Date(value) : fallbackDate;
 
   return Number.isNaN(normalizedDate.getTime()) ? fallbackDate : normalizedDate;
+}
+
+export function getDefaultNotificationPreferences(): NotificationPreferences {
+  return {
+    expenseAdded: false,
+    paymentReceived: false,
+    settlementReminder: false,
+    weeklyDigest: false,
+    groupInvites: false,
+    marketingEmails: false,
+  };
+}
+
+function normalizeNotificationPreferences(
+  notificationPreferences?: Partial<NotificationPreferences>,
+): NotificationPreferences {
+  const defaults = getDefaultNotificationPreferences();
+
+  if (!notificationPreferences) {
+    return defaults;
+  }
+
+  const normalizedPreferences = { ...defaults };
+
+  for (const key of NOTIFICATION_PREFERENCE_KEYS) {
+    const value = notificationPreferences[key];
+
+    if (value === undefined) {
+      continue;
+    }
+
+    if (typeof value !== "boolean") {
+      throw new Error(`Notification preference "${key}" must be a boolean.`);
+    }
+
+    normalizedPreferences[key] = value;
+  }
+
+  return normalizedPreferences;
+}
+
+function normalizeNotificationPreferencesInput(
+  notificationPreferences: UpdateNotificationPreferencesInput,
+): UpdateNotificationPreferencesInput {
+  const normalizedPreferences: UpdateNotificationPreferencesInput = {};
+
+  for (const key of NOTIFICATION_PREFERENCE_KEYS) {
+    const value = notificationPreferences[key];
+
+    if (value === undefined) {
+      continue;
+    }
+
+    if (typeof value !== "boolean") {
+      throw new Error(`Notification preference "${key}" must be a boolean.`);
+    }
+
+    normalizedPreferences[key] = value;
+  }
+
+  return normalizedPreferences;
+}
+
+function normalizeBillingPlan(plan?: string): BillingPlan {
+  const normalizedPlan = plan?.trim().toLowerCase();
+
+  if (!normalizedPlan) {
+    return "free";
+  }
+
+  if (!SUPPORTED_BILLING_PLANS.has(normalizedPlan as BillingPlan)) {
+    throw new Error("Billing plan must be either free or pro.");
+  }
+
+  return normalizedPlan as BillingPlan;
+}
+
+function toPublicBillingProfile(
+  billingProfile: UserDocument["billingProfile"] | undefined,
+  fallbackUpdatedAt: Date,
+): UserBillingProfile {
+  const normalizedUpdatedAt = normalizeDocumentDate(
+    billingProfile?.updatedAt,
+    fallbackUpdatedAt,
+  );
+
+  return {
+    plan: normalizeBillingPlan(billingProfile?.plan),
+    status: "active",
+    updatedAt: normalizedUpdatedAt.toISOString(),
+  };
+}
+
+function getBillingUsageSummary(plan: BillingPlan, input: {
+  groupCount: number;
+  expenseCount: number;
+}): CurrentUserBillingSummary["usage"] {
+  if (plan === "pro") {
+    return {
+      groupCount: input.groupCount,
+      groupLimit: null,
+      expenseCount: input.expenseCount,
+      expenseLimit: null,
+      receiptScanIncluded: true,
+    };
+  }
+
+  return {
+    groupCount: input.groupCount,
+    groupLimit: 3,
+    expenseCount: input.expenseCount,
+    expenseLimit: 10,
+    receiptScanIncluded: false,
+  };
 }
 
 export function toPublicUser(user: UserDocument): PublicUser {
@@ -84,6 +220,20 @@ function normalizeDefaultCurrency(defaultCurrency?: string): SupportedCurrency {
   }
 
   return normalizedDefaultCurrency as SupportedCurrency;
+}
+
+export function normalizeUserRole(role?: string): UserDocument["role"] {
+  const normalizedRole = role?.trim().toLowerCase();
+
+  if (!normalizedRole) {
+    throw new Error("User role is required.");
+  }
+
+  if (!SUPPORTED_USER_ROLES.has(normalizedRole as UserDocument["role"])) {
+    throw new Error("User role must be either admin or user.");
+  }
+
+  return normalizedRole as UserDocument["role"];
 }
 
 function hashPasswordResetToken(token: string) {
@@ -309,6 +459,137 @@ export async function getUserById(userId: string): Promise<PublicUser | null> {
   return user ? toPublicUser(user) : null;
 }
 
+export async function countUsersByRole(role: UserDocument["role"]) {
+  const users = await getUsersCollection();
+  return users.countDocuments({ role });
+}
+
+export async function updateUserRoleById(
+  userId: string,
+  role: string,
+): Promise<PublicUser | null> {
+  if (!MongoObjectId.isValid(userId)) {
+    return null;
+  }
+
+  const normalizedRole = normalizeUserRole(role);
+  const users = await getUsersCollection();
+  const userObjectId = new MongoObjectId(userId);
+
+  await users.updateOne(
+    { _id: userObjectId },
+    {
+      $set: {
+        role: normalizedRole,
+        updatedAt: new Date(),
+      },
+    },
+  );
+
+  const updatedUser = await users.findOne({ _id: userObjectId });
+
+  return updatedUser ? toPublicUser(updatedUser) : null;
+}
+
+export async function deleteUserById(userId: string): Promise<boolean | null> {
+  if (!MongoObjectId.isValid(userId)) {
+    return null;
+  }
+
+  const users = await getUsersCollection();
+  const result = await users.deleteOne({
+    _id: new MongoObjectId(userId),
+  });
+
+  return result.deletedCount > 0;
+}
+
+export async function getCurrentUserBillingSummary(
+  userId: string,
+): Promise<CurrentUserBillingSummary | null> {
+  if (!MongoObjectId.isValid(userId)) {
+    return null;
+  }
+
+  const users = await getUsersCollection();
+  const user = await users.findOne({ _id: new MongoObjectId(userId) });
+
+  if (!user?._id) {
+    return null;
+  }
+
+  const db = await connectToMongo();
+  const groups = db.collection<{
+    members: Array<{ userId: string }>;
+  }>("groups");
+  const expenses = db.collection<{
+    createdBy: string;
+    createdAt: Date;
+  }>("expenses");
+  const currentMonthStart = new Date();
+
+  currentMonthStart.setDate(1);
+  currentMonthStart.setHours(0, 0, 0, 0);
+
+  const [groupCount, expenseCount] = await Promise.all([
+    groups.countDocuments({ "members.userId": userId }),
+    expenses.countDocuments({
+      createdBy: userId,
+      createdAt: {
+        $gte: currentMonthStart,
+      },
+    }),
+  ]);
+
+  const fallbackUpdatedAt = normalizeDocumentDate(
+    user.updatedAt,
+    user._id.getTimestamp(),
+  );
+  const profile = toPublicBillingProfile(user.billingProfile, fallbackUpdatedAt);
+
+  return {
+    profile,
+    usage: getBillingUsageSummary(profile.plan, {
+      groupCount,
+      expenseCount,
+    }),
+  };
+}
+
+export async function updateCurrentUserBillingPlan(
+  userId: string,
+  input: UpdateCurrentUserBillingInput,
+): Promise<CurrentUserBillingSummary | null> {
+  if (!MongoObjectId.isValid(userId)) {
+    return null;
+  }
+
+  const normalizedPlan = normalizeBillingPlan(input.plan);
+  const users = await getUsersCollection();
+  const userObjectId = new MongoObjectId(userId);
+  const updatedAt = new Date();
+
+  const result = await users.updateOne(
+    { _id: userObjectId },
+    {
+      $set: {
+        billingProfile: {
+          plan: normalizedPlan,
+          status: "active",
+          updatedAt,
+        },
+        updatedAt,
+      },
+    },
+  );
+
+  if (result.matchedCount === 0) {
+    return null;
+  }
+
+  return getCurrentUserBillingSummary(userId);
+}
+
 export async function updateCurrentUserProfile(
   userId: string,
   input: UpdateCurrentUserInput,
@@ -358,6 +639,65 @@ export async function updateCurrentUserProfile(
   const updatedUser = await users.findOne({ _id: userObjectId });
 
   return updatedUser ? toPublicUser(updatedUser) : null;
+}
+
+export async function getCurrentUserNotificationPreferences(
+  userId: string,
+): Promise<NotificationPreferences | null> {
+  if (!MongoObjectId.isValid(userId)) {
+    return null;
+  }
+
+  const users = await getUsersCollection();
+  const user = await users.findOne({ _id: new MongoObjectId(userId) });
+
+  if (!user) {
+    return null;
+  }
+
+  return normalizeNotificationPreferences(user.notificationPreferences);
+}
+
+export async function updateCurrentUserNotificationPreferences(
+  userId: string,
+  input: UpdateNotificationPreferencesInput,
+): Promise<NotificationPreferences | null> {
+  if (!MongoObjectId.isValid(userId)) {
+    return null;
+  }
+
+  if (Object.keys(input).length === 0) {
+    throw new Error("At least one notification preference is required.");
+  }
+
+  const users = await getUsersCollection();
+  const userObjectId = new MongoObjectId(userId);
+  const user = await users.findOne({ _id: userObjectId });
+
+  if (!user) {
+    return null;
+  }
+
+  const currentPreferences = normalizeNotificationPreferences(
+    user.notificationPreferences,
+  );
+  const normalizedInput = normalizeNotificationPreferencesInput(input);
+  const nextPreferences = {
+    ...currentPreferences,
+    ...normalizedInput,
+  };
+
+  await users.updateOne(
+    { _id: userObjectId },
+    {
+      $set: {
+        notificationPreferences: nextPreferences,
+        updatedAt: new Date(),
+      },
+    },
+  );
+
+  return nextPreferences;
 }
 
 export async function changeCurrentUserPassword(

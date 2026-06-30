@@ -1,6 +1,10 @@
 import { ObjectId as MongoObjectId } from "mongodb";
 import type { Collection, IndexDescription, ObjectId } from "mongodb";
 import { connectToMongo } from "../../db/mongo.js";
+import {
+  canSettleGroupExpense,
+  getGroupPermission,
+} from "../../policies/group.policy.js";
 import type { SupportedCurrency } from "../auth/auth.types.js";
 import { getGroupByIdForUser, getGroupIdsByUserId } from "../groups/groups.service.js";
 import type {
@@ -384,21 +388,23 @@ export async function markExpenseAsSettled(
     throw new Error("Expense is already settled.");
   }
 
-  if (input.userRole !== "admin") {
-    const group = await getGroupByIdForUser(expenseDocument.groupId, input.userId);
+  const group = await getGroupByIdForUser(expenseDocument.groupId, input.userId);
 
-    if (!group) {
-      return null;
-    }
+  if (!group) {
+    return null;
+  }
 
-    const currentMember = group.members.find((member) => member.id === input.userId);
-    const canSettleExpense =
-      expenseDocument.paidByUserId === input.userId ||
-      currentMember?.role === "owner";
+  const groupPermission = getGroupPermission(group.members, input.userId);
 
-    if (!canSettleExpense) {
-      throw new Error("You are not allowed to settle this expense.");
-    }
+  if (
+    !canSettleGroupExpense({
+      currentUserId: input.userId,
+      groupPermission,
+      paidByUserId: expenseDocument.paidByUserId,
+      userRole: input.userRole,
+    })
+  ) {
+    throw new Error("You are not allowed to settle this expense.");
   }
 
   const updatedAt = new Date();

@@ -1,5 +1,34 @@
 export type UserRole = "admin" | "user";
 export type SupportedCurrency = "USD" | "VND";
+export type BillingPlan = "free" | "pro";
+
+export interface UserBillingProfile {
+  plan: BillingPlan;
+  status: "active";
+  updatedAt: string;
+}
+
+export interface UserBillingUsageSummary {
+  groupCount: number;
+  groupLimit: number | null;
+  expenseCount: number;
+  expenseLimit: number | null;
+  receiptScanIncluded: boolean;
+}
+
+export interface CurrentUserBillingSummary {
+  profile: UserBillingProfile;
+  usage: UserBillingUsageSummary;
+}
+
+export interface NotificationPreferences {
+  expenseAdded: boolean;
+  paymentReceived: boolean;
+  settlementReminder: boolean;
+  weeklyDigest: boolean;
+  groupInvites: boolean;
+  marketingEmails: boolean;
+}
 
 export interface RegisterUserInput {
   firstName: string;
@@ -63,4 +92,17 @@ export interface UpdateCurrentUserInput {
 export interface ChangeCurrentUserPasswordInput {
   currentPassword: string;
   newPassword: string;
+}
+
+export interface UpdateNotificationPreferencesInput {
+  expenseAdded?: boolean;
+  paymentReceived?: boolean;
+  settlementReminder?: boolean;
+  weeklyDigest?: boolean;
+  groupInvites?: boolean;
+  marketingEmails?: boolean;
+}
+
+export interface UpdateCurrentUserBillingInput {
+  plan: BillingPlan;
 }
