@@ -18,6 +18,7 @@ import {
   type AccentColor,
   useAppearance,
 } from "../../../shared/providers/AppearanceProvider";
+import { useFeedback } from "../../../shared/providers/FeedbackProvider";
 import {
   clearStoredUser,
   getUserInitials,
@@ -26,10 +27,14 @@ import {
 } from "../../auth";
 import {
   changeCurrentUserPassword,
+  type CurrentUserBillingSummary,
+  deleteCurrentUser,
+  getCurrentUserBilling,
   getCurrentUser,
   getCurrentUserNotificationPreferences,
   type NotificationPreferences,
   updateCurrentUser,
+  updateCurrentUserBilling,
   updateCurrentUserNotificationPreferences,
 } from "..";
 
@@ -40,6 +45,21 @@ const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   weeklyDigest: false,
   groupInvites: false,
   marketingEmails: false,
+};
+
+const DEFAULT_BILLING_SUMMARY: CurrentUserBillingSummary = {
+  profile: {
+    plan: "free",
+    status: "active",
+    updatedAt: new Date(0).toISOString(),
+  },
+  usage: {
+    groupCount: 0,
+    groupLimit: 3,
+    expenseCount: 0,
+    expenseLimit: 10,
+    receiptScanIncluded: false,
+  },
 };
 
 const ACCENT_COLOR_OPTIONS: { color: string; value: AccentColor }[] = [
@@ -59,6 +79,9 @@ export function SettingsPage() {
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(true);
   const [isSavingNotifications, setIsSavingNotifications] = useState(false);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [isLoadingBilling, setIsLoadingBilling] = useState(true);
+  const [isUpdatingBilling, setIsUpdatingBilling] = useState(false);
   const [isAppearanceReady, setIsAppearanceReady] = useState(false);
   const [appearanceSaved, setAppearanceSaved] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -66,6 +89,7 @@ export function SettingsPage() {
   const [notificationSuccessMessage, setNotificationSuccessMessage] = useState("");
   const [passwordErrorMessage, setPasswordErrorMessage] = useState("");
   const [passwordSuccessMessage, setPasswordSuccessMessage] = useState("");
+  const [billingErrorMessage, setBillingErrorMessage] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -82,9 +106,13 @@ export function SettingsPage() {
   const currentUser = useStoredUser();
   const { setTheme, theme } = useTheme();
   const { accentColor, density, setAccentColor, setDensity } = useAppearance();
+  const { confirm, showToast } = useFeedback();
 
   const [notifs, setNotifs] = useState<NotificationPreferences>(
     DEFAULT_NOTIFICATION_PREFERENCES,
+  );
+  const [billingSummary, setBillingSummary] = useState<CurrentUserBillingSummary>(
+    DEFAULT_BILLING_SUMMARY,
   );
 
   useEffect(() => {
@@ -105,9 +133,11 @@ export function SettingsPage() {
   useEffect(() => {
     async function loadProfile() {
       try {
-        const [profileResult, notificationsResult] = await Promise.allSettled([
+        const [profileResult, notificationsResult, billingResult] =
+          await Promise.allSettled([
           getCurrentUser(),
           getCurrentUserNotificationPreferences(),
+          getCurrentUserBilling(),
         ]);
 
         if (profileResult.status === "fulfilled" && profileResult.value.user) {
@@ -140,9 +170,20 @@ export function SettingsPage() {
               : "Unable to load your notification preferences.",
           );
         }
+
+        if (billingResult.status === "fulfilled" && billingResult.value.billing) {
+          setBillingSummary(billingResult.value.billing);
+        } else if (billingResult.status === "rejected") {
+          setBillingErrorMessage(
+            billingResult.reason instanceof Error
+              ? billingResult.reason.message
+              : "Unable to load your billing summary.",
+          );
+        }
       } finally {
         setIsLoadingProfile(false);
         setIsLoadingNotifications(false);
+        setIsLoadingBilling(false);
       }
     }
 
@@ -191,6 +232,39 @@ export function SettingsPage() {
   const handleSignOut = () => {
     clearStoredUser();
     navigate("/login");
+  };
+
+  const handleDeleteAccount = async () => {
+    const confirmed = await confirm({
+      title: t.deleteAccountTitle ?? t.deleteAccount,
+      message: `${t.deleteAccount}? ${t.deleteAccountDesc ?? t.deleteUserDesc}`,
+      cancelLabel: t.cancel,
+      confirmLabel: t.deleteAccount,
+      variant: "danger",
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setIsDeletingAccount(true);
+      const response = await deleteCurrentUser();
+
+      clearStoredUser();
+      showToast({
+        variant: "success",
+        message: response.message,
+      });
+      navigate("/login");
+    } catch (error) {
+      showToast({
+        variant: "error",
+        message: error instanceof Error ? error.message : "Unable to delete account.",
+      });
+    } finally {
+      setIsDeletingAccount(false);
+    }
   };
 
   const handlePasswordChange = async () => {
@@ -263,6 +337,38 @@ export function SettingsPage() {
     }
   };
 
+  const handleUpgradePlan = async () => {
+    setBillingErrorMessage("");
+
+    try {
+      setIsUpdatingBilling(true);
+
+      const response = await updateCurrentUserBilling({
+        plan: "pro",
+      });
+
+      if (response.billing) {
+        setBillingSummary(response.billing);
+      }
+
+      showToast({
+        variant: "success",
+        message: response.message,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to update billing plan.";
+
+      setBillingErrorMessage(message);
+      showToast({
+        variant: "error",
+        message,
+      });
+    } finally {
+      setIsUpdatingBilling(false);
+    }
+  };
+
   const showAppearanceSavedState = () => {
     setAppearanceSaved(true);
     window.setTimeout(() => setAppearanceSaved(false), 1500);
@@ -299,6 +405,19 @@ export function SettingsPage() {
     { id: "billing", label: t.billing, icon: CreditCard },
     { id: "appearance", label: t.appearance, icon: Palette },
   ];
+
+  const currentBillingPlan = billingSummary.profile.plan;
+  const isProPlan = currentBillingPlan === "pro";
+  const billingPlanLabel = isProPlan ? t.pro : t.free;
+  const billingPlanDescription = isProPlan
+    ? "Your Pro plan is active."
+    : t.onFreePlan;
+  const billingActionLabel = isProPlan ? "Pro Active" : t.upgradePro;
+  const formatUsageValue = (used: number, limit: number | null) =>
+    limit === null ? `${used} / ${t.unlimited}` : `${used} / ${limit}`;
+  const receiptScanValue = billingSummary.usage.receiptScanIncluded
+    ? "Included"
+    : t.notIncluded;
 
   return (
     <div className="lg:pl-60 min-h-screen bg-[#F6FBF8]">
@@ -736,11 +855,15 @@ export function SettingsPage() {
                     {t.dangerZoneDesc}
                   </p>
                   <button
+                    onClick={() => void handleDeleteAccount()}
+                    disabled={isDeletingAccount}
                     className="flex items-center gap-2 bg-white text-[#EF4444] border border-[#FCA5A5] px-4 py-2.5 rounded-xl text-sm hover:bg-[#FEF2F2] transition-colors"
                     style={{ fontWeight: 600 }}
                   >
                     <Trash2 className="w-4 h-4" />
-                    {t.deleteAccount}
+                    {isDeletingAccount
+                      ? (t.deletingAccount ?? t.deleting)
+                      : t.deleteAccount}
                   </button>
                 </div>
               </div>
@@ -749,6 +872,16 @@ export function SettingsPage() {
             {activeTab === "billing" && (
               <div className="space-y-5">
                 <div className="bg-white rounded-2xl border border-[#E5E7EB] p-6">
+                  {billingErrorMessage && (
+                    <div className="rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C] mb-5">
+                      {billingErrorMessage}
+                    </div>
+                  )}
+                  {isLoadingBilling && (
+                    <div className="rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 text-sm text-[#166534] mb-5">
+                      Loading your billing summary...
+                    </div>
+                  )}
                   <div className="flex items-start justify-between mb-5">
                     <div>
                       <h2
@@ -758,23 +891,35 @@ export function SettingsPage() {
                         {t.currentPlan}
                       </h2>
                       <p className="text-[#6B7280] text-sm mt-0.5">
-                        {t.onFreePlan}
+                        {billingPlanDescription}
                       </p>
                     </div>
                     <span
                       className="bg-[#F3F4F6] text-[#6B7280] text-xs px-3 py-1.5 rounded-full"
                       style={{ fontWeight: 600 }}
                     >
-                      {t.free}
+                      {billingPlanLabel}
                     </span>
                   </div>
                   <div className="bg-[#F6FBF8] rounded-xl p-4 border border-[#E5E7EB] mb-5">
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       {[
-                        { label: t.groupsUsed, used: `0 / 3 ${t.groupsUsed}` },
-                        { label: t.expensesUsed, used: "0 / 10" },
+                        {
+                          label: t.groupsUsed,
+                          used: formatUsageValue(
+                            billingSummary.usage.groupCount,
+                            billingSummary.usage.groupLimit,
+                          ),
+                        },
+                        {
+                          label: t.expensesUsed,
+                          used: formatUsageValue(
+                            billingSummary.usage.expenseCount,
+                            billingSummary.usage.expenseLimit,
+                          ),
+                        },
                         { label: t.membersLabel, used: t.unlimited },
-                        { label: t.receiptScan, used: t.notIncluded },
+                        { label: t.receiptScan, used: receiptScanValue },
                       ].map(({ label, used }) => (
                         <div key={label}>
                           <p className="text-[#9CA3AF] text-xs">{label}</p>
@@ -789,10 +934,12 @@ export function SettingsPage() {
                     </div>
                   </div>
                   <button
+                    onClick={() => void handleUpgradePlan()}
+                    disabled={isLoadingBilling || isUpdatingBilling || isProPlan}
                     className="bg-[#16A34A] text-white px-6 py-2.5 rounded-xl text-sm hover:bg-[#15803d] transition-colors shadow-sm"
                     style={{ fontWeight: 600 }}
                   >
-                    {t.upgradePro}
+                    {isUpdatingBilling ? "Updating..." : billingActionLabel}
                   </button>
                 </div>
                 <div className="bg-white rounded-2xl border border-[#E5E7EB] p-6">

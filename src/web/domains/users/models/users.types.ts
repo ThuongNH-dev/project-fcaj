@@ -15,10 +15,38 @@ export interface NotificationPreferences {
   marketingEmails: boolean;
 }
 
+export type BillingPlan = "free" | "pro";
+
+export interface CurrentUserBillingSummary {
+  profile: {
+    plan: BillingPlan;
+    status: "active";
+    updatedAt: string;
+  };
+  usage: {
+    groupCount: number;
+    groupLimit: number | null;
+    expenseCount: number;
+    expenseLimit: number | null;
+    receiptScanIncluded: boolean;
+  };
+}
+
 export interface NotificationPreferencesResponse {
   ok: boolean;
   message: string;
   notificationPreferences?: NotificationPreferences;
+}
+
+export interface CurrentUserBillingResponse {
+  ok: boolean;
+  message: string;
+  billing?: CurrentUserBillingSummary;
+}
+
+export interface DeleteCurrentUserResponse {
+  ok: boolean;
+  message: string;
 }
 
 export interface UpdateCurrentUserPayload {
@@ -36,4 +64,8 @@ export interface ChangeCurrentUserPasswordPayload {
 
 export interface UpdateNotificationPreferencesPayload {
   notificationPreferences: Partial<NotificationPreferences>;
+}
+
+export interface UpdateCurrentUserBillingPayload {
+  plan: BillingPlan;
 }
