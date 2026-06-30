@@ -1,8 +1,11 @@
-import { getJson, patchJson } from "../../../shared/api/client";
+import { deleteJson, getJson, patchJson } from "../../../shared/api/client";
 import type {
+  CurrentUserBillingResponse,
   ChangeCurrentUserPasswordPayload,
   CurrentUserResponse,
+  DeleteCurrentUserResponse,
   NotificationPreferencesResponse,
+  UpdateCurrentUserBillingPayload,
   UpdateNotificationPreferencesPayload,
   UpdateCurrentUserPayload,
 } from "../models/users.types";
@@ -38,4 +41,21 @@ export function updateCurrentUserNotificationPreferences(
     UpdateNotificationPreferencesPayload,
     NotificationPreferencesResponse
   >("/api/users/me/notifications", payload);
+}
+
+export function getCurrentUserBilling() {
+  return getJson<CurrentUserBillingResponse>("/api/users/me/billing");
+}
+
+export function updateCurrentUserBilling(
+  payload: UpdateCurrentUserBillingPayload,
+) {
+  return patchJson<UpdateCurrentUserBillingPayload, CurrentUserBillingResponse>(
+    "/api/users/me/billing",
+    payload,
+  );
+}
+
+export function deleteCurrentUser() {
+  return deleteJson<DeleteCurrentUserResponse>("/api/users/me");
 }

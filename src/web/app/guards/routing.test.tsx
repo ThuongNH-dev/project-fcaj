@@ -54,7 +54,7 @@ describe("route guards", () => {
   it("redirects non-admin users away from admin pages", async () => {
     setStoredAuthSession({
       id: "user-1",
-      firstName: "Codex",
+      firstName: "Test",
       lastName: "User",
       email: "user@example.com",
       bio: "",
@@ -73,7 +73,7 @@ describe("route guards", () => {
   it("renders admin content for admin users", async () => {
     setStoredAuthSession({
       id: "admin-1",
-      firstName: "Codex",
+      firstName: "Test",
       lastName: "Admin",
       email: "admin@example.com",
       bio: "",
@@ -92,7 +92,7 @@ describe("route guards", () => {
   it("reacts to sign-out while viewing a private route", async () => {
     setStoredAuthSession({
       id: "user-2",
-      firstName: "Codex",
+      firstName: "Test",
       lastName: "Member",
       email: "member@example.com",
       bio: "",
@@ -117,7 +117,7 @@ describe("route guards", () => {
   it("treats user-only localStorage as logged out for private routes", async () => {
     setStoredUser({
       id: "user-3",
-      firstName: "Codex",
+      firstName: "Test",
       lastName: "Broken",
       email: "broken@example.com",
       bio: "",
