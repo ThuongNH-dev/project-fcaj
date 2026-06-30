@@ -382,6 +382,28 @@ swaggerSpec.paths = {
         },
       },
     },
+    delete: {
+      summary: "Delete the current logged-in user's account",
+      tags: ["Users"],
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: "Account deleted successfully",
+        },
+        400: {
+          description: "Account cannot be deleted because linked data still exists or the final admin would be removed",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
   },
   "/api/users/me/password": {
     patch: {
@@ -502,6 +524,67 @@ swaggerSpec.paths = {
         },
         400: {
           description: "Invalid notification preferences payload",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
+  "/api/users/me/billing": {
+    get: {
+      summary: "Get the current logged-in user's billing summary",
+      tags: ["Users"],
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: "Billing summary fetched successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+    patch: {
+      summary: "Update the current logged-in user's billing plan",
+      tags: ["Users"],
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["plan"],
+              properties: {
+                plan: {
+                  type: "string",
+                  enum: ["free", "pro"],
+                  example: "pro",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Billing plan updated successfully",
+        },
+        400: {
+          description: "Missing or invalid billing plan payload",
         },
         401: {
           description: "Missing or invalid bearer token",

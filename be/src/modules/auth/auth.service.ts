@@ -4,7 +4,9 @@ import type { Collection, ObjectId } from "mongodb";
 import { ObjectId as MongoObjectId } from "mongodb";
 import { connectToMongo } from "../../db/mongo.js";
 import type {
+  BillingPlan,
   ChangeCurrentUserPasswordInput,
+  CurrentUserBillingSummary,
   ForgotPasswordInput,
   LoginUserInput,
   NotificationPreferences,
@@ -12,8 +14,10 @@ import type {
   RegisterUserInput,
   ResetPasswordInput,
   SupportedCurrency,
+  UpdateCurrentUserBillingInput,
   UpdateNotificationPreferencesInput,
   UpdateCurrentUserInput,
+  UserBillingProfile,
   VerifyResetOtpInput,
 } from "./auth.types.js";
 
@@ -27,6 +31,11 @@ export interface UserDocument {
   avatarUrl: string;
   defaultCurrency: SupportedCurrency;
   notificationPreferences?: NotificationPreferences;
+  billingProfile?: {
+    plan: BillingPlan;
+    status: "active";
+    updatedAt: Date;
+  };
   role: "admin" | "user";
   passwordResetTokenHash?: string;
   passwordResetOtpHash?: string;
@@ -37,6 +46,7 @@ export interface UserDocument {
 }
 
 const SUPPORTED_CURRENCIES = new Set<SupportedCurrency>(["USD", "VND"]);
+const SUPPORTED_BILLING_PLANS = new Set<BillingPlan>(["free", "pro"]);
 const SUPPORTED_USER_ROLES = new Set<UserDocument["role"]>(["admin", "user"]);
 const NOTIFICATION_PREFERENCE_KEYS = [
   "expenseAdded",
@@ -121,6 +131,59 @@ function normalizeNotificationPreferencesInput(
   }
 
   return normalizedPreferences;
+}
+
+function normalizeBillingPlan(plan?: string): BillingPlan {
+  const normalizedPlan = plan?.trim().toLowerCase();
+
+  if (!normalizedPlan) {
+    return "free";
+  }
+
+  if (!SUPPORTED_BILLING_PLANS.has(normalizedPlan as BillingPlan)) {
+    throw new Error("Billing plan must be either free or pro.");
+  }
+
+  return normalizedPlan as BillingPlan;
+}
+
+function toPublicBillingProfile(
+  billingProfile: UserDocument["billingProfile"] | undefined,
+  fallbackUpdatedAt: Date,
+): UserBillingProfile {
+  const normalizedUpdatedAt = normalizeDocumentDate(
+    billingProfile?.updatedAt,
+    fallbackUpdatedAt,
+  );
+
+  return {
+    plan: normalizeBillingPlan(billingProfile?.plan),
+    status: "active",
+    updatedAt: normalizedUpdatedAt.toISOString(),
+  };
+}
+
+function getBillingUsageSummary(plan: BillingPlan, input: {
+  groupCount: number;
+  expenseCount: number;
+}): CurrentUserBillingSummary["usage"] {
+  if (plan === "pro") {
+    return {
+      groupCount: input.groupCount,
+      groupLimit: null,
+      expenseCount: input.expenseCount,
+      expenseLimit: null,
+      receiptScanIncluded: true,
+    };
+  }
+
+  return {
+    groupCount: input.groupCount,
+    groupLimit: 3,
+    expenseCount: input.expenseCount,
+    expenseLimit: 10,
+    receiptScanIncluded: false,
+  };
 }
 
 export function toPublicUser(user: UserDocument): PublicUser {
@@ -439,6 +502,92 @@ export async function deleteUserById(userId: string): Promise<boolean | null> {
   });
 
   return result.deletedCount > 0;
+}
+
+export async function getCurrentUserBillingSummary(
+  userId: string,
+): Promise<CurrentUserBillingSummary | null> {
+  if (!MongoObjectId.isValid(userId)) {
+    return null;
+  }
+
+  const users = await getUsersCollection();
+  const user = await users.findOne({ _id: new MongoObjectId(userId) });
+
+  if (!user?._id) {
+    return null;
+  }
+
+  const db = await connectToMongo();
+  const groups = db.collection<{
+    members: Array<{ userId: string }>;
+  }>("groups");
+  const expenses = db.collection<{
+    createdBy: string;
+    createdAt: Date;
+  }>("expenses");
+  const currentMonthStart = new Date();
+
+  currentMonthStart.setDate(1);
+  currentMonthStart.setHours(0, 0, 0, 0);
+
+  const [groupCount, expenseCount] = await Promise.all([
+    groups.countDocuments({ "members.userId": userId }),
+    expenses.countDocuments({
+      createdBy: userId,
+      createdAt: {
+        $gte: currentMonthStart,
+      },
+    }),
+  ]);
+
+  const fallbackUpdatedAt = normalizeDocumentDate(
+    user.updatedAt,
+    user._id.getTimestamp(),
+  );
+  const profile = toPublicBillingProfile(user.billingProfile, fallbackUpdatedAt);
+
+  return {
+    profile,
+    usage: getBillingUsageSummary(profile.plan, {
+      groupCount,
+      expenseCount,
+    }),
+  };
+}
+
+export async function updateCurrentUserBillingPlan(
+  userId: string,
+  input: UpdateCurrentUserBillingInput,
+): Promise<CurrentUserBillingSummary | null> {
+  if (!MongoObjectId.isValid(userId)) {
+    return null;
+  }
+
+  const normalizedPlan = normalizeBillingPlan(input.plan);
+  const users = await getUsersCollection();
+  const userObjectId = new MongoObjectId(userId);
+  const updatedAt = new Date();
+
+  const result = await users.updateOne(
+    { _id: userObjectId },
+    {
+      $set: {
+        billingProfile: {
+          plan: normalizedPlan,
+          status: "active",
+          updatedAt,
+        },
+        updatedAt,
+      },
+    },
+  );
+
+  if (result.matchedCount === 0) {
+    return null;
+  }
+
+  return getCurrentUserBillingSummary(userId);
 }
 
 export async function updateCurrentUserProfile(
