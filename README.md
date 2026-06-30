@@ -104,7 +104,25 @@ npm --prefix be install
 Copy-Item .\be\.env.example .\be\.env
 ```
 
-4. Fill `be/.env` with MongoDB, JWT, frontend URL, and email provider settings.
+4. Fill `be/.env` with MongoDB, JWT, frontend URL, email provider settings, and S3 settings if you want receipt uploads to work.
+
+Required for basic local development:
+
+- `PORT`
+- `MONGODB_URI`
+- `MONGODB_DB`
+- `JWT_SECRET`
+- `FRONTEND_URL`
+- `EMAIL_PROVIDER`
+
+Required for receipt upload to AWS S3:
+
+- `AWS_REGION`
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `S3_RECEIPTS_BUCKET`
+- `S3_RECEIPTS_PREFIX`
+- `S3_PRESIGN_EXPIRES_SECONDS`
 
 5. Start MongoDB locally with Docker if you are not using MongoDB Atlas:
 
@@ -136,8 +154,20 @@ MONGODB_URI=mongodb://127.0.0.1:27017
 MONGODB_DB=Splitly
 JWT_SECRET=replace_with_a_long_random_secret
 FRONTEND_URL=http://localhost:5173
+AWS_REGION=ap-southeast-1
+AWS_ACCESS_KEY_ID=replace_with_an_iam_access_key
+AWS_SECRET_ACCESS_KEY=replace_with_an_iam_secret_key
+S3_RECEIPTS_BUCKET=replace_with_your_bucket_name
+S3_RECEIPTS_PREFIX=receipts/
+S3_PRESIGN_EXPIRES_SECONDS=300
 EMAIL_PROVIDER=console
 ```
+
+Notes:
+
+- `FRONTEND_URL` should match the actual frontend origin used by the backend for reset-password links. If Vite runs on another port such as `5175`, update it.
+- Receipt uploads accept `PNG`, `JPG`, `JPEG`, and `PDF` files up to `10MB`.
+- If you are not using S3 yet, keep the S3 values empty, but receipt upload endpoints will fail until they are configured.
 
 ### Console Email
 
@@ -163,6 +193,62 @@ EMAIL_PROVIDER=resend
 RESEND_API_KEY=your_resend_api_key
 RESEND_API_URL=https://api.resend.com/emails
 EMAIL_FROM=Splitly <no-reply@your-verified-domain.com>
+```
+
+## AWS S3 Receipt Upload Setup
+
+Receipt files are uploaded with this flow:
+
+1. frontend requests a presigned upload URL from `POST /api/receipts/presign`
+2. frontend uploads the file directly to S3
+3. backend stores receipt metadata in MongoDB with `POST /api/receipts`
+
+To make that work in a new environment:
+
+1. Create a private S3 bucket in the same region you place in `AWS_REGION`
+2. Keep `Block all public access` enabled
+3. Create a dedicated IAM user for the backend
+4. Attach an S3 policy limited to the receipt prefix, for example:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReceiptsObjectAccess",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject"],
+      "Resource": "arn:aws:s3:::YOUR_BUCKET_NAME/receipts/*"
+    }
+  ]
+}
+```
+
+5. Add bucket CORS so the browser can upload to S3 from local frontend origins:
+
+```json
+[
+  {
+    "AllowedHeaders": ["*"],
+    "AllowedMethods": ["PUT", "GET", "HEAD"],
+    "AllowedOrigins": [
+      "http://localhost:5173",
+      "http://127.0.0.1:5173",
+      "http://localhost:5175",
+      "http://127.0.0.1:5175"
+    ],
+    "ExposeHeaders": ["ETag"],
+    "MaxAgeSeconds": 3000
+  }
+]
+```
+
+6. Restart the backend after updating `be/.env`
+
+Expected storage path format inside the bucket:
+
+```text
+receipts/<userId>/<year>/<month>/<generated-file-name>
 ```
 
 ## API Docs
@@ -231,6 +317,15 @@ Run them with:
 ```powershell
 npm test
 ```
+
+Manual checks recommended for a fresh dev environment:
+
+- register and log in with a normal user
+- create a group
+- upload a receipt and verify the object appears in S3
+- create an expense with the uploaded receipt attached
+- log in as an admin and verify `/admin/users` plus user export
+- test forgot-password and reset-password links if email settings changed
 
 ## Suggested Verification Before PR
 
