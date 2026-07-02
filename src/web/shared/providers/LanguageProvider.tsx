@@ -1,6 +1,28 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 
 export type Lang = "en" | "vi";
+
+const LANGUAGE_STORAGE_KEY = "splitly-language";
+
+function getStoredLanguage(): Lang {
+  if (typeof window === "undefined") {
+    return "en";
+  }
+
+  const storedLanguage = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+
+  if (storedLanguage === "en" || storedLanguage === "vi") {
+    return storedLanguage;
+  }
+
+  return "en";
+}
 
 export const translations = {
   en: {
@@ -177,7 +199,59 @@ export const translations = {
     emailPlaceholder: "you@example.com", bio: "Bio",
     bioPaceholder: "Tell your group members a little about yourself…",
     defaultCurrency: "Default currency", saveChanges: "Save changes", saved: "Saved!",
-    removePhoto: "Remove photo",
+    uploadPhoto: "Upload photo", removePhoto: "Remove photo", avatarUrlLabel: "Avatar URL",
+    avatarUploadHint: "PNG, JPG, or WEBP up to 2 MB.",
+    avatarUploadedState: "Using the uploaded image.",
+    avatarTypeError: "Avatar must be a PNG, JPG, or WEBP image.",
+    avatarSizeError: "Avatar must be 2 MB or smaller.",
+    avatarReadError: "Unable to read the selected avatar image.",
+    userAvatarAlt: "User avatar",
+    loadingProfile: "Loading your profile...",
+    loadProfileError: "Unable to load your profile.",
+    loadingNotifications: "Loading your notification preferences...",
+    loadNotificationsError: "Unable to load your notification preferences.",
+    loadingBilling: "Loading your billing summary...",
+    loadBillingError: "Unable to load your billing summary.",
+    loadingPaymentMethod: "Loading your payment method...",
+    loadPaymentMethodError: "Unable to load your payment method.",
+    firstNameRequired: "First name cannot be empty.",
+    lastNameRequired: "Last name cannot be empty.",
+    saveProfileError: "Unable to save your profile.",
+    deleteAccountError: "Unable to delete account.",
+    passwordRequired: "Current password and new password are required.",
+    passwordMinLength: "Password must be at least 6 characters.",
+    passwordsDoNotMatch: "Passwords do not match.",
+    updatePasswordError: "Unable to update password.",
+    saveNotificationsError: "Unable to save notification preferences.",
+    billingProDesc: "Your Pro plan is active.",
+    proActive: "Pro Active",
+    included: "Included",
+    updatingPlan: "Updating...",
+    updateBillingError: "Unable to update billing plan.",
+    paymentMethodRequiredFields:
+      "Cardholder name, card number, expiry month, expiry year, and CVC are required.",
+    savePaymentMethodError: "Unable to save payment method.",
+    removePaymentMethodTitle: "Remove payment method",
+    removePaymentMethodMessage:
+      "Remove the saved payment method from this account?",
+    remove: "Remove",
+    removePaymentMethodError: "Unable to remove payment method.",
+    endingIn: "ending in",
+    expires: "Expires",
+    cardholder: "Cardholder",
+    billingEmailLabel: "Billing email",
+    updatePaymentMethod: "Update payment method",
+    removePaymentMethod: "Remove payment method",
+    cardholderName: "Cardholder name",
+    cardholderNamePlaceholder: "Name on card",
+    cardNumber: "Card number",
+    expiryMonth: "Expiry month",
+    expiryYear: "Expiry year",
+    saveUpdatedMethod: "Save updated method",
+    savePaymentMethodLabel: "Save payment method",
+    close: "Close",
+    saving: "Saving...",
+    removing: "Removing...",
     notificationPrefs: "Notification Preferences",
     expenseAdded: "Expense added", expenseAddedDesc: "When someone adds an expense to your group",
     paymentReceived: "Payment received", paymentReceivedDesc: "When a group member marks a payment as sent",
@@ -198,7 +272,7 @@ export const translations = {
     upgradePro: "Upgrade to Pro — $4/mo",
     paymentMethod: "Payment Method", noPaymentMethod: "No payment method",
     noPaymentDesc: "Add a card to upgrade your plan.", addPaymentMethod: "+ Add payment method",
-    appearanceTitle: "Appearance", theme: "Theme", accentColor: "Accent color", density: "Density",
+    appearanceTitle: "Appearance", language: "Language", english: "English", vietnamese: "Tiếng Việt", theme: "Theme", accentColor: "Accent color", density: "Density",
     light: "Light", dark: "Dark", system: "System",
     compact: "Compact", default: "Default", comfortable: "Comfortable",
   },
@@ -374,7 +448,59 @@ export const translations = {
     emailPlaceholder: "ban@example.com", bio: "Giới thiệu",
     bioPaceholder: "Giới thiệu bản thân với các thành viên trong nhóm…",
     defaultCurrency: "Tiền tệ mặc định", saveChanges: "Lưu thay đổi", saved: "Đã lưu!",
-    removePhoto: "Xóa ảnh",
+    uploadPhoto: "Tải ảnh", removePhoto: "Xóa ảnh", avatarUrlLabel: "URL ảnh đại diện",
+    avatarUploadHint: "PNG, JPG hoặc WEBP tối đa 2 MB.",
+    avatarUploadedState: "Đang dùng ảnh đã tải lên.",
+    avatarTypeError: "Ảnh đại diện phải là PNG, JPG hoặc WEBP.",
+    avatarSizeError: "Ảnh đại diện phải nhỏ hơn hoặc bằng 2 MB.",
+    avatarReadError: "Không thể đọc ảnh đại diện đã chọn.",
+    userAvatarAlt: "Ảnh đại diện",
+    loadingProfile: "Đang tải hồ sơ của bạn...",
+    loadProfileError: "Không thể tải hồ sơ của bạn.",
+    loadingNotifications: "Đang tải tùy chọn thông báo...",
+    loadNotificationsError: "Không thể tải tùy chọn thông báo.",
+    loadingBilling: "Đang tải thông tin thanh toán...",
+    loadBillingError: "Không thể tải thông tin thanh toán.",
+    loadingPaymentMethod: "Đang tải phương thức thanh toán...",
+    loadPaymentMethodError: "Không thể tải phương thức thanh toán.",
+    firstNameRequired: "Tên không được để trống.",
+    lastNameRequired: "Họ không được để trống.",
+    saveProfileError: "Không thể lưu hồ sơ của bạn.",
+    deleteAccountError: "Không thể xóa tài khoản.",
+    passwordRequired: "Mật khẩu hiện tại và mật khẩu mới là bắt buộc.",
+    passwordMinLength: "Mật khẩu phải có ít nhất 6 ký tự.",
+    passwordsDoNotMatch: "Mật khẩu không khớp.",
+    updatePasswordError: "Không thể cập nhật mật khẩu.",
+    saveNotificationsError: "Không thể lưu tùy chọn thông báo.",
+    billingProDesc: "Gói Pro của bạn đang hoạt động.",
+    proActive: "Pro đang hoạt động",
+    included: "Đã bao gồm",
+    updatingPlan: "Đang cập nhật...",
+    updateBillingError: "Không thể cập nhật gói thanh toán.",
+    paymentMethodRequiredFields:
+      "Tên chủ thẻ, số thẻ, tháng hết hạn, năm hết hạn và CVC là bắt buộc.",
+    savePaymentMethodError: "Không thể lưu phương thức thanh toán.",
+    removePaymentMethodTitle: "Xóa phương thức thanh toán",
+    removePaymentMethodMessage:
+      "Xóa phương thức thanh toán đã lưu khỏi tài khoản này?",
+    remove: "Xóa",
+    removePaymentMethodError: "Không thể xóa phương thức thanh toán.",
+    endingIn: "số cuối",
+    expires: "Hết hạn",
+    cardholder: "Chủ thẻ",
+    billingEmailLabel: "Email thanh toán",
+    updatePaymentMethod: "Cập nhật phương thức thanh toán",
+    removePaymentMethod: "Xóa phương thức thanh toán",
+    cardholderName: "Tên chủ thẻ",
+    cardholderNamePlaceholder: "Tên trên thẻ",
+    cardNumber: "Số thẻ",
+    expiryMonth: "Tháng hết hạn",
+    expiryYear: "Năm hết hạn",
+    saveUpdatedMethod: "Lưu phương thức đã cập nhật",
+    savePaymentMethodLabel: "Lưu phương thức thanh toán",
+    close: "Đóng",
+    saving: "Đang lưu...",
+    removing: "Đang xóa...",
     notificationPrefs: "Tùy chọn thông báo",
     expenseAdded: "Chi phí được thêm", expenseAddedDesc: "Khi ai đó thêm chi phí vào nhóm của bạn",
     paymentReceived: "Nhận thanh toán", paymentReceivedDesc: "Khi thành viên đánh dấu đã thanh toán",
@@ -393,7 +519,7 @@ export const translations = {
     upgradePro: "Nâng cấp lên Pro — $4/tháng",
     paymentMethod: "Phương thức thanh toán", noPaymentMethod: "Chưa có phương thức thanh toán",
     noPaymentDesc: "Thêm thẻ để nâng cấp gói.", addPaymentMethod: "+ Thêm phương thức thanh toán",
-    appearanceTitle: "Giao diện", theme: "Chủ đề", accentColor: "Màu nhấn", density: "Mật độ",
+    appearanceTitle: "Giao diện", language: "Ngôn ngữ", english: "English", vietnamese: "Tiếng Việt", theme: "Chủ đề", accentColor: "Màu nhấn", density: "Mật độ",
     light: "Sáng", dark: "Tối", system: "Hệ thống",
     compact: "Thu gọn", default: "Mặc định", comfortable: "Thoải mái",
   },
@@ -414,7 +540,17 @@ const LangContext = createContext<LangContextType>({
 });
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [lang, setLang] = useState<Lang>("en");
+  const [lang, setLang] = useState<Lang>(getStoredLanguage);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+    document.documentElement.lang = lang;
+  }, [lang]);
+
   return (
     <LangContext.Provider value={{ lang, setLang, t: translations[lang] }}>
       {children}

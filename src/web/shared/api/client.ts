@@ -10,9 +10,15 @@ const AUTH_SESSION_ERROR_MESSAGES = new Set([
   "Authorization token is required.",
   "Invalid or expired authorization token.",
 ]);
+const AUTH_SESSION_MISSING_USER_MESSAGE = "User not found.";
 
 function shouldClearAuthSession(status: number, message?: string) {
-  return status === 401 && AUTH_SESSION_ERROR_MESSAGES.has(message ?? "");
+  const normalizedMessage = message ?? "";
+
+  return (
+    (status === 401 && AUTH_SESSION_ERROR_MESSAGES.has(normalizedMessage)) ||
+    (status === 404 && normalizedMessage === AUTH_SESSION_MISSING_USER_MESSAGE)
+  );
 }
 
 async function requestJson<TResponse>(

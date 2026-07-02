@@ -76,6 +76,37 @@ describe("shared api client", () => {
     expect(localStorage.getItem("splitly_token")).toBe("valid-token");
   });
 
+  it("clears the local session when the authenticated user no longer exists", async () => {
+    setStoredAuthSession(
+      {
+        id: "user-404",
+        firstName: "Codex",
+        lastName: "Deleted",
+        email: "deleted@example.com",
+        bio: "",
+        avatarUrl: "",
+        defaultCurrency: "USD",
+        role: "user",
+        createdAt: "2026-06-26T00:00:00.000Z",
+        updatedAt: "2026-06-26T00:00:00.000Z",
+      },
+      "valid-but-stale-token",
+    );
+
+    mockFetch.mockResolvedValue({
+      json: async () => ({
+        message: "User not found.",
+      }),
+      ok: false,
+      status: 404,
+    });
+
+    await expect(getJson("/api/users/me")).rejects.toThrow("User not found.");
+
+    expect(localStorage.getItem("splitly_user")).toBeNull();
+    expect(localStorage.getItem("splitly_token")).toBeNull();
+  });
+
   it("sends the bearer token only when a complete auth session exists", async () => {
     setStoredUser({
       id: "user-3",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useTheme } from "next-themes";
 import { useNavigate } from "react-router";
 import {
@@ -28,13 +28,17 @@ import {
 import {
   changeCurrentUserPassword,
   type CurrentUserBillingSummary,
+  type CurrentUserPaymentMethod,
   deleteCurrentUser,
+  deleteCurrentUserPaymentMethod,
   getCurrentUserBilling,
   getCurrentUser,
   getCurrentUserNotificationPreferences,
+  getCurrentUserPaymentMethod,
   type NotificationPreferences,
   updateCurrentUser,
   updateCurrentUserBilling,
+  updateCurrentUserPaymentMethod,
   updateCurrentUserNotificationPreferences,
 } from "..";
 
@@ -62,6 +66,46 @@ const DEFAULT_BILLING_SUMMARY: CurrentUserBillingSummary = {
   },
 };
 
+const DEFAULT_PAYMENT_METHOD_FORM = {
+  billingEmail: "",
+  cardNumber: "",
+  cardholderName: "",
+  cvc: "",
+  expiryMonth: "",
+  expiryYear: "",
+};
+const MAX_AVATAR_FILE_SIZE_BYTES = 2 * 1024 * 1024;
+const SUPPORTED_AVATAR_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+        return;
+      }
+
+      reject(new Error("Unable to read avatar."));
+    };
+
+    reader.onerror = () => {
+      reject(new Error("Unable to read avatar."));
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+
+function isDataUrl(value: string) {
+  return value.trim().startsWith("data:");
+}
+
 const ACCENT_COLOR_OPTIONS: { color: string; value: AccentColor }[] = [
   { color: "#16A34A", value: "green" },
   { color: "#2563EB", value: "blue" },
@@ -82,6 +126,10 @@ export function SettingsPage() {
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isLoadingBilling, setIsLoadingBilling] = useState(true);
   const [isUpdatingBilling, setIsUpdatingBilling] = useState(false);
+  const [isLoadingPaymentMethod, setIsLoadingPaymentMethod] = useState(true);
+  const [isSavingPaymentMethod, setIsSavingPaymentMethod] = useState(false);
+  const [isRemovingPaymentMethod, setIsRemovingPaymentMethod] = useState(false);
+  const [isEditingPaymentMethod, setIsEditingPaymentMethod] = useState(false);
   const [isAppearanceReady, setIsAppearanceReady] = useState(false);
   const [appearanceSaved, setAppearanceSaved] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -90,18 +138,20 @@ export function SettingsPage() {
   const [passwordErrorMessage, setPasswordErrorMessage] = useState("");
   const [passwordSuccessMessage, setPasswordSuccessMessage] = useState("");
   const [billingErrorMessage, setBillingErrorMessage] = useState("");
+  const [paymentMethodErrorMessage, setPaymentMethodErrorMessage] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [bio, setBio] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
+  const [avatarUrlInput, setAvatarUrlInput] = useState("");
   const [currency, setCurrency] = useState<"USD" | "VND">("USD");
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
     newPassword: "",
     confirmNewPassword: "",
   });
-  const { t } = useLanguage();
+  const { lang, setLang, t } = useLanguage();
   const navigate = useNavigate();
   const currentUser = useStoredUser();
   const { setTheme, theme } = useTheme();
@@ -114,6 +164,13 @@ export function SettingsPage() {
   const [billingSummary, setBillingSummary] = useState<CurrentUserBillingSummary>(
     DEFAULT_BILLING_SUMMARY,
   );
+  const [paymentMethod, setPaymentMethod] = useState<CurrentUserPaymentMethod | null>(
+    null,
+  );
+  const [paymentMethodForm, setPaymentMethodForm] = useState(
+    DEFAULT_PAYMENT_METHOD_FORM,
+  );
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (currentUser) {
@@ -122,6 +179,7 @@ export function SettingsPage() {
       setEmail(currentUser.email);
       setBio(currentUser.bio);
       setAvatarUrl(currentUser.avatarUrl);
+      setAvatarUrlInput(isDataUrl(currentUser.avatarUrl) ? "" : currentUser.avatarUrl);
       setCurrency(currentUser.defaultCurrency === "VND" ? "VND" : "USD");
     }
   }, [currentUser]);
@@ -131,14 +189,30 @@ export function SettingsPage() {
   }, []);
 
   useEffect(() => {
+    if (!email) {
+      return;
+    }
+
+    setPaymentMethodForm((currentForm) =>
+      currentForm.billingEmail.trim()
+        ? currentForm
+        : {
+            ...currentForm,
+            billingEmail: email,
+          },
+    );
+  }, [email]);
+
+  useEffect(() => {
     async function loadProfile() {
       try {
-        const [profileResult, notificationsResult, billingResult] =
+        const [profileResult, notificationsResult, billingResult, paymentMethodResult] =
           await Promise.allSettled([
-          getCurrentUser(),
-          getCurrentUserNotificationPreferences(),
-          getCurrentUserBilling(),
-        ]);
+            getCurrentUser(),
+            getCurrentUserNotificationPreferences(),
+            getCurrentUserBilling(),
+            getCurrentUserPaymentMethod(),
+          ]);
 
         if (profileResult.status === "fulfilled" && profileResult.value.user) {
           setFirstName(profileResult.value.user.firstName);
@@ -146,6 +220,11 @@ export function SettingsPage() {
           setEmail(profileResult.value.user.email);
           setBio(profileResult.value.user.bio);
           setAvatarUrl(profileResult.value.user.avatarUrl);
+          setAvatarUrlInput(
+            isDataUrl(profileResult.value.user.avatarUrl)
+              ? ""
+              : profileResult.value.user.avatarUrl,
+          );
           setCurrency(
             profileResult.value.user.defaultCurrency === "VND" ? "VND" : "USD",
           );
@@ -154,7 +233,7 @@ export function SettingsPage() {
           setErrorMessage(
             profileResult.reason instanceof Error
               ? profileResult.reason.message
-              : "Unable to load your profile.",
+              : t.loadProfileError,
           );
         }
 
@@ -167,7 +246,7 @@ export function SettingsPage() {
           setNotificationErrorMessage(
             notificationsResult.reason instanceof Error
               ? notificationsResult.reason.message
-              : "Unable to load your notification preferences.",
+              : t.loadNotificationsError,
           );
         }
 
@@ -177,29 +256,53 @@ export function SettingsPage() {
           setBillingErrorMessage(
             billingResult.reason instanceof Error
               ? billingResult.reason.message
-              : "Unable to load your billing summary.",
+              : t.loadBillingError,
+          );
+        }
+
+        if (paymentMethodResult.status === "fulfilled") {
+          const nextPaymentMethod = paymentMethodResult.value.paymentMethod ?? null;
+
+          setPaymentMethod(nextPaymentMethod);
+
+          if (nextPaymentMethod) {
+            setPaymentMethodForm({
+              billingEmail: nextPaymentMethod.billingEmail,
+              cardNumber: "",
+              cardholderName: nextPaymentMethod.cardholderName,
+              cvc: "",
+              expiryMonth: nextPaymentMethod.expiryMonth.toString(),
+              expiryYear: nextPaymentMethod.expiryYear.toString(),
+            });
+          }
+        } else {
+          setPaymentMethodErrorMessage(
+            paymentMethodResult.reason instanceof Error
+              ? paymentMethodResult.reason.message
+              : t.loadPaymentMethodError,
           );
         }
       } finally {
         setIsLoadingProfile(false);
         setIsLoadingNotifications(false);
         setIsLoadingBilling(false);
+        setIsLoadingPaymentMethod(false);
       }
     }
 
     void loadProfile();
-  }, []);
+  }, [t]);
 
   const handleSave = async () => {
     setErrorMessage("");
 
     if (!firstName.trim()) {
-      setErrorMessage("First name cannot be empty.");
+      setErrorMessage(t.firstNameRequired);
       return;
     }
 
     if (!lastName.trim()) {
-      setErrorMessage("Last name cannot be empty.");
+      setErrorMessage(t.lastNameRequired);
       return;
     }
 
@@ -222,7 +325,7 @@ export function SettingsPage() {
       window.setTimeout(() => setSaved(false), 2000);
     } catch (error) {
       setErrorMessage(
-        error instanceof Error ? error.message : "Unable to save your profile.",
+        error instanceof Error ? error.message : t.saveProfileError,
       );
     } finally {
       setIsSavingProfile(false);
@@ -232,6 +335,44 @@ export function SettingsPage() {
   const handleSignOut = () => {
     clearStoredUser();
     navigate("/login");
+  };
+
+  const handleAvatarUploadClick = () => {
+    avatarInputRef.current?.click();
+  };
+
+  const handleAvatarFileChange = async (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+
+    setErrorMessage("");
+
+    if (!file) {
+      return;
+    }
+
+    if (!SUPPORTED_AVATAR_MIME_TYPES.has(file.type)) {
+      setErrorMessage(t.avatarTypeError);
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > MAX_AVATAR_FILE_SIZE_BYTES) {
+      setErrorMessage(t.avatarSizeError);
+      event.target.value = "";
+      return;
+    }
+
+    try {
+      const nextAvatarUrl = await readFileAsDataUrl(file);
+      setAvatarUrl(nextAvatarUrl);
+      setAvatarUrlInput("");
+    } catch {
+      setErrorMessage(t.avatarReadError);
+    } finally {
+      event.target.value = "";
+    }
   };
 
   const handleDeleteAccount = async () => {
@@ -260,7 +401,7 @@ export function SettingsPage() {
     } catch (error) {
       showToast({
         variant: "error",
-        message: error instanceof Error ? error.message : "Unable to delete account.",
+        message: error instanceof Error ? error.message : t.deleteAccountError,
       });
     } finally {
       setIsDeletingAccount(false);
@@ -272,17 +413,17 @@ export function SettingsPage() {
     setPasswordSuccessMessage("");
 
     if (!passwordForm.currentPassword || !passwordForm.newPassword) {
-      setPasswordErrorMessage("Current password and new password are required.");
+      setPasswordErrorMessage(t.passwordRequired);
       return;
     }
 
     if (passwordForm.newPassword.length < 6) {
-      setPasswordErrorMessage("Password must be at least 6 characters.");
+      setPasswordErrorMessage(t.passwordMinLength);
       return;
     }
 
     if (passwordForm.newPassword !== passwordForm.confirmNewPassword) {
-      setPasswordErrorMessage("Passwords do not match.");
+      setPasswordErrorMessage(t.passwordsDoNotMatch);
       return;
     }
 
@@ -302,7 +443,7 @@ export function SettingsPage() {
       });
     } catch (error) {
       setPasswordErrorMessage(
-        error instanceof Error ? error.message : "Unable to update password.",
+        error instanceof Error ? error.message : t.updatePasswordError,
       );
     } finally {
       setIsSavingPassword(false);
@@ -330,7 +471,7 @@ export function SettingsPage() {
       setNotificationErrorMessage(
         error instanceof Error
           ? error.message
-          : "Unable to save notification preferences.",
+          : t.saveNotificationsError,
       );
     } finally {
       setIsSavingNotifications(false);
@@ -356,8 +497,7 @@ export function SettingsPage() {
         message: response.message,
       });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unable to update billing plan.";
+      const message = error instanceof Error ? error.message : t.updateBillingError;
 
       setBillingErrorMessage(message);
       showToast({
@@ -366,6 +506,132 @@ export function SettingsPage() {
       });
     } finally {
       setIsUpdatingBilling(false);
+    }
+  };
+
+  const handlePaymentMethodFieldChange = (
+    field: keyof typeof DEFAULT_PAYMENT_METHOD_FORM,
+    value: string,
+  ) => {
+    setPaymentMethodForm((currentForm) => ({
+      ...currentForm,
+      [field]: value,
+    }));
+  };
+
+  const handleStartPaymentMethodEdit = () => {
+    setPaymentMethodErrorMessage("");
+    setIsEditingPaymentMethod(true);
+  };
+
+  const handleCancelPaymentMethodEdit = () => {
+    setPaymentMethodErrorMessage("");
+    setIsEditingPaymentMethod(false);
+    setPaymentMethodForm((currentForm) => ({
+      billingEmail: paymentMethod?.billingEmail ?? currentForm.billingEmail,
+      cardNumber: "",
+      cardholderName: paymentMethod?.cardholderName ?? "",
+      cvc: "",
+      expiryMonth: paymentMethod?.expiryMonth?.toString() ?? "",
+      expiryYear: paymentMethod?.expiryYear?.toString() ?? "",
+    }));
+  };
+
+  const handleSavePaymentMethod = async () => {
+    setPaymentMethodErrorMessage("");
+
+    if (
+      !paymentMethodForm.cardholderName.trim() ||
+      !paymentMethodForm.cardNumber.trim() ||
+      !paymentMethodForm.expiryMonth.trim() ||
+      !paymentMethodForm.expiryYear.trim() ||
+      !paymentMethodForm.cvc.trim()
+    ) {
+      setPaymentMethodErrorMessage(
+        t.paymentMethodRequiredFields,
+      );
+      return;
+    }
+
+    try {
+      setIsSavingPaymentMethod(true);
+
+      const response = await updateCurrentUserPaymentMethod({
+        billingEmail: paymentMethodForm.billingEmail.trim() || undefined,
+        cardNumber: paymentMethodForm.cardNumber,
+        cardholderName: paymentMethodForm.cardholderName.trim(),
+        cvc: paymentMethodForm.cvc,
+        expiryMonth: Number(paymentMethodForm.expiryMonth),
+        expiryYear: Number(paymentMethodForm.expiryYear),
+      });
+
+      const nextPaymentMethod = response.paymentMethod ?? null;
+
+      setPaymentMethod(nextPaymentMethod);
+      setIsEditingPaymentMethod(false);
+      setPaymentMethodForm({
+        billingEmail: nextPaymentMethod?.billingEmail ?? email,
+        cardNumber: "",
+        cardholderName: nextPaymentMethod?.cardholderName ?? "",
+        cvc: "",
+        expiryMonth: nextPaymentMethod?.expiryMonth?.toString() ?? "",
+        expiryYear: nextPaymentMethod?.expiryYear?.toString() ?? "",
+      });
+      showToast({
+        variant: "success",
+        message: response.message,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t.savePaymentMethodError;
+
+      setPaymentMethodErrorMessage(message);
+      showToast({
+        variant: "error",
+        message,
+      });
+    } finally {
+      setIsSavingPaymentMethod(false);
+    }
+  };
+
+  const handleRemovePaymentMethod = async () => {
+    const confirmed = await confirm({
+      title: t.removePaymentMethodTitle,
+      message: t.removePaymentMethodMessage,
+      cancelLabel: t.cancel,
+      confirmLabel: t.remove,
+      variant: "danger",
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setIsRemovingPaymentMethod(true);
+      const response = await deleteCurrentUserPaymentMethod();
+
+      setPaymentMethod(null);
+      setIsEditingPaymentMethod(true);
+      setPaymentMethodForm({
+        ...DEFAULT_PAYMENT_METHOD_FORM,
+        billingEmail: email,
+      });
+      showToast({
+        variant: "success",
+        message: response.message,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : t.removePaymentMethodError;
+
+      setPaymentMethodErrorMessage(message);
+      showToast({
+        variant: "error",
+        message,
+      });
+    } finally {
+      setIsRemovingPaymentMethod(false);
     }
   };
 
@@ -391,6 +657,11 @@ export function SettingsPage() {
     showAppearanceSavedState();
   };
 
+  const handleLanguageChange = (nextLanguage: "en" | "vi") => {
+    setLang(nextLanguage);
+    showAppearanceSavedState();
+  };
+
   const initials = avatarUrl.trim()
     ? ""
     : getUserInitials({
@@ -410,14 +681,28 @@ export function SettingsPage() {
   const isProPlan = currentBillingPlan === "pro";
   const billingPlanLabel = isProPlan ? t.pro : t.free;
   const billingPlanDescription = isProPlan
-    ? "Your Pro plan is active."
+    ? t.billingProDesc
     : t.onFreePlan;
-  const billingActionLabel = isProPlan ? "Pro Active" : t.upgradePro;
+  const billingActionLabel = isProPlan ? t.proActive : t.upgradePro;
   const formatUsageValue = (used: number, limit: number | null) =>
     limit === null ? `${used} / ${t.unlimited}` : `${used} / ${limit}`;
   const receiptScanValue = billingSummary.usage.receiptScanIncluded
-    ? "Included"
+    ? t.included
     : t.notIncluded;
+  const paymentMethodBrandLabelMap: Record<NonNullable<CurrentUserPaymentMethod["brand"]>, string> =
+    {
+      amex: "American Express",
+      card: "Card",
+      diners: "Diners Club",
+      discover: "Discover",
+      jcb: "JCB",
+      mastercard: "Mastercard",
+      unionpay: "UnionPay",
+      visa: "Visa",
+    };
+  const paymentMethodBrandLabel = paymentMethod
+    ? paymentMethodBrandLabelMap[paymentMethod.brand] ?? "Card"
+    : "Card";
 
   return (
     <div className="lg:pl-60 min-h-screen bg-[#F6FBF8]">
@@ -478,7 +763,7 @@ export function SettingsPage() {
                     {avatarUrl.trim() ? (
                       <img
                         src={avatarUrl}
-                        alt="User avatar"
+                        alt={t.userAvatarAlt}
                         className="rounded-2xl object-cover"
                         style={{ width: "4.5rem", height: "4.5rem" }}
                       />
@@ -495,9 +780,22 @@ export function SettingsPage() {
                         {initials}
                       </div>
                     )}
-                    <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-[#16A34A] rounded-xl flex items-center justify-center shadow-sm">
+                    <button
+                      type="button"
+                      aria-label={t.uploadPhoto}
+                      onClick={handleAvatarUploadClick}
+                      className="absolute -bottom-1 -right-1 w-7 h-7 bg-[#16A34A] rounded-xl flex items-center justify-center shadow-sm transition-colors hover:bg-[#15803d]"
+                    >
                       <Camera className="w-3.5 h-3.5 text-white" />
-                    </div>
+                    </button>
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      data-testid="avatar-upload-input"
+                      onChange={(event) => void handleAvatarFileChange(event)}
+                      className="hidden"
+                    />
                   </div>
                   <div>
                     <p
@@ -511,15 +809,37 @@ export function SettingsPage() {
                     <p className="text-[#9CA3AF] text-xs mt-0.5">
                       {email || "-"}
                     </p>
-                    {avatarUrl.trim() && (
+                    <div className="flex flex-wrap items-center gap-3 mt-2">
                       <button
-                        onClick={() => setAvatarUrl("")}
-                        className="text-xs text-[#EF4444] mt-1.5 hover:underline flex items-center gap-1"
-                        style={{ fontWeight: 500 }}
+                        type="button"
+                        onClick={handleAvatarUploadClick}
+                        className="text-xs text-[#16A34A] hover:underline"
+                        style={{ fontWeight: 600 }}
                       >
-                        <Trash2 className="w-3 h-3" />
-                        {t.removePhoto}
+                        {t.uploadPhoto}
                       </button>
+                      {avatarUrl.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAvatarUrl("");
+                            setAvatarUrlInput("");
+                          }}
+                          className="text-xs text-[#EF4444] hover:underline flex items-center gap-1"
+                          style={{ fontWeight: 500 }}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          {t.removePhoto}
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[#9CA3AF] text-xs mt-1.5">
+                      {t.avatarUploadHint}
+                    </p>
+                    {avatarUrl.trim() && isDataUrl(avatarUrl) && (
+                      <p className="text-[#16A34A] text-xs mt-1">
+                        {t.avatarUploadedState}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -532,7 +852,7 @@ export function SettingsPage() {
 
                 {isLoadingProfile && (
                   <div className="rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 text-sm text-[#166534] mb-5">
-                    Loading your profile...
+                    {t.loadingProfile}
                   </div>
                 )}
 
@@ -606,13 +926,16 @@ export function SettingsPage() {
                     className="block text-sm text-[#374151] mb-1.5"
                     style={{ fontWeight: 600 }}
                   >
-                    Avatar URL
+                    {t.avatarUrlLabel}
                   </label>
                   <input
                     type="url"
                     placeholder="https://example.com/avatar.png"
-                    value={avatarUrl}
-                    onChange={(event) => setAvatarUrl(event.target.value)}
+                    value={avatarUrlInput}
+                    onChange={(event) => {
+                      setAvatarUrlInput(event.target.value);
+                      setAvatarUrl(event.target.value);
+                    }}
                     className="w-full bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-4 py-3 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent"
                   />
                 </div>
@@ -648,7 +971,7 @@ export function SettingsPage() {
                       {t.saved}
                     </>
                   ) : isSavingProfile ? (
-                    "Saving..."
+                    t.saving
                   ) : (
                     t.saveChanges
                   )}
@@ -676,7 +999,7 @@ export function SettingsPage() {
                 )}
                 {isLoadingNotifications && (
                   <div className="rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 text-sm text-[#166534] mb-5">
-                    Loading your notification preferences...
+                    {t.loadingNotifications}
                   </div>
                 )}
                 <div>
@@ -749,7 +1072,7 @@ export function SettingsPage() {
                   className="mt-5 bg-[#16A34A] text-white px-6 py-2.5 rounded-xl text-sm hover:bg-[#15803d] transition-colors shadow-sm disabled:cursor-not-allowed disabled:opacity-70"
                   style={{ fontWeight: 600 }}
                 >
-                  {isSavingNotifications ? "Saving..." : t.saveChanges}
+                  {isSavingNotifications ? t.saving : t.saveChanges}
                 </button>
               </div>
             )}
@@ -839,8 +1162,8 @@ export function SettingsPage() {
                       disabled={isSavingPassword}
                       className="bg-[#16A34A] text-white px-6 py-2.5 rounded-xl text-sm hover:bg-[#15803d] transition-colors"
                       style={{ fontWeight: 600 }}
-                    >
-                      {isSavingPassword ? "Saving..." : t.updatePassword}
+                >
+                      {isSavingPassword ? t.saving : t.updatePassword}
                     </button>
                   </div>
                 </div>
@@ -879,7 +1202,7 @@ export function SettingsPage() {
                   )}
                   {isLoadingBilling && (
                     <div className="rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 text-sm text-[#166534] mb-5">
-                      Loading your billing summary...
+                      {t.loadingBilling}
                     </div>
                   )}
                   <div className="flex items-start justify-between mb-5">
@@ -939,7 +1262,7 @@ export function SettingsPage() {
                     className="bg-[#16A34A] text-white px-6 py-2.5 rounded-xl text-sm hover:bg-[#15803d] transition-colors shadow-sm"
                     style={{ fontWeight: 600 }}
                   >
-                    {isUpdatingBilling ? "Updating..." : billingActionLabel}
+                    {isUpdatingBilling ? t.updatingPlan : billingActionLabel}
                   </button>
                 </div>
                 <div className="bg-white rounded-2xl border border-[#E5E7EB] p-6">
@@ -949,26 +1272,255 @@ export function SettingsPage() {
                   >
                     {t.paymentMethod}
                   </h2>
-                  <div className="flex flex-col items-center justify-center py-8 text-center">
-                    <div className="w-12 h-12 bg-[#F0FAF5] rounded-2xl flex items-center justify-center mx-auto mb-3">
-                      <CreditCard className="w-6 h-6 text-[#7EDDBA]" />
+                  {paymentMethodErrorMessage && (
+                    <div className="rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C] mb-5">
+                      {paymentMethodErrorMessage}
                     </div>
-                    <p
-                      className="text-[#374151] text-sm mb-1"
-                      style={{ fontWeight: 600 }}
-                    >
-                      {t.noPaymentMethod}
-                    </p>
-                    <p className="text-[#9CA3AF] text-xs mb-4">
-                      {t.noPaymentDesc}
-                    </p>
-                    <button
-                      className="text-sm text-[#16A34A] hover:underline"
-                      style={{ fontWeight: 600 }}
-                    >
-                      {t.addPaymentMethod}
-                    </button>
-                  </div>
+                  )}
+                  {isLoadingPaymentMethod ? (
+                    <div className="rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 text-sm text-[#166534]">
+                      {t.loadingPaymentMethod}
+                    </div>
+                  ) : paymentMethod && !isEditingPaymentMethod ? (
+                    <div className="space-y-5">
+                      <div className="rounded-2xl bg-[#F9FAFB] border border-[#E5E7EB] px-5 py-5">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p
+                              className="text-[#111827] text-base"
+                              style={{ fontWeight: 700 }}
+                            >
+                              {paymentMethodBrandLabel} {t.endingIn} {paymentMethod.last4}
+                            </p>
+                            <p className="text-sm text-[#6B7280] mt-1">
+                              {t.expires}{" "}
+                              {paymentMethod.expiryMonth.toString().padStart(2, "0")}/
+                              {paymentMethod.expiryYear}
+                            </p>
+                          </div>
+                          <span
+                            className="rounded-full bg-[#F0FAF5] px-3 py-1.5 text-xs text-[#166534]"
+                            style={{ fontWeight: 700 }}
+                          >
+                            {t.saved}
+                          </span>
+                        </div>
+                        <div className="grid sm:grid-cols-2 gap-4 mt-5 text-sm">
+                          <div>
+                            <p className="text-[#9CA3AF] text-xs">{t.cardholder}</p>
+                            <p className="text-[#111827] mt-0.5" style={{ fontWeight: 600 }}>
+                              {paymentMethod.cardholderName}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[#9CA3AF] text-xs">{t.billingEmailLabel}</p>
+                            <p className="text-[#111827] mt-0.5" style={{ fontWeight: 600 }}>
+                              {paymentMethod.billingEmail}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          onClick={handleStartPaymentMethodEdit}
+                          className="bg-[#16A34A] text-white px-5 py-2.5 rounded-xl text-sm hover:bg-[#15803d] transition-colors shadow-sm"
+                          style={{ fontWeight: 600 }}
+                        >
+                          {t.updatePaymentMethod}
+                        </button>
+                        <button
+                          onClick={() => void handleRemovePaymentMethod()}
+                          disabled={isRemovingPaymentMethod}
+                          className="border border-[#FCA5A5] text-[#B91C1C] px-5 py-2.5 rounded-xl text-sm hover:bg-[#FEF2F2] transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                          style={{ fontWeight: 600 }}
+                        >
+                          {isRemovingPaymentMethod ? t.removing : t.removePaymentMethod}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-5">
+                      {!isEditingPaymentMethod && !paymentMethod && (
+                        <div className="flex flex-col items-center justify-center py-6 text-center">
+                          <div className="w-12 h-12 bg-[#F0FAF5] rounded-2xl flex items-center justify-center mx-auto mb-3">
+                            <CreditCard className="w-6 h-6 text-[#7EDDBA]" />
+                          </div>
+                          <p
+                            className="text-[#374151] text-sm mb-1"
+                            style={{ fontWeight: 600 }}
+                          >
+                            {t.noPaymentMethod}
+                          </p>
+                          <p className="text-[#9CA3AF] text-xs mb-4">
+                            {t.noPaymentDesc}
+                          </p>
+                          <button
+                            onClick={handleStartPaymentMethodEdit}
+                            className="text-sm text-[#16A34A] hover:underline"
+                            style={{ fontWeight: 600 }}
+                          >
+                            {t.addPaymentMethod}
+                          </button>
+                        </div>
+                      )}
+
+                      {isEditingPaymentMethod && (
+                        <div className="space-y-4">
+                          <div className="grid sm:grid-cols-2 gap-4">
+                            <div>
+                              <label
+                                className="block text-sm text-[#374151] mb-1.5"
+                                style={{ fontWeight: 600 }}
+                              >
+                                {t.cardholderName}
+                              </label>
+                              <input
+                                type="text"
+                                value={paymentMethodForm.cardholderName}
+                                onChange={(event) =>
+                                  handlePaymentMethodFieldChange(
+                                    "cardholderName",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder={t.cardholderNamePlaceholder}
+                                className="w-full bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-4 py-3 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent"
+                              />
+                            </div>
+                            <div>
+                              <label
+                                className="block text-sm text-[#374151] mb-1.5"
+                                style={{ fontWeight: 600 }}
+                              >
+                                {t.billingEmailLabel}
+                              </label>
+                              <input
+                                type="email"
+                                value={paymentMethodForm.billingEmail}
+                                onChange={(event) =>
+                                  handlePaymentMethodFieldChange(
+                                    "billingEmail",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder={t.emailPlaceholder}
+                                className="w-full bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-4 py-3 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label
+                              className="block text-sm text-[#374151] mb-1.5"
+                              style={{ fontWeight: 600 }}
+                            >
+                              {t.cardNumber}
+                            </label>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={paymentMethodForm.cardNumber}
+                              onChange={(event) =>
+                                handlePaymentMethodFieldChange(
+                                  "cardNumber",
+                                  event.target.value,
+                                )
+                              }
+                              placeholder="4242 4242 4242 4242"
+                              className="w-full bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-4 py-3 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent"
+                            />
+                          </div>
+                          <div className="grid grid-cols-3 gap-4">
+                            <div>
+                              <label
+                                className="block text-sm text-[#374151] mb-1.5"
+                                style={{ fontWeight: 600 }}
+                              >
+                                {t.expiryMonth}
+                              </label>
+                              <input
+                                type="number"
+                                min="1"
+                                max="12"
+                                value={paymentMethodForm.expiryMonth}
+                                onChange={(event) =>
+                                  handlePaymentMethodFieldChange(
+                                    "expiryMonth",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="12"
+                                className="w-full bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-4 py-3 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent"
+                              />
+                            </div>
+                            <div>
+                              <label
+                                className="block text-sm text-[#374151] mb-1.5"
+                                style={{ fontWeight: 600 }}
+                              >
+                                {t.expiryYear}
+                              </label>
+                              <input
+                                type="number"
+                                min="2026"
+                                value={paymentMethodForm.expiryYear}
+                                onChange={(event) =>
+                                  handlePaymentMethodFieldChange(
+                                    "expiryYear",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="2030"
+                                className="w-full bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-4 py-3 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent"
+                              />
+                            </div>
+                            <div>
+                              <label
+                                className="block text-sm text-[#374151] mb-1.5"
+                                style={{ fontWeight: 600 }}
+                              >
+                                CVC
+                              </label>
+                              <input
+                                type="password"
+                                inputMode="numeric"
+                                value={paymentMethodForm.cvc}
+                                onChange={(event) =>
+                                  handlePaymentMethodFieldChange(
+                                    "cvc",
+                                    event.target.value,
+                                  )
+                                }
+                                placeholder="123"
+                                className="w-full bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-4 py-3 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-3">
+                            <button
+                              onClick={() => void handleSavePaymentMethod()}
+                              disabled={isSavingPaymentMethod}
+                              className="bg-[#16A34A] text-white px-5 py-2.5 rounded-xl text-sm hover:bg-[#15803d] transition-colors shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+                              style={{ fontWeight: 600 }}
+                            >
+                              {isSavingPaymentMethod
+                                ? t.saving
+                                : paymentMethod
+                                  ? t.saveUpdatedMethod
+                                  : t.savePaymentMethodLabel}
+                            </button>
+                            <button
+                              onClick={handleCancelPaymentMethodEdit}
+                              disabled={isSavingPaymentMethod}
+                              className="border border-[#E5E7EB] text-[#374151] px-5 py-2.5 rounded-xl text-sm hover:bg-[#F9FAFB] transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                              style={{ fontWeight: 600 }}
+                            >
+                              {paymentMethod ? t.cancel : t.close}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -986,6 +1538,29 @@ export function SettingsPage() {
                     {t.saved}
                   </div>
                 )}
+                <div className="mb-6">
+                  <p
+                    className="text-sm text-[#374151] mb-3"
+                    style={{ fontWeight: 600 }}
+                  >
+                    {t.language}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {[
+                      { label: t.english, value: "en" as const },
+                      { label: t.vietnamese, value: "vi" as const },
+                    ].map(({ label, value }) => (
+                      <button
+                        key={value}
+                        onClick={() => handleLanguageChange(value)}
+                        className={`px-4 py-2 rounded-xl border text-sm transition-all ${lang === value ? "bg-[#F0FAF5] border-[#7EDDBA] text-[#16A34A]" : "border-[#E5E7EB] text-[#6B7280] hover:border-[#7EDDBA]"}`}
+                        style={{ fontWeight: 500 }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="mb-6">
                   <p
                     className="text-sm text-[#374151] mb-3"
