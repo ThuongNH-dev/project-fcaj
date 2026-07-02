@@ -1,11 +1,13 @@
 import { deleteJson, getJson, patchJson } from "../../../shared/api/client";
 import type {
   CurrentUserBillingResponse,
+  CurrentUserPaymentMethodResponse,
   ChangeCurrentUserPasswordPayload,
   CurrentUserResponse,
   DeleteCurrentUserResponse,
   NotificationPreferencesResponse,
   UpdateCurrentUserBillingPayload,
+  UpdateCurrentUserPaymentMethodPayload,
   UpdateNotificationPreferencesPayload,
   UpdateCurrentUserPayload,
 } from "../models/users.types";
@@ -54,6 +56,23 @@ export function updateCurrentUserBilling(
     "/api/users/me/billing",
     payload,
   );
+}
+
+export function getCurrentUserPaymentMethod() {
+  return getJson<CurrentUserPaymentMethodResponse>("/api/users/me/payment-method");
+}
+
+export function updateCurrentUserPaymentMethod(
+  payload: UpdateCurrentUserPaymentMethodPayload,
+) {
+  return patchJson<
+    UpdateCurrentUserPaymentMethodPayload,
+    CurrentUserPaymentMethodResponse
+  >("/api/users/me/payment-method", payload);
+}
+
+export function deleteCurrentUserPaymentMethod() {
+  return deleteJson<CurrentUserPaymentMethodResponse>("/api/users/me/payment-method");
 }
 
 export function deleteCurrentUser() {
