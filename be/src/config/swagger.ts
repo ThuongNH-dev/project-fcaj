@@ -598,6 +598,112 @@ swaggerSpec.paths = {
       },
     },
   },
+  "/api/users/me/payment-method": {
+    get: {
+      summary: "Get the current logged-in user's saved payment method",
+      tags: ["Users"],
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: "Payment method fetched successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+    patch: {
+      summary: "Save or update the current logged-in user's payment method",
+      tags: ["Users"],
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: [
+                "cardholderName",
+                "cardNumber",
+                "expiryMonth",
+                "expiryYear",
+                "cvc",
+              ],
+              properties: {
+                cardholderName: {
+                  type: "string",
+                  example: "Thuong Nguyen",
+                },
+                cardNumber: {
+                  type: "string",
+                  example: "4242 4242 4242 4242",
+                },
+                expiryMonth: {
+                  type: "integer",
+                  example: 12,
+                },
+                expiryYear: {
+                  type: "integer",
+                  example: 2030,
+                },
+                cvc: {
+                  type: "string",
+                  example: "123",
+                },
+                billingEmail: {
+                  type: "string",
+                  format: "email",
+                  example: "thuong@example.com",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Payment method saved successfully",
+        },
+        400: {
+          description: "Missing or invalid payment method payload",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+    delete: {
+      summary: "Remove the current logged-in user's saved payment method",
+      tags: ["Users"],
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: "Payment method removed successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
   "/api/groups": {
     get: {
       summary: "Get groups for the current logged-in user",

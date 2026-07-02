@@ -1,6 +1,15 @@
 export type UserRole = "admin" | "user";
 export type SupportedCurrency = "USD" | "VND";
 export type BillingPlan = "free" | "pro";
+export type PaymentCardBrand =
+  | "visa"
+  | "mastercard"
+  | "amex"
+  | "discover"
+  | "jcb"
+  | "diners"
+  | "unionpay"
+  | "card";
 
 export interface UserBillingProfile {
   plan: BillingPlan;
@@ -19,6 +28,16 @@ export interface UserBillingUsageSummary {
 export interface CurrentUserBillingSummary {
   profile: UserBillingProfile;
   usage: UserBillingUsageSummary;
+}
+
+export interface CurrentUserPaymentMethod {
+  brand: PaymentCardBrand;
+  last4: string;
+  expiryMonth: number;
+  expiryYear: number;
+  cardholderName: string;
+  billingEmail: string;
+  updatedAt: string;
 }
 
 export interface NotificationPreferences {
@@ -105,4 +124,13 @@ export interface UpdateNotificationPreferencesInput {
 
 export interface UpdateCurrentUserBillingInput {
   plan: BillingPlan;
+}
+
+export interface UpdateCurrentUserPaymentMethodInput {
+  cardholderName: string;
+  cardNumber: string;
+  expiryMonth: number;
+  expiryYear: number;
+  cvc: string;
+  billingEmail?: string;
 }
