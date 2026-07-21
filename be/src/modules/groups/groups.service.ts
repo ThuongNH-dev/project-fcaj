@@ -107,7 +107,7 @@ async function toPublicGroupWithMembers(group: GroupDocument): Promise<PublicGro
   const memberIds = group.members
     .map((member) => member.userId)
     .filter((memberId) => MongoObjectId.isValid(memberId));
-  const usersById = new Map<string, { name: string; email: string }>();
+  const usersById = new Map<string, { name: string; email: string; avatarUrl: string }>();
 
   if (memberIds.length > 0) {
     const memberUsers = await users
@@ -125,6 +125,7 @@ async function toPublicGroupWithMembers(group: GroupDocument): Promise<PublicGro
           {
             name: `${user.firstName} ${user.lastName}`.trim(),
             email: user.email,
+            avatarUrl: user.avatarUrl ?? "",
           },
         );
       }
@@ -135,6 +136,7 @@ async function toPublicGroupWithMembers(group: GroupDocument): Promise<PublicGro
     id: member.userId,
     name: usersById.get(member.userId)?.name ?? "Unknown user",
     email: usersById.get(member.userId)?.email ?? "",
+    avatarUrl: usersById.get(member.userId)?.avatarUrl ?? "",
     role: member.role,
   }));
   const [currency, expenseCount] = await Promise.all([
