@@ -40,14 +40,7 @@ export interface CurrentUserPaymentMethod {
   updatedAt: string;
 }
 
-export interface NotificationPreferences {
-  expenseAdded: boolean;
-  paymentReceived: boolean;
-  settlementReminder: boolean;
-  weeklyDigest: boolean;
-  groupInvites: boolean;
-  marketingEmails: boolean;
-}
+
 
 export interface RegisterUserInput {
   firstName: string;
@@ -113,14 +106,7 @@ export interface ChangeCurrentUserPasswordInput {
   newPassword: string;
 }
 
-export interface UpdateNotificationPreferencesInput {
-  expenseAdded?: boolean;
-  paymentReceived?: boolean;
-  settlementReminder?: boolean;
-  weeklyDigest?: boolean;
-  groupInvites?: boolean;
-  marketingEmails?: boolean;
-}
+
 
 export interface UpdateCurrentUserBillingInput {
   plan: BillingPlan;
