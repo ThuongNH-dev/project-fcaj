@@ -452,10 +452,10 @@ swaggerSpec.paths = {
       },
     },
   },
-  "/api/users/me/notifications": {
+  "/api/notifications/preferences": {
     get: {
       summary: "Get the current logged-in user's notification preferences",
-      tags: ["Users"],
+      tags: ["Notifications"],
       security: [{ bearerAuth: [] }],
       responses: {
         200: {
@@ -474,7 +474,7 @@ swaggerSpec.paths = {
     },
     patch: {
       summary: "Update the current logged-in user's notification preferences",
-      tags: ["Users"],
+      tags: ["Notifications"],
       security: [{ bearerAuth: [] }],
       requestBody: {
         required: true,

@@ -6,12 +6,10 @@ import {
   deleteCurrentUserPaymentMethodHandler,
   getCurrentUserBillingHandler,
   getCurrentUserHandler,
-  getCurrentUserNotificationPreferencesHandler,
   getCurrentUserPaymentMethodHandler,
   updateCurrentUserHandler,
   updateCurrentUserBillingHandler,
   updateCurrentUserPaymentMethodHandler,
-  updateCurrentUserNotificationPreferencesHandler,
 } from "./users.controller.js";
 
 const usersRouter = Router();
@@ -33,15 +31,4 @@ usersRouter.delete(
   deleteCurrentUserPaymentMethodHandler,
 );
 usersRouter.patch("/me/password", authMiddleware, changeCurrentUserPasswordHandler);
-usersRouter.get(
-  "/me/notifications",
-  authMiddleware,
-  getCurrentUserNotificationPreferencesHandler,
-);
-usersRouter.patch(
-  "/me/notifications",
-  authMiddleware,
-  updateCurrentUserNotificationPreferencesHandler,
-);
-
 export default usersRouter;
