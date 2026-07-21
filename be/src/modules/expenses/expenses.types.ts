@@ -33,6 +33,20 @@ export interface CreateExpenseInput {
   receiptId?: string | null;
 }
 
+export interface UpdateExpenseInput {
+  expenseId: string;
+  userId: string;
+  paidByUserId: string;
+  title: string;
+  description?: string;
+  expenseDate?: string;
+  category: string;
+  amount: number;
+  splitMode?: string;
+  participants: ExpenseParticipantShare[];
+  receiptId?: string | null;
+}
+
 export interface SettleExpenseInput {
   expenseId: string;
   userId: string;

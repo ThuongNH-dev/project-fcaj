@@ -10,8 +10,10 @@ export interface Group {
   name: string;
   icon: string;
   color: string;
+  currency: "USD" | "VND";
   createdBy: string;
   members: GroupMember[];
+  expenseCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -26,6 +28,7 @@ export interface CreateGroupPayload {
   name: string;
   icon: string;
   color: string;
+  currency: "USD" | "VND";
   members?: string[];
 }
 
@@ -33,6 +36,7 @@ export interface UpdateGroupPayload {
   name: string;
   icon: string;
   color: string;
+  currency: "USD" | "VND";
 }
 
 export interface AddGroupMemberPayload {

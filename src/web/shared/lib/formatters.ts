@@ -1,9 +1,19 @@
+export type Currency = "VND" | "USD";
+
+export function formatCurrency(amount: number, currency: Currency): string;
+export function formatCurrency(amount: number, currency: string): string;
 export function formatCurrency(amount: number, currency: string) {
-  return new Intl.NumberFormat("en-US", {
+  const normalizedCurrency = (currency?.toUpperCase() === "VND" ? "VND" : "USD") as Currency;
+  const isVnd = normalizedCurrency === "VND";
+
+  return new Intl.NumberFormat(isVnd ? "vi-VN" : "en-US", {
     style: "currency",
-    currency: currency || "USD",
-    minimumFractionDigits: 2,
-  }).format(amount);
+    currency: normalizedCurrency,
+    minimumFractionDigits: isVnd ? 0 : 2,
+    maximumFractionDigits: isVnd ? 0 : 2,
+  })
+    .format(amount)
+    .replace(/\u00A0/g, " ");
 }
 
 export function formatDateTime(dateValue: string) {

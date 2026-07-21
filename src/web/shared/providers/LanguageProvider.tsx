@@ -110,6 +110,15 @@ export const translations = {
     editGroup: "Edit Group", editGroupDesc: "Update your group details",
     deleteGroup: "Delete Group", deleteGroupConfirm: "Delete group",
     readyToUpdate: "Ready to update",
+    currencyLabel: "Currency",
+    currencyDiffersFromDefault:
+      "This differs from your default currency ({defaultCurrency}).",
+    currencyChangeConfirmTitle: "Change currency?",
+    currencyChangeConfirmMessage:
+      "This differs from your default currency ({defaultCurrency}). Are you sure you want to use {currency} for this group?",
+    currencyChangeConfirmAction: "Yes, use it",
+    currencyLockedAfterExpense: "Currency cannot be changed after this group has expenses.",
+    currencyWillApplyToExpenses: "All expenses in this group will use the selected currency.",
     deleting: "Deleting...", updating: "Updating...",
     groupName: "Group name", groupNamePlaceholder: "e.g. Bali Trip 2026",
     groupIcon: "Group icon", color: "Color",
@@ -359,6 +368,16 @@ export const translations = {
     editGroup: "Sửa nhóm", editGroupDesc: "Cập nhật thông tin nhóm",
     deleteGroup: "Xóa nhóm", deleteGroupConfirm: "Xóa nhóm",
     readyToUpdate: "Sẵn sàng cập nhật",
+    currencyLabel: "Tiền tệ",
+    currencyDiffersFromDefault:
+      "Loại tiền này khác với tiền tệ mặc định của bạn ({defaultCurrency}).",
+    currencyChangeConfirmTitle: "Đổi tiền tệ?",
+    currencyChangeConfirmMessage:
+      "Loại tiền này khác với tiền tệ mặc định của bạn ({defaultCurrency}). Bạn có chắc muốn dùng {currency} cho nhóm này không?",
+    currencyChangeConfirmAction: "Đúng, dùng loại này",
+    currencyLockedAfterExpense:
+      "Không thể đổi tiền tệ sau khi nhóm đã có expense.",
+    currencyWillApplyToExpenses: "Tất cả expense trong nhóm sẽ dùng đúng loại tiền này.",
     deleting: "Đang xóa...", updating: "Đang cập nhật...",
     groupName: "Tên nhóm", groupNamePlaceholder: "vd: Chuyến đi Bali 2026",
     groupIcon: "Biểu tượng nhóm", color: "Màu sắc",

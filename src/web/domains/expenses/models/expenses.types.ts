@@ -39,7 +39,18 @@ export interface CreateExpensePayload {
   description?: string;
   expenseDate?: string;
   category: string;
-  currency?: string;
+  amount: number;
+  splitMode?: string;
+  participants: ExpenseParticipantShare[];
+  receiptId?: string;
+}
+
+export interface UpdateExpensePayload {
+  paidByUserId: string;
+  title: string;
+  description?: string;
+  expenseDate?: string;
+  category: string;
   amount: number;
   splitMode?: string;
   participants: ExpenseParticipantShare[];
@@ -60,4 +71,9 @@ export interface ExpenseResponse {
   ok: boolean;
   message: string;
   expense?: Expense;
+}
+
+export interface DeleteExpenseResponse {
+  ok: boolean;
+  message: string;
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { X, Users, Plus, Trash2 } from "lucide-react";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
+import { useStoredUser } from "../../auth";
 import { createGroup, type Group, updateGroup } from "..";
 import { useFeedback } from "../../../shared/providers/FeedbackProvider";
 
@@ -32,12 +33,19 @@ export function GroupFormDialog({
   const [groupName, setGroupName] = useState("");
   const [selectedColor, setSelectedColor] = useState(colorOptions[0]);
   const [selectedIcon, setSelectedIcon] = useState(iconOptions[0]);
+  const [selectedCurrency, setSelectedCurrency] = useState<"USD" | "VND">("USD");
   const [emails, setEmails] = useState<string[]>([""]);
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { t } = useLanguage();
-  const { showToast } = useFeedback();
+  const { confirm, showToast } = useFeedback();
+  const currentUser = useStoredUser();
   const isEditing = Boolean(groupToEdit);
+  const defaultCurrency = currentUser?.defaultCurrency ?? "USD";
+  const formatCurrencyMessage = (value: string) =>
+    value
+      .replace("{defaultCurrency}", defaultCurrency)
+      .replace("{currency}", selectedCurrency);
 
   useEffect(() => {
     if (!isOpen) {
@@ -48,6 +56,7 @@ export function GroupFormDialog({
       setGroupName(groupToEdit.name);
       setSelectedColor(groupToEdit.color);
       setSelectedIcon(groupToEdit.icon);
+      setSelectedCurrency(groupToEdit.currency);
       setEmails([""]);
       setErrorMessage("");
       setIsSubmitting(false);
@@ -57,10 +66,11 @@ export function GroupFormDialog({
     setGroupName("");
     setSelectedColor(colorOptions[0]);
     setSelectedIcon(iconOptions[0]);
+    setSelectedCurrency(defaultCurrency);
     setEmails([""]);
     setErrorMessage("");
     setIsSubmitting(false);
-  }, [groupToEdit, isOpen]);
+  }, [defaultCurrency, groupToEdit, isOpen]);
 
   if (!isOpen) {
     return null;
@@ -78,9 +88,33 @@ export function GroupFormDialog({
     setGroupName("");
     setSelectedColor(colorOptions[0]);
     setSelectedIcon(iconOptions[0]);
+    setSelectedCurrency(defaultCurrency);
     setEmails([""]);
     setErrorMessage("");
     setIsSubmitting(false);
+  };
+
+  const handleCurrencySelect = async (currency: "USD" | "VND") => {
+    const isLocked = isEditing && (groupToEdit?.expenseCount ?? 0) > 0;
+
+    if (isLocked) {
+      return;
+    }
+
+    if (currency !== defaultCurrency) {
+      const confirmed = await confirm({
+        title: t.currencyChangeConfirmTitle,
+        message: formatCurrencyMessage(t.currencyChangeConfirmMessage),
+        confirmLabel: t.currencyChangeConfirmAction,
+        cancelLabel: "Cancel",
+      });
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setSelectedCurrency(currency);
   };
 
   const handleClose = () => {
@@ -104,6 +138,7 @@ export function GroupFormDialog({
           name: groupName.trim(),
           icon: selectedIcon,
           color: selectedColor,
+          currency: selectedCurrency,
         });
         showToast({
           variant: "success",
@@ -115,6 +150,7 @@ export function GroupFormDialog({
           name: groupName.trim(),
           icon: selectedIcon,
           color: selectedColor,
+          currency: selectedCurrency,
           members,
         });
         showToast({
@@ -195,6 +231,47 @@ export function GroupFormDialog({
             </div>
           </div>
 
+          <div>
+            <label className="block text-sm text-[#374151] mb-2" style={{ fontWeight: 600 }}>
+              {t.currencyLabel}
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {(["USD", "VND"] as const).map((currencyOption) => {
+                const isDisabled = isEditing && (groupToEdit?.expenseCount ?? 0) > 0;
+
+                return (
+                  <button
+                    key={currencyOption}
+                    type="button"
+                    onClick={() => void handleCurrencySelect(currencyOption)}
+                    disabled={isDisabled}
+                    className={`rounded-xl border px-4 py-3 text-sm transition-colors ${
+                      selectedCurrency === currencyOption
+                        ? "border-[#16A34A] bg-[#F0FAF5] text-[#166534]"
+                        : "border-[#E5E7EB] bg-[#F9FAFB] text-[#374151]"
+                    } ${isDisabled ? "cursor-not-allowed opacity-60" : "hover:border-[#7EDDBA]"}`}
+                    style={{ fontWeight: 600 }}
+                  >
+                    {currencyOption}
+                  </button>
+                );
+              })}
+            </div>
+            {isEditing && (groupToEdit?.expenseCount ?? 0) > 0 ? (
+              <p className="mt-2 text-xs text-[#9CA3AF]">
+                {t.currencyLockedAfterExpense}
+              </p>
+            ) : selectedCurrency !== defaultCurrency ? (
+              <p className="mt-2 text-xs text-[#9CA3AF]">
+                {formatCurrencyMessage(t.currencyDiffersFromDefault)}
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-[#9CA3AF]">
+                {t.currencyWillApplyToExpenses}
+              </p>
+            )}
+          </div>
+
           {groupName && (
             <div className="bg-[#F6FBF8] rounded-xl p-4 border border-[#E5E7EB] flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0" style={{ background: selectedColor }}>
@@ -202,7 +279,9 @@ export function GroupFormDialog({
               </div>
               <div>
                 <p className="text-sm text-[#111827]" style={{ fontWeight: 700 }}>{groupName}</p>
-                <p className="text-xs text-[#9CA3AF]">{isEditing ? t.readyToUpdate : t.justCreated}</p>
+                <p className="text-xs text-[#9CA3AF]">
+                  {selectedCurrency} • {isEditing ? t.readyToUpdate : t.justCreated}
+                </p>
               </div>
             </div>
           )}

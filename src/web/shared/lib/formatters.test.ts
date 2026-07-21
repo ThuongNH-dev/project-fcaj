@@ -7,8 +7,10 @@ import {
 } from "./formatters";
 
 describe("shared formatters", () => {
-  it("formats currency with a fallback currency", () => {
+  it("formats currency for VND and USD", () => {
+    expect(formatCurrency(500000, "VND")).toBe("500.000 ₫");
     expect(formatCurrency(12.5, "USD")).toBe("$12.50");
+    expect(formatCurrency(50.5, "USD")).toBe("$50.50");
     expect(formatCurrency(7, "")).toBe("$7.00");
   });
 

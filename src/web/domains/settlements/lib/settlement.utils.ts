@@ -47,7 +47,7 @@ export function formatCurrencyBreakdown(
 
       return formattedAmount;
     })
-    .join(" | ");
+    .join("\n");
 }
 
 export function getCurrentUserShare(
