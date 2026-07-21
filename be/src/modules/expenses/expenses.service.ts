@@ -2,8 +2,7 @@ import { ObjectId as MongoObjectId } from "mongodb";
 import type { Collection, IndexDescription, ObjectId } from "mongodb";
 import { connectToMongo } from "../../db/mongo.js";
 import {
-  canSettleGroupExpense,
-  getGroupPermission,
+  canSettleExpense,
 } from "../../policies/group.policy.js";
 import type { SupportedCurrency } from "../auth/auth.types.js";
 import { getGroupByIdForUser, getGroupIdsByUserId } from "../groups/groups.service.js";
@@ -384,27 +383,23 @@ export async function markExpenseAsSettled(
     return null;
   }
 
-  if (expenseDocument.settlementStatus === "settled") {
-    throw new Error("Expense is already settled.");
-  }
-
   const group = await getGroupByIdForUser(expenseDocument.groupId, input.userId);
 
   if (!group) {
     return null;
   }
 
-  const groupPermission = getGroupPermission(group.members, input.userId);
-
   if (
-    !canSettleGroupExpense({
+    !canSettleExpense({
       currentUserId: input.userId,
-      groupPermission,
       paidByUserId: expenseDocument.paidByUserId,
-      userRole: input.userRole,
     })
   ) {
     throw new Error("You are not allowed to settle this expense.");
+  }
+
+  if (expenseDocument.settlementStatus === "settled") {
+    throw new Error("Expense is already settled.");
   }
 
   const updatedAt = new Date();

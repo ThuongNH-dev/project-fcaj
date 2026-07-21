@@ -1,6 +1,3 @@
-import type { UserRole } from "../modules/auth/auth.types.js";
-import { isAdminUserRole } from "./auth.policy.js";
-
 export type GroupPermission = "non-member" | "member" | "owner";
 
 export interface GroupPolicyMemberLike {
@@ -45,18 +42,9 @@ export function canManageGroupMembers(permission: GroupPermission) {
   return permission === "owner";
 }
 
-export function canSettleGroupExpense(input: {
+export function canSettleExpense(input: {
   currentUserId: string;
-  groupPermission: GroupPermission;
   paidByUserId: string;
-  userRole: UserRole;
 }) {
-  if (isAdminUserRole(input.userRole)) {
-    return true;
-  }
-
-  return (
-    input.currentUserId === input.paidByUserId ||
-    input.groupPermission === "owner"
-  );
+  return input.currentUserId === input.paidByUserId;
 }
