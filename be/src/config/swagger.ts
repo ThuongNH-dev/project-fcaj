@@ -1092,6 +1092,65 @@ swaggerSpec.paths = {
       },
     },
   },
+  "/api/expenses/{expenseId}/settlement": {
+    patch: {
+      summary: "Mark an expense as settled",
+      description:
+        "Only the user identified by paidByUserId (the creditor) can mark the expense as settled. Group owners, admins, and debtors are not permitted regardless of their role.",
+      tags: ["Expenses"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "expenseId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+          description: "MongoDB ObjectId of the expense to settle",
+        },
+      ],
+      requestBody: {
+        required: false,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              properties: {
+                settlementNote: {
+                  type: "string",
+                  nullable: true,
+                  example: "Paid via bank transfer",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Expense marked as settled successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        403: {
+          description:
+            "Forbidden – the current user is not the paidByUserId (creditor) of this expense. Group owners, admins, and debtors receive this error.",
+        },
+        404: {
+          description: "User or expense not found",
+        },
+        409: {
+          description:
+            "Conflict – expense is already settled, or a concurrent update prevented the change",
+        },
+        503: {
+          description: "MongoDB or backend service failed",
+        },
+      },
+    },
+  },
   "/api/receipts/presign": {
     post: {
       summary: "Create a presigned S3 upload URL for a receipt file",

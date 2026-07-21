@@ -334,7 +334,6 @@ export async function settleExpenseHandler(req: Request, res: Response) {
     const expense = await markExpenseAsSettled({
       expenseId,
       userId: currentUser.id,
-      userRole: currentUser.role,
       settlementNote,
     });
 
