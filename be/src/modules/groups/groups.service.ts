@@ -17,6 +17,20 @@ import type {
   UpdateGroupInput,
 } from "./groups.types.js";
 
+export const FREE_PLAN_GROUP_MEMBER_LIMIT = 5;
+
+export const FREE_PLAN_GROUP_MEMBER_LIMIT_ERROR =
+  "Free plan groups can have up to 5 members, including the owner.";
+
+async function getOwnerBillingPlan(ownerId: string): Promise<string> {
+  const users = await getUsersCollection();
+  const owner = await users.findOne(
+    { _id: new MongoObjectId(ownerId) },
+    { projection: { billingProfile: 1 } },
+  );
+  return owner?.billingProfile?.plan === "pro" ? "pro" : "free";
+}
+
 interface GroupDocument {
   _id?: ObjectId;
   name: string;
@@ -142,6 +156,12 @@ export async function createGroup(input: CreateGroupInput): Promise<PublicGroup>
       role: "member" as const,
     })),
   ];
+
+  const ownerPlan = await getOwnerBillingPlan(input.createdBy);
+
+  if (ownerPlan === "free" && members.length > FREE_PLAN_GROUP_MEMBER_LIMIT) {
+    throw new Error(FREE_PLAN_GROUP_MEMBER_LIMIT_ERROR);
+  }
 
   const result = await groups.insertOne({
     name: normalizedName,
@@ -343,6 +363,12 @@ export async function addGroupMember(input: AddGroupMemberInput): Promise<Public
     throw new Error("This user is already a member of the group.");
   }
 
+  const ownerPlan = await getOwnerBillingPlan(group.createdBy);
+
+  if (ownerPlan === "free" && group.members.length >= FREE_PLAN_GROUP_MEMBER_LIMIT) {
+    throw new Error(FREE_PLAN_GROUP_MEMBER_LIMIT_ERROR);
+  }
+
   const updatedMembers: GroupMember[] = [
     ...group.members,
     {
@@ -351,8 +377,15 @@ export async function addGroupMember(input: AddGroupMemberInput): Promise<Public
     },
   ];
 
-  await groups.updateOne(
-    { _id: groupObjectId },
+  const filter: any = { _id: groupObjectId };
+  if (ownerPlan === "free") {
+    // Atomic check: ensure the array length in the DB is strictly less than FREE_PLAN_GROUP_MEMBER_LIMIT
+    // For limit = 5, members.4 must not exist (max length 4).
+    filter[`members.${FREE_PLAN_GROUP_MEMBER_LIMIT - 1}`] = { $exists: false };
+  }
+
+  const updateResult = await groups.updateOne(
+    filter,
     {
       $set: {
         members: updatedMembers,
@@ -360,6 +393,14 @@ export async function addGroupMember(input: AddGroupMemberInput): Promise<Public
       },
     },
   );
+
+  if (updateResult.matchedCount === 0) {
+    const groupStillExists = await groups.findOne({ _id: groupObjectId });
+    if (!groupStillExists) {
+      throw new Error("Group not found.");
+    }
+    throw new Error(FREE_PLAN_GROUP_MEMBER_LIMIT_ERROR);
+  }
 
   return toPublicGroupWithMembers({
     ...group,
