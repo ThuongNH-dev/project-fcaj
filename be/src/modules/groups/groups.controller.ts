@@ -5,6 +5,7 @@ import {
   addGroupMember,
   createGroup,
   deleteGroup,
+  FREE_PLAN_GROUP_MEMBER_LIMIT_ERROR,
   getGroupByIdForUser,
   getGroupsByUserId,
   removeGroupMember,
@@ -135,12 +136,25 @@ export async function createGroupHandler(req: Request, res: Response) {
     const message =
       error instanceof Error ? error.message : "Unable to create group.";
 
+<<<<<<< Updated upstream
     const statusCode =
       message === "One or more member emails do not exist." ||
       message === "Group currency is required." ||
       message === "Group currency must be either USD or VND."
         ? 400
         : 503;
+=======
+    let statusCode = 503;
+    if (
+      message === "One or more member emails do not exist." ||
+      message === "Group currency is required." ||
+      message === "Group currency must be either USD or VND."
+    ) {
+      statusCode = 400;
+    } else if (message === FREE_PLAN_GROUP_MEMBER_LIMIT_ERROR) {
+      statusCode = 403;
+    }
+>>>>>>> Stashed changes
 
     return res.status(statusCode).json({
       ok: false,
@@ -390,7 +404,9 @@ export async function addGroupMemberHandler(req: Request, res: Response) {
     const message =
       error instanceof Error ? error.message : "Unable to add member.";
 
-    return res.status(400).json({
+    const statusCode = message === FREE_PLAN_GROUP_MEMBER_LIMIT_ERROR ? 403 : 400;
+
+    return res.status(statusCode).json({
       ok: false,
       message,
     });
