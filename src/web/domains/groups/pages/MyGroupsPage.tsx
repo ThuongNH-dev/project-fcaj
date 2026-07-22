@@ -3,11 +3,6 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router";
 import { ChevronRight, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "../../../shared/ui/avatar";
 import { useStoredUser } from "../../auth";
 import { useFeedback } from "../../../shared/providers/FeedbackProvider";
 import {
@@ -151,17 +146,19 @@ export function MyGroupsPage() {
     return formatLocalDate(value);
   };
 
+  const avatarPalette = ["#7EDDBA", "#93C5FD", "#FCA5A5", "#FCD34D", "#C4B5FD"];
+
   const buildMemberBadges = (group: Group) => {
     return group.members.slice(0, 4).map((member, index) => ({
       key: `${group.id}-${member.name}-${index}`,
-      avatarUrl: member.avatarUrl?.trim() ?? "",
-      initials:
+      label:
         member.name
           .split(" ")
           .map((part) => part.charAt(0))
           .join("")
           .slice(0, 2)
           .toUpperCase() || (member.role === "owner" ? "OW" : "MB"),
+      color: avatarPalette[index % avatarPalette.length],
     }));
   };
 
@@ -370,25 +367,18 @@ export function MyGroupsPage() {
                     <div className="flex items-center gap-2 mb-4">
                       <div className="flex -space-x-2">
                         {buildMemberBadges(group).map((member, index) => (
-                          <Avatar
+                          <div
                             key={member.key}
-                            className="w-7 h-7 rounded-full border-2 border-white bg-[#D1FAE5] text-[#065f46]"
-                            style={{ zIndex: 4 - index }}
+                            className="w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[10px]"
+                            style={{
+                              background: member.color,
+                              color: "#065f46",
+                              fontWeight: 700,
+                              zIndex: 4 - index,
+                            }}
                           >
-                            {member.avatarUrl ? (
-                              <AvatarImage
-                                src={member.avatarUrl}
-                                alt={member.initials}
-                                className="object-cover"
-                              />
-                            ) : null}
-                            <AvatarFallback
-                              className="rounded-full bg-[#D1FAE5] text-[#065f46] text-[10px]"
-                              style={{ fontWeight: 700 }}
-                            >
-                              {member.initials}
-                            </AvatarFallback>
-                          </Avatar>
+                            {member.label[0]}
+                          </div>
                         ))}
                       </div>
                       <span className="text-xs text-[#9CA3AF]">

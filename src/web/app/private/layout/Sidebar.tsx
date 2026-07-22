@@ -16,11 +16,6 @@ import {
 } from "lucide-react";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
 import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "../../../shared/ui/avatar";
-import {
   clearStoredUser,
   getUserInitials,
   useStoredUser,
@@ -52,7 +47,6 @@ export function Sidebar({ currentPath }: SidebarProps) {
   const displayName = user ? `${user.firstName} ${user.lastName}` : "Guest";
   const displayEmail = user?.email ?? "No active session";
   const userInitials = user ? getUserInitials(user) : "GU";
-  const userAvatarUrl = user?.avatarUrl?.trim() ?? "";
 
   const handleSignOut = () => {
     clearStoredUser();
@@ -155,17 +149,12 @@ export function Sidebar({ currentPath }: SidebarProps) {
             collapsed ? "justify-center" : ""
           }`}
         >
-          <Avatar className="w-8 h-8 rounded-full bg-[#7EDDBA] text-[#065f46] flex-shrink-0">
-            {userAvatarUrl ? (
-              <AvatarImage src={userAvatarUrl} alt={displayName} className="object-cover" />
-            ) : null}
-            <AvatarFallback
-              className="rounded-full bg-[#7EDDBA] text-[#065f46]"
-              style={{ fontWeight: 700, fontSize: "0.8125rem" }}
-            >
-              {userInitials}
-            </AvatarFallback>
-          </Avatar>
+          <div
+            className="w-8 h-8 rounded-full bg-[#7EDDBA] flex items-center justify-center text-[#065f46] flex-shrink-0"
+            style={{ fontWeight: 700, fontSize: "0.8125rem" }}
+          >
+            {userInitials}
+          </div>
           {!collapsed ? (
             <div className="flex-1 min-w-0">
               <p

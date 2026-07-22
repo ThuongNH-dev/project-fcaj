@@ -13,11 +13,6 @@ import {
 } from "lucide-react";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
 import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "../../../shared/ui/avatar";
-import {
   formatCurrency,
   formatLocalDate,
   toTitleCase,
@@ -52,7 +47,6 @@ export function DashboardPage() {
 
   const userName = user ? `${user.firstName} ${user.lastName}` : "Guest";
   const userInitials = user ? getUserInitials(user) : "GU";
-  const userAvatarUrl = user?.avatarUrl?.trim() ?? "";
   const welcomeMessage = user
     ? `Signed in as ${userName} (${user.role})`
     : t.welcomeMsg;
@@ -231,17 +225,13 @@ export function DashboardPage() {
             <button className="relative w-9 h-9 bg-white rounded-xl border border-[#E5E7EB] flex items-center justify-center hover:bg-[#F0FAF5] transition-colors">
               <Bell className="w-4 h-4 text-[#6B7280]" />
             </button>
-            <Avatar className="w-9 h-9 rounded-xl bg-[#7EDDBA] text-[#065f46]" title={userName}>
-              {userAvatarUrl ? (
-                <AvatarImage src={userAvatarUrl} alt={userName} className="object-cover" />
-              ) : null}
-              <AvatarFallback
-                className="rounded-xl bg-[#7EDDBA] text-[#065f46] text-xs"
-                style={{ fontWeight: 700 }}
-              >
-                {userInitials}
-              </AvatarFallback>
-            </Avatar>
+            <div
+              className="w-9 h-9 rounded-xl bg-[#7EDDBA] flex items-center justify-center text-[#065f46] text-xs"
+              style={{ fontWeight: 700 }}
+              title={userName}
+            >
+              {userInitials}
+            </div>
           </div>
         </div>
 
