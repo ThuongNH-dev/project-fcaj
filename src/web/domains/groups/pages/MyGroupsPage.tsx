@@ -12,14 +12,18 @@ import {
 import { getExpenses, type Expense } from "../../expenses";
 import { GroupFormDialog } from "../components/GroupFormDialog";
 import { canManageGroup, deleteGroup, getGroups, type Group } from "..";
+import { formatCurrencyBreakdown } from "../../settlements/lib/settlement.utils";
 
 type GroupStatus = "Active" | "Pending" | "Settled";
 
 interface GroupExpenseSummary {
-  totalExpenses: number;
-  yourBalance: number;
-  currency: string;
+  totalExpenses: Map<string, number>;
+  yourBalance: Map<string, number>;
   status: GroupStatus;
+}
+
+function addCurrencyAmount(totals: Map<string, number>, currency: string, amount: number) {
+  totals.set(currency, Number(((totals.get(currency) ?? 0) + amount).toFixed(2)));
 }
 
 export function MyGroupsPage() {
@@ -74,9 +78,8 @@ export function MyGroupsPage() {
 
     groups.forEach((group) => {
       summaries.set(group.id, {
-        totalExpenses: 0,
-        yourBalance: 0,
-        currency: currentUser?.defaultCurrency ?? "USD",
+        totalExpenses: new Map<string, number>(),
+        yourBalance: new Map<string, number>(),
         status: "Active",
       });
     });
@@ -88,17 +91,14 @@ export function MyGroupsPage() {
         return;
       }
 
-      summary.totalExpenses += expense.amount;
-      summary.currency = expense.currency || summary.currency;
+      addCurrencyAmount(summary.totalExpenses, expense.currency, expense.amount);
 
       const yourShare =
         expense.participants.find((participant) => participant.userId === currentUser?.id)
           ?.shareAmount ?? 0;
       const yourPaidAmount = expense.paidByUserId === currentUser?.id ? expense.amount : 0;
 
-      summary.yourBalance = Number(
-        (summary.yourBalance + yourPaidAmount - yourShare).toFixed(2),
-      );
+      addCurrencyAmount(summary.yourBalance, expense.currency, yourPaidAmount - yourShare);
 
       if (expense.settlementStatus === "pending") {
         summary.status = "Pending";
@@ -278,27 +278,20 @@ export function MyGroupsPage() {
           <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-5">
             {filteredGroups.map((group) => {
               const summary = groupExpenseSummaries.get(group.id) ?? {
-                totalExpenses: 0,
-                yourBalance: 0,
-                currency: currentUser?.defaultCurrency ?? "USD",
+                totalExpenses: new Map<string, number>(),
+                yourBalance: new Map<string, number>(),
                 status: "Active" as GroupStatus,
               };
-              const formattedTotalExpenses = formatCurrency(
-                summary.totalExpenses,
-                summary.currency,
-              );
-              const formattedBalanceAmount = formatCurrency(
-                Math.abs(summary.yourBalance),
-                summary.currency,
-              );
-              const yourBalance =
-                summary.yourBalance > 0
-                  ? `+${formattedBalanceAmount}`
-                  : summary.yourBalance < 0
-                    ? `-${formattedBalanceAmount}`
-                    : formattedBalanceAmount;
-              const isPositive = summary.yourBalance > 0;
-              const isZero = summary.yourBalance === 0;
+              const formattedTotalExpenses = formatCurrencyBreakdown(summary.totalExpenses, {
+                emptyCurrency: group.currency,
+              });
+              const yourBalance = formatCurrencyBreakdown(summary.yourBalance, {
+                signed: true,
+                emptyCurrency: group.currency,
+              });
+              const balanceValues = Array.from(summary.yourBalance.values());
+              const isPositive = balanceValues.some((amount) => amount > 0);
+              const isZero = balanceValues.every((amount) => amount === 0);
               const status = summary.status;
               const userCanManageGroup = canManageGroup(currentUser, group);
 
@@ -398,7 +391,7 @@ export function MyGroupsPage() {
                         <p className="text-xs text-[#9CA3AF] mb-0.5">
                           {t.totalExpensesLabel}
                         </p>
-                        <p className="text-[#111827]" style={{ fontWeight: 700 }}>
+                        <p className="text-[#111827] whitespace-pre-line" style={{ fontWeight: 700 }}>
                           {formattedTotalExpenses}
                         </p>
                       </div>
@@ -410,10 +403,10 @@ export function MyGroupsPage() {
                           style={{ fontWeight: 700 }}
                           className={
                             isZero
-                              ? "text-[#6B7280]"
+                              ? "text-[#6B7280] whitespace-pre-line"
                               : isPositive
-                                ? "text-[#16A34A]"
-                                : "text-[#EF4444]"
+                                ? "text-[#16A34A] whitespace-pre-line"
+                                : "text-[#EF4444] whitespace-pre-line"
                           }
                         >
                           {yourBalance}

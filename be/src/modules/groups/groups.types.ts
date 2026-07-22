@@ -1,7 +1,10 @@
+import type { SupportedCurrency } from "../auth/auth.types.js";
+
 export interface CreateGroupInput {
   name: string;
   icon: string;
   color: string;
+  currency: SupportedCurrency;
   createdBy: string;
   members?: string[];
 }
@@ -12,6 +15,7 @@ export interface UpdateGroupInput {
   name: string;
   icon: string;
   color: string;
+  currency: SupportedCurrency;
 }
 
 export interface GroupMember {
@@ -31,8 +35,10 @@ export interface PublicGroup {
   name: string;
   icon: string;
   color: string;
+  currency: SupportedCurrency;
   createdBy: string;
   members: PublicGroupMember[];
+  expenseCount: number;
   createdAt: string;
   updatedAt: string;
 }

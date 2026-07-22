@@ -14,6 +14,7 @@ import type {
   ExpenseSettlementStatus,
   ExpenseSplitMode,
   PublicExpense,
+  UpdateExpenseInput,
   SettleExpenseInput,
 } from "./expenses.types.js";
 
@@ -320,6 +321,99 @@ export async function createExpense(
     createdAt,
     updatedAt,
   });
+}
+
+export async function updateExpense(
+  input: UpdateExpenseInput,
+): Promise<PublicExpense | null> {
+  if (!MongoObjectId.isValid(input.expenseId)) {
+    return null;
+  }
+
+  const expenses = await getExpensesCollection();
+  const existingExpense = await expenses.findOne({
+    _id: new MongoObjectId(input.expenseId),
+  });
+
+  if (!existingExpense?._id) {
+    return null;
+  }
+
+  if (existingExpense.createdBy !== input.userId) {
+    throw new Error("You are not allowed to update this expense.");
+  }
+
+  const normalizedTitle = normalizeExpenseTitle(input.title);
+  const normalizedDescription = normalizeExpenseDescription(input.description);
+  const normalizedExpenseDate = normalizeExpenseDate(input.expenseDate);
+  const normalizedCategory = normalizeExpenseCategory(input.category);
+  const normalizedCurrency = normalizeExpenseCurrency(existingExpense.currency);
+  const normalizedAmount = normalizeExpenseAmount(input.amount);
+  const normalizedSplitMode = normalizeExpenseSplitMode(input.splitMode);
+  const normalizedParticipants = normalizeExpenseParticipants(input.participants);
+  const normalizedReceiptId = normalizeExpenseOptionalReferenceId(input.receiptId);
+  const participantTotalAmount = getParticipantTotalAmount(normalizedParticipants);
+
+  if (participantTotalAmount !== normalizedAmount) {
+    throw new Error("Expense participant share amounts must equal the total amount.");
+  }
+
+  const updatedAt = new Date();
+  const result = await expenses.findOneAndUpdate(
+    {
+      _id: new MongoObjectId(input.expenseId),
+      createdBy: input.userId,
+    },
+    {
+      $set: {
+        paidByUserId: input.paidByUserId,
+        title: normalizedTitle,
+        description: normalizedDescription,
+        expenseDate: normalizedExpenseDate,
+        category: normalizedCategory,
+        currency: normalizedCurrency,
+        amount: normalizedAmount,
+        splitMode: normalizedSplitMode,
+        participants: normalizedParticipants,
+        receiptId: normalizedReceiptId,
+        updatedAt,
+      },
+    },
+    {
+      returnDocument: "after",
+    },
+  );
+
+  return result ? toPublicExpense(result) : null;
+}
+
+export async function deleteExpense(
+  expenseId: string,
+  userId: string,
+): Promise<boolean> {
+  if (!MongoObjectId.isValid(expenseId)) {
+    return false;
+  }
+
+  const expenses = await getExpensesCollection();
+  const expenseDocument = await expenses.findOne({
+    _id: new MongoObjectId(expenseId),
+  });
+
+  if (!expenseDocument?._id) {
+    return false;
+  }
+
+  if (expenseDocument.createdBy !== userId) {
+    throw new Error("You are not allowed to delete this expense.");
+  }
+
+  const result = await expenses.deleteOne({
+    _id: new MongoObjectId(expenseId),
+    createdBy: userId,
+  });
+
+  return result.deletedCount > 0;
 }
 
 export async function getExpensesByUserId(userId: string): Promise<PublicExpense[]> {

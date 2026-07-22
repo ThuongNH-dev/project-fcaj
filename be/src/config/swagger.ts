@@ -1092,6 +1092,179 @@ swaggerSpec.paths = {
       },
     },
   },
+  "/api/expenses/{expenseId}": {
+    patch: {
+      summary: "Update an expense created by the current logged-in user",
+      tags: ["Expenses"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "expenseId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+          description: "MongoDB ObjectId of the expense to update",
+        },
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: [
+                "paidByUserId",
+                "title",
+                "category",
+                "amount",
+                "splitMode",
+                "participants",
+              ],
+              properties: {
+                paidByUserId: {
+                  type: "string",
+                  example: "66b8f2e2b1a23c0012345678",
+                },
+                title: {
+                  type: "string",
+                  example: "Team dinner",
+                },
+                description: {
+                  type: "string",
+                  example: "Dinner after project kickoff.",
+                },
+                expenseDate: {
+                  type: "string",
+                  format: "date-time",
+                  example: "2026-07-21T00:00:00.000Z",
+                },
+                category: {
+                  type: "string",
+                  example: "food",
+                },
+                amount: {
+                  type: "number",
+                  example: 120,
+                },
+                splitMode: {
+                  type: "string",
+                  enum: ["equal", "custom"],
+                  example: "equal",
+                },
+                participants: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    required: ["userId", "shareAmount"],
+                    properties: {
+                      userId: {
+                        type: "string",
+                        example: "66b8f2e2b1a23c0012345679",
+                      },
+                      shareAmount: {
+                        type: "number",
+                        example: 60,
+                      },
+                    },
+                  },
+                },
+                receiptId: {
+                  type: "string",
+                  nullable: true,
+                  example: "66b8f2e2b1a23c0012345680",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Expense updated successfully",
+        },
+        400: {
+          description: "Missing or invalid expense payload",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        403: {
+          description: "Only the expense creator can update it",
+        },
+        404: {
+          description: "User, group, receipt, or expense not found",
+        },
+        503: {
+          description: "MongoDB or backend service failed",
+        },
+      },
+    },
+    delete: {
+      summary: "Delete an expense created by the current logged-in user",
+      tags: ["Expenses"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "expenseId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+          description: "MongoDB ObjectId of the expense to delete",
+        },
+      ],
+      responses: {
+        200: {
+          description: "Expense deleted successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        403: {
+          description: "Only the expense creator can delete it",
+        },
+        404: {
+          description: "User or expense not found",
+        },
+        503: {
+          description: "MongoDB or backend service failed",
+        },
+      },
+    },
+    get: {
+      summary: "Get a single expense visible to the current logged-in user",
+      tags: ["Expenses"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "expenseId",
+          required: true,
+          schema: {
+            type: "string",
+          },
+          description: "MongoDB ObjectId of the expense",
+        },
+      ],
+      responses: {
+        200: {
+          description: "Expense fetched successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User or expense not found",
+        },
+        503: {
+          description: "MongoDB or backend service failed",
+        },
+      },
+    },
+  },
   "/api/expenses/{expenseId}/settlement": {
     patch: {
       summary: "Mark an expense as settled",

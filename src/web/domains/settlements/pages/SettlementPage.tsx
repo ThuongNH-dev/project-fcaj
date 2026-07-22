@@ -21,6 +21,14 @@ import {
   getYouOweByCurrency,
 } from "../lib/settlement.utils";
 
+function CurrencyBreakdownValue({ value }: { value: string }) {
+  return value.split("\n").map((line) => (
+    <span key={line} className="block">
+      {line}
+    </span>
+  ));
+}
+
 export function SettlementPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -228,10 +236,10 @@ export function SettlementPage() {
                 <Icon className="w-4 h-4 text-[#065f46]" />
               </div>
               <p
-                className="text-[#111827]"
+                className="text-[#111827] whitespace-pre-line"
                 style={{ fontSize: "1.5rem", fontWeight: 800 }}
               >
-                {value}
+                <CurrencyBreakdownValue value={value} />
               </p>
               <p className="text-[#6B7280] text-xs mt-0.5">{label}</p>
             </div>
@@ -408,8 +416,11 @@ export function SettlementPage() {
                   {t.netPosition}
                 </span>
               </div>
-              <p className="text-white mb-1" style={{ fontSize: "1.75rem", fontWeight: 800 }}>
-                {isLoading ? "--" : netPositionSummary}
+              <p
+                className="text-white mb-1 whitespace-pre-line"
+                style={{ fontSize: "1.75rem", fontWeight: 800 }}
+              >
+                {isLoading ? "--" : <CurrencyBreakdownValue value={netPositionSummary} />}
               </p>
               <p className="text-[#A7F3D0] text-xs">
                 {relevantExpenses.length > 0

@@ -35,6 +35,7 @@ import {
   formatShortDate,
   toTitleCase,
 } from "../../../shared/lib/formatters";
+import { formatCurrencyBreakdown } from "../../settlements/lib/settlement.utils";
 
 const catColors: Record<string, string> = {
   food: "bg-[#D1FAE5] text-[#065f46]",
@@ -50,6 +51,10 @@ const statusStyles: Record<string, string> = {
   settled: "bg-[#D1FAE5] text-[#065f46]",
   pending: "bg-[#FEF3C7] text-[#92400e]",
 };
+
+function addCurrencyAmount(totals: Map<string, number>, currency: string, amount: number) {
+  totals.set(currency, Number(((totals.get(currency) ?? 0) + amount).toFixed(2)));
+}
 
 export function GroupDetailPage() {
   const [activeCategory, setActiveCategory] = useState("All");
@@ -138,22 +143,28 @@ export function GroupDetailPage() {
 
   const memberCount = group?.members.length ?? 0;
   const canManageMembers = Boolean(group && canManageGroupMembers(currentUser, group));
-  const totalExpensesAmount = expenses.reduce(
-    (sum, expense) => sum + expense.amount,
-    0,
-  );
-  const yourShareAmount = expenses.reduce((sum, expense) => {
+  const groupCurrency = group?.currency ?? currentUser?.defaultCurrency ?? "USD";
+  const totalExpensesByCurrency = expenses.reduce((totals, expense) => {
+    addCurrencyAmount(totals, expense.currency, expense.amount);
+    return totals;
+  }, new Map<string, number>());
+  const yourShareByCurrency = expenses.reduce((totals, expense) => {
     const share =
       expense.participants.find((participant) => participant.userId === currentUser?.id)
         ?.shareAmount ?? 0;
-
-    return sum + share;
-  }, 0);
-  const youPaidAmount = expenses.reduce((sum, expense) => {
-    return expense.paidByUserId === currentUser?.id ? sum + expense.amount : sum;
-  }, 0);
-  const youAreOwedAmount = Number((youPaidAmount - yourShareAmount).toFixed(2));
-  const groupCurrency = expenses[0]?.currency ?? currentUser?.defaultCurrency ?? "USD";
+    addCurrencyAmount(totals, expense.currency, share);
+    return totals;
+  }, new Map<string, number>());
+  const youPaidByCurrency = expenses.reduce((totals, expense) => {
+    if (expense.paidByUserId === currentUser?.id) {
+      addCurrencyAmount(totals, expense.currency, expense.amount);
+    }
+    return totals;
+  }, new Map<string, number>());
+  const youAreOwedByCurrency = new Map<string, number>();
+  youPaidByCurrency.forEach((paidAmount, currency) => {
+    addCurrencyAmount(youAreOwedByCurrency, currency, paidAmount - (yourShareByCurrency.get(currency) ?? 0));
+  });
 
   async function handleAddExpense(expense: NewExpense) {
     if (!group || !groupId || !expense.paidByUserId || !expense.participantShares) {
@@ -326,28 +337,37 @@ export function GroupDetailPage() {
           {[
             {
               label: t.totalExpenses,
-              value: formatCurrency(totalExpensesAmount, groupCurrency),
+              value: formatCurrencyBreakdown(totalExpensesByCurrency, {
+                emptyCurrency: groupCurrency,
+              }),
               icon: DollarSign,
               bg: "bg-[#F0FAF5]",
               iconBg: "bg-[#7EDDBA]",
             },
             {
               label: t.yourShare,
-              value: formatCurrency(yourShareAmount, groupCurrency),
+              value: formatCurrencyBreakdown(yourShareByCurrency, {
+                emptyCurrency: groupCurrency,
+              }),
               icon: Users,
               bg: "bg-[#EFF6FF]",
               iconBg: "bg-[#93C5FD]",
             },
             {
               label: t.youPaid,
-              value: formatCurrency(youPaidAmount, groupCurrency),
+              value: formatCurrencyBreakdown(youPaidByCurrency, {
+                emptyCurrency: groupCurrency,
+              }),
               icon: TrendingUp,
               bg: "bg-[#FEFCE8]",
               iconBg: "bg-[#FCD34D]",
             },
             {
               label: t.youAreOwed,
-              value: formatCurrency(youAreOwedAmount, groupCurrency),
+              value: formatCurrencyBreakdown(youAreOwedByCurrency, {
+                signed: true,
+                emptyCurrency: groupCurrency,
+              }),
               icon: TrendingUp,
               bg: "bg-[#F0FDF4]",
               iconBg: "bg-[#4ADE80]",
@@ -360,7 +380,7 @@ export function GroupDetailPage() {
                 <Icon className="w-4 h-4 text-[#065f46]" />
               </div>
               <p
-                className="text-[#111827]"
+                className="text-[#111827] whitespace-pre-line"
                 style={{ fontWeight: 700, fontSize: "1.25rem" }}
               >
                 {value}

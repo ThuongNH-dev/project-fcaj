@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { X, Upload, DollarSign, Calendar, ChevronDown, Check } from "lucide-react";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
+import { formatCurrency } from "../../../shared/lib/formatters";
 import type { Group } from "../../groups";
 
 export interface NewExpense {
@@ -45,10 +46,13 @@ interface AddExpenseDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onAdd?: (expense: NewExpense) => Promise<void> | void;
+  onSubmit?: (expense: NewExpense) => Promise<void> | void;
   showGroupSelect?: boolean;
   availableGroups?: Group[];
   defaultGroupId?: string | null;
   currentUserId?: string | null;
+  initialExpense?: Partial<NewExpense> | null;
+  submitLabel?: string;
 }
 
 function formatIsoDateForInput(value: Date) {
@@ -76,10 +80,13 @@ export function AddExpenseDialog({
   isOpen,
   onClose,
   onAdd,
+  onSubmit,
   showGroupSelect = false,
   availableGroups = [],
   defaultGroupId = null,
   currentUserId = null,
+  initialExpense = null,
+  submitLabel,
 }: AddExpenseDialogProps) {
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
@@ -122,6 +129,12 @@ export function AddExpenseDialog({
     normalizedGroups[0] ??
     null;
   const memberOptions = activeGroup?.members ?? [];
+  const activeCurrency = availableGroups.find((group) => group.id === activeGroup?.id)?.currency ?? "VND";
+  const amountStep = activeCurrency.toUpperCase() === "VND" ? "1" : "0.01";
+  const amountPreview =
+    amount && !Number.isNaN(Number(amount))
+      ? formatCurrency(Number(amount), activeCurrency)
+      : "";
 
   const categoryOptions = [
     { key: "food", label: t.categories.food },
@@ -135,6 +148,21 @@ export function AddExpenseDialog({
 
   useEffect(() => {
     if (!isOpen) {
+      return;
+    }
+
+    if (initialExpense) {
+      setTitle(initialExpense.title ?? "");
+      setAmount(initialExpense.amount?.toString() ?? "");
+      setPaidBy(initialExpense.paidByUserId ?? "");
+      setCategory(initialExpense.categoryKey ?? "food");
+      setDate(initialExpense.date ?? formatIsoDateForInput(new Date()));
+      setSelectedMembers(initialExpense.participantShares?.map((share) => share.userId) ?? []);
+      setSplitType(initialExpense.splitMode ?? "equal");
+      setUploadedFile(initialExpense.receiptFile ?? null);
+      setSelectedGroup(initialExpense.groupId ?? "");
+      setError("");
+      setIsSubmitting(false);
       return;
     }
 
@@ -240,7 +268,7 @@ export function AddExpenseDialog({
     try {
       setIsSubmitting(true);
 
-      await onAdd?.({
+      const payload: NewExpense = {
         title: title.trim(),
         amount: Number(numericAmount.toFixed(2)),
         paidBy: paidByLabel,
@@ -254,7 +282,13 @@ export function AddExpenseDialog({
         groupId: activeGroup?.id,
         splitMode: splitType,
         receiptFile: uploadedFile,
-      });
+      };
+
+      if (onSubmit) {
+        await onSubmit(payload);
+      } else {
+        await onAdd?.(payload);
+      }
 
       setTitle("");
       setAmount("");
@@ -370,8 +404,9 @@ export function AddExpenseDialog({
                 <input
                   type="number"
                   min="0"
-                  step="0.01"
-                  placeholder="0.00"
+                  step={amountStep}
+                  inputMode="decimal"
+                  placeholder={activeCurrency.toUpperCase() === "VND" ? "0" : "0.00"}
                   value={amount}
                   onChange={(event) => {
                     setAmount(event.target.value);
@@ -380,6 +415,9 @@ export function AddExpenseDialog({
                   className="w-full bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl pl-9 pr-4 py-3 text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent"
                 />
               </div>
+              <p className="mt-1 text-xs text-[#9CA3AF]">
+                {amountPreview ? `Preview: ${amountPreview}` : `Currency: ${activeCurrency}`}
+              </p>
             </div>
             <div>
               <label
@@ -521,12 +559,13 @@ export function AddExpenseDialog({
                       <Check className="w-4 h-4 text-[#16A34A] flex-shrink-0" />
                     )}
                     {splitType === "custom" && selected && (
-                      <input
-                        type="number"
-                        placeholder="0.00"
-                        value={customShares[member.id] ?? ""}
-                        onClick={(event) => event.stopPropagation()}
-                        onChange={(event) =>
+                  <input
+                    type="number"
+                    step={amountStep}
+                    placeholder={activeCurrency.toUpperCase() === "VND" ? "0" : "0.00"}
+                    value={customShares[member.id] ?? ""}
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={(event) =>
                           setCustomShares((prev) => ({
                             ...prev,
                             [member.id]: event.target.value,
@@ -611,7 +650,7 @@ export function AddExpenseDialog({
             className="flex-1 py-3 rounded-xl bg-[#16A34A] text-white text-sm hover:bg-[#15803d] transition-colors shadow-sm disabled:cursor-not-allowed disabled:opacity-70"
             style={{ fontWeight: 600 }}
           >
-            {isSubmitting ? "Saving..." : t.saveExpense}
+            {isSubmitting ? "Saving..." : submitLabel ?? t.saveExpense}
           </button>
         </div>
       </div>

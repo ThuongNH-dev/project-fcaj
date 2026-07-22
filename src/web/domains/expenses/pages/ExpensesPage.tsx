@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Search, Receipt } from "lucide-react";
+import { Pencil, Plus, Search, Receipt, Trash2 } from "lucide-react";
 import {
   formatCurrency,
   formatShortDate,
@@ -12,7 +12,8 @@ import { getGroups, type Group } from "../../groups";
 import { uploadReceiptFile } from "../../receipts";
 import { useFeedback } from "../../../shared/providers/FeedbackProvider";
 import { AddExpenseDialog, type NewExpense } from "../components/AddExpenseDialog";
-import { createExpense, getExpenses, type Expense } from "..";
+import { createExpense, deleteExpense, getExpenses, updateExpense, type Expense } from "..";
+import { formatCurrencyBreakdown } from "../../settlements/lib/settlement.utils";
 
 const catColors: Record<string, string> = {
   food: "bg-[#D1FAE5] text-[#065f46]",
@@ -29,6 +30,18 @@ const statusStyles: Record<string, string> = {
   pending: "bg-[#FEF3C7] text-[#92400e]",
 };
 
+function addCurrencyAmount(totals: Map<string, number>, currency: string, amount: number) {
+  totals.set(currency, Number(((totals.get(currency) ?? 0) + amount).toFixed(2)));
+}
+
+function CurrencyBreakdownValue({ value }: { value: string }) {
+  return value.split("\n").map((line) => (
+    <span key={line} className="block">
+      {line}
+    </span>
+  ));
+}
+
 export function ExpensesPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
@@ -37,9 +50,12 @@ export function ExpensesPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [expenseToEdit, setExpenseToEdit] = useState<Expense | null>(null);
   const { t } = useLanguage();
-  const { showToast } = useFeedback();
+  const { confirm, showToast } = useFeedback();
   const currentUser = useStoredUser();
+  const preferredCurrency =
+    currentUser?.defaultCurrency ?? expenses[0]?.currency ?? "VND";
   const filters = [
     { key: "All", label: t.all },
     { key: "Pending", label: t.pending },
@@ -101,23 +117,25 @@ export function ExpensesPage() {
     return matchesSearch && matchesFilter;
   });
 
-  const totalSpent = filteredExpenses.reduce((sum, expense) => {
+  const totalSpentByCurrency = filteredExpenses.reduce((totals, expense) => {
     const currentUserShare =
       expense.participants.find((participant) => participant.userId === currentUser?.id)
         ?.shareAmount ?? 0;
 
-    return sum + currentUserShare;
-  }, 0);
+    addCurrencyAmount(totals, expense.currency, currentUserShare);
+    return totals;
+  }, new Map<string, number>());
 
-  const pendingTotal = filteredExpenses
+  const pendingTotalByCurrency = filteredExpenses
     .filter((expense) => expense.settlementStatus === "pending")
-    .reduce((sum, expense) => {
+    .reduce((totals, expense) => {
       const currentUserShare =
         expense.participants.find((participant) => participant.userId === currentUser?.id)
           ?.shareAmount ?? 0;
 
-      return sum + currentUserShare;
-    }, 0);
+      addCurrencyAmount(totals, expense.currency, currentUserShare);
+      return totals;
+    }, new Map<string, number>());
 
   const handleOpenAddExpense = () => {
     if (groups.length === 0) {
@@ -172,6 +190,69 @@ export function ExpensesPage() {
     });
   };
 
+  const handleUpdate = async (expense: NewExpense) => {
+    if (!expenseToEdit || !expense.paidByUserId || !expense.participantShares) {
+      throw new Error("Expense details are incomplete.");
+    }
+
+    const response = await updateExpense(expenseToEdit.id, {
+      paidByUserId: expense.paidByUserId,
+      title: expense.title,
+      description: expense.description,
+      expenseDate: expense.date,
+      category: expense.categoryKey ?? expense.category.toLowerCase(),
+      amount: expense.amount,
+      splitMode: expense.splitMode,
+      participants: expense.participantShares,
+    });
+
+    if (response.expense) {
+      setExpenses((prevExpenses) =>
+        prevExpenses.map((currentExpense) =>
+          currentExpense.id === response.expense?.id ? response.expense! : currentExpense,
+        ),
+      );
+    } else {
+      await loadExpenseData();
+    }
+
+    showToast({
+      variant: "success",
+      message: response.message,
+    });
+    setExpenseToEdit(null);
+  };
+
+  const handleDelete = async (expense: Expense) => {
+    const confirmed = await confirm({
+      title: "Delete expense",
+      message: `Delete "${expense.title}"? This cannot be undone.`,
+      cancelLabel: t.cancel,
+      confirmLabel: "Delete",
+      variant: "danger",
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const response = await deleteExpense(expense.id);
+      setExpenses((prevExpenses) =>
+        prevExpenses.filter((currentExpense) => currentExpense.id !== expense.id),
+      );
+      showToast({
+        variant: "success",
+        message: response.message,
+      });
+    } catch (error) {
+      showToast({
+        variant: "error",
+        message: error instanceof Error ? error.message : "Unable to delete expense.",
+      });
+    }
+  };
+
   return (
     <div className="lg:pl-60 min-h-screen bg-[#F6FBF8]">
       <div className="max-w-7xl mx-auto px-6 py-8 pt-16 lg:pt-8">
@@ -201,11 +282,15 @@ export function ExpensesPage() {
           {[
             {
               label: t.totalSpent,
-              value: formatCurrency(totalSpent, currentUser?.defaultCurrency ?? "USD"),
+              value: formatCurrencyBreakdown(totalSpentByCurrency, {
+                emptyCurrency: preferredCurrency,
+              }),
             },
             {
               label: t.pendingSettlement,
-              value: formatCurrency(pendingTotal, currentUser?.defaultCurrency ?? "USD"),
+              value: formatCurrencyBreakdown(pendingTotalByCurrency, {
+                emptyCurrency: preferredCurrency,
+              }),
             },
             { label: t.expensesThisMonth, value: `${expenses.length}` },
           ].map(({ label, value }) => (
@@ -214,7 +299,7 @@ export function ExpensesPage() {
                 className="text-[#111827]"
                 style={{ fontSize: "1.5rem", fontWeight: 800 }}
               >
-                {value}
+                <CurrencyBreakdownValue value={value} />
               </p>
               <p className="text-[#6B7280] text-xs mt-0.5">{label}</p>
             </div>
@@ -373,6 +458,30 @@ export function ExpensesPage() {
                           {toTitleCase(expense.settlementStatus)}
                         </span>
                       </td>
+                      <td className="px-5 py-3.5 text-right">
+                        {expense.createdBy === currentUser?.id && (
+                          <div className="inline-flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setExpenseToEdit(expense)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-xs text-[#374151] hover:bg-[#F9FAFB]"
+                              style={{ fontWeight: 600 }}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleDelete(expense)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-[#FECACA] bg-[#FEF2F2] px-2.5 py-1.5 text-xs text-[#B91C1C] hover:bg-[#FEE2E2]"
+                              style={{ fontWeight: 600 }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -390,6 +499,34 @@ export function ExpensesPage() {
           showGroupSelect={true}
           availableGroups={groups}
           currentUserId={currentUser?.id ?? null}
+        />,
+        document.body,
+      )}
+      {createPortal(
+        <AddExpenseDialog
+          isOpen={expenseToEdit !== null}
+          onClose={() => setExpenseToEdit(null)}
+          onSubmit={handleUpdate}
+          showGroupSelect={true}
+          availableGroups={groups}
+          currentUserId={currentUser?.id ?? null}
+          initialExpense={expenseToEdit ? {
+            title: expenseToEdit.title,
+            description: expenseToEdit.description,
+            amount: expenseToEdit.amount,
+            paidBy: expenseToEdit.paidByUserId,
+            paidByUserId: expenseToEdit.paidByUserId,
+            category: expenseToEdit.category,
+            categoryKey: expenseToEdit.category,
+            date: expenseToEdit.expenseDate.slice(0, 10),
+            splitWith: expenseToEdit.participants.map((participant) => participant.userId),
+            participantShares: expenseToEdit.participants,
+            group: groupsById.get(expenseToEdit.groupId)?.name,
+            groupId: expenseToEdit.groupId,
+            splitMode: expenseToEdit.splitMode as "equal" | "custom",
+            receiptFile: null,
+          } : null}
+          submitLabel="Save changes"
         />,
         document.body,
       )}

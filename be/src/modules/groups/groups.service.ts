@@ -7,6 +7,7 @@ import {
   getGroupPermission,
 } from "../../policies/group.policy.js";
 import { getUsersCollection } from "../auth/auth.service.js";
+import type { SupportedCurrency } from "../auth/auth.types.js";
 import type {
   AddGroupMemberInput,
   CreateGroupInput,
@@ -36,15 +37,27 @@ interface GroupDocument {
   name: string;
   icon: string;
   color: string;
+  currency?: SupportedCurrency;
   createdBy: string;
   members: GroupMember[];
   createdAt: Date;
   updatedAt: Date;
 }
 
+interface ExpenseGroupReferenceDocument {
+  _id?: ObjectId;
+  groupId: string;
+  currency?: SupportedCurrency;
+}
+
 async function getGroupsCollection(): Promise<Collection<GroupDocument>> {
   const db = await connectToMongo();
   return db.collection<GroupDocument>("groups");
+}
+
+async function getExpensesCollection(): Promise<Collection<ExpenseGroupReferenceDocument>> {
+  const db = await connectToMongo();
+  return db.collection<ExpenseGroupReferenceDocument>("expenses");
 }
 
 async function getGroupDocumentById(groupId: string): Promise<GroupDocument | null> {
@@ -60,6 +73,43 @@ async function getGroupDocumentById(groupId: string): Promise<GroupDocument | nu
 
 function toPublicGroup(group: GroupDocument): PublicGroup {
   throw new Error("Use toPublicGroupWithMembers instead.");
+}
+
+function normalizeGroupCurrency(currency?: string): SupportedCurrency {
+  const normalizedCurrency = currency?.trim().toUpperCase();
+
+  if (!normalizedCurrency) {
+    throw new Error("Group currency is required.");
+  }
+
+  if (normalizedCurrency !== "USD" && normalizedCurrency !== "VND") {
+    throw new Error("Group currency must be either USD or VND.");
+  }
+
+  return normalizedCurrency;
+}
+
+async function getGroupExpenseCount(groupId: string): Promise<number> {
+  const expenses = await getExpensesCollection();
+  return expenses.countDocuments({ groupId });
+}
+
+async function resolveGroupCurrency(group: GroupDocument): Promise<SupportedCurrency> {
+  if (group.currency) {
+    return group.currency;
+  }
+
+  if (!group._id) {
+    return "USD";
+  }
+
+  const expenses = await getExpensesCollection();
+  const existingExpense = await expenses.findOne(
+    { groupId: group._id.toString() },
+    { projection: { currency: 1 } },
+  );
+
+  return existingExpense?.currency ?? "USD";
 }
 
 async function toPublicGroupWithMembers(group: GroupDocument): Promise<PublicGroup> {
@@ -101,14 +151,20 @@ async function toPublicGroupWithMembers(group: GroupDocument): Promise<PublicGro
     email: usersById.get(member.userId)?.email ?? "",
     role: member.role,
   }));
+  const [currency, expenseCount] = await Promise.all([
+    resolveGroupCurrency(group),
+    getGroupExpenseCount(group._id.toString()),
+  ]);
 
   return {
     id: group._id.toString(),
     name: group.name,
     icon: group.icon,
     color: group.color,
+    currency,
     createdBy: group.createdBy,
     members: publicMembers,
+    expenseCount,
     createdAt: group.createdAt.toISOString(),
     updatedAt: group.updatedAt.toISOString(),
   };
@@ -120,6 +176,7 @@ export async function createGroup(input: CreateGroupInput): Promise<PublicGroup>
   const normalizedName = input.name.trim();
   const normalizedIcon = input.icon.trim();
   const normalizedColor = input.color.trim();
+  const normalizedCurrency = normalizeGroupCurrency(input.currency);
   const createdAt = new Date();
   const updatedAt = createdAt;
   const memberEmails = Array.from(
@@ -167,6 +224,7 @@ export async function createGroup(input: CreateGroupInput): Promise<PublicGroup>
     name: normalizedName,
     icon: normalizedIcon,
     color: normalizedColor,
+    currency: normalizedCurrency,
     createdBy: input.createdBy,
     members,
     createdAt,
@@ -178,6 +236,7 @@ export async function createGroup(input: CreateGroupInput): Promise<PublicGroup>
     name: normalizedName,
     icon: normalizedIcon,
     color: normalizedColor,
+    currency: normalizedCurrency,
     createdBy: input.createdBy,
     members,
     createdAt,
@@ -274,8 +333,14 @@ export async function updateGroup(input: UpdateGroupInput): Promise<PublicGroup 
   const normalizedName = input.name.trim();
   const normalizedIcon = input.icon.trim();
   const normalizedColor = input.color.trim();
+  const normalizedCurrency = normalizeGroupCurrency(input.currency);
   const updatedAt = new Date();
   const groupObjectId = new MongoObjectId(input.groupId);
+  const expenseCount = await getGroupExpenseCount(input.groupId);
+
+  if (groupDocument.currency && normalizedCurrency !== groupDocument.currency && expenseCount > 0) {
+    throw new Error("Group currency cannot be changed after expenses have been created.");
+  }
 
   const result = await groups.findOneAndUpdate(
     {
@@ -286,6 +351,7 @@ export async function updateGroup(input: UpdateGroupInput): Promise<PublicGroup 
         name: normalizedName,
         icon: normalizedIcon,
         color: normalizedColor,
+        currency: normalizedCurrency,
         updatedAt,
       },
     },

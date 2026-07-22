@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import type { SupportedCurrency } from "../auth/auth.types.js";
 import { getUserById } from "../auth/auth.service.js";
 import {
   addGroupMember,
@@ -59,10 +60,11 @@ export async function createGroupHandler(req: Request, res: Response) {
     });
   }
 
-  const { name, icon, color } = req.body as {
+  const { name, icon, color, currency } = req.body as {
     name?: string;
     icon?: string;
     color?: string;
+    currency?: string;
     members?: string[];
   };
 
@@ -84,6 +86,13 @@ export async function createGroupHandler(req: Request, res: Response) {
     return res.status(400).json({
       ok: false,
       message: "Group color is required.",
+    });
+  }
+
+  if (!currency?.trim()) {
+    return res.status(400).json({
+      ok: false,
+      message: "Group currency is required.",
     });
   }
 
@@ -113,6 +122,7 @@ export async function createGroupHandler(req: Request, res: Response) {
       name,
       icon,
       color,
+      currency: currency as SupportedCurrency,
       createdBy: currentUser.id,
       members: req.body.members,
     });
@@ -203,10 +213,11 @@ export async function updateGroupHandler(req: Request, res: Response) {
     });
   }
 
-  const { name, icon, color } = req.body as {
+  const { name, icon, color, currency } = req.body as {
     name?: string;
     icon?: string;
     color?: string;
+    currency?: string;
   };
 
   if (!name?.trim()) {
@@ -230,6 +241,13 @@ export async function updateGroupHandler(req: Request, res: Response) {
     });
   }
 
+  if (!currency?.trim()) {
+    return res.status(400).json({
+      ok: false,
+      message: "Group currency is required.",
+    });
+  }
+
   try {
     const currentUser = await getUserById(userId);
 
@@ -246,6 +264,7 @@ export async function updateGroupHandler(req: Request, res: Response) {
       name,
       icon,
       color,
+      currency: currency as SupportedCurrency,
     });
 
     if (!group) {
@@ -264,7 +283,14 @@ export async function updateGroupHandler(req: Request, res: Response) {
     const message =
       error instanceof Error ? error.message : "Unable to update group.";
 
-    return res.status(503).json({
+    const statusCode =
+      message === "Group currency is required." ||
+      message === "Group currency must be either USD or VND." ||
+      message === "Group currency cannot be changed after expenses have been created."
+        ? 400
+        : 503;
+
+    return res.status(statusCode).json({
       ok: false,
       message,
     });

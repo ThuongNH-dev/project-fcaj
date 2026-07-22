@@ -20,6 +20,19 @@ import {
 import { getUserInitials, useStoredUser } from "../../../domains/auth";
 import { getExpenses, type Expense } from "../../../domains/expenses";
 import { getGroups, type Group } from "../../../domains/groups";
+import { formatCurrencyBreakdown } from "../../../domains/settlements/lib/settlement.utils";
+
+function addCurrencyAmount(totals: Map<string, number>, currency: string, amount: number) {
+  totals.set(currency, Number(((totals.get(currency) ?? 0) + amount).toFixed(2)));
+}
+
+function CurrencyBreakdownValue({ value }: { value: string }) {
+  return value.split("\n").map((line) => (
+    <span key={line} className="block">
+      {line}
+    </span>
+  ));
+}
 
 export function DashboardPage() {
   const [search, setSearch] = useState("");
@@ -78,31 +91,31 @@ export function DashboardPage() {
     );
   });
 
-  const currency = user?.defaultCurrency ?? expenses[0]?.currency ?? "USD";
-  const totalExpensesAmount = expenses.reduce(
-    (sum, expense) => sum + expense.amount,
-    0,
-  );
-  const youOweAmount = expenses
+  const currency = user?.defaultCurrency ?? expenses[0]?.currency ?? "VND";
+  const totalExpensesByCurrency = expenses.reduce((totals, expense) => {
+    addCurrencyAmount(totals, expense.currency, expense.amount);
+    return totals;
+  }, new Map<string, number>());
+  const youOweByCurrency = expenses
     .filter(
       (expense) =>
         expense.settlementStatus === "pending" &&
         expense.paidByUserId !== user?.id,
     )
-    .reduce((sum, expense) => {
+    .reduce((totals, expense) => {
       const currentUserShare =
         expense.participants.find((participant) => participant.userId === user?.id)
           ?.shareAmount ?? 0;
-
-      return sum + currentUserShare;
-    }, 0);
-  const youAreOwedAmount = expenses
+      addCurrencyAmount(totals, expense.currency, currentUserShare);
+      return totals;
+    }, new Map<string, number>());
+  const youAreOwedByCurrency = expenses
     .filter(
       (expense) =>
         expense.settlementStatus === "pending" &&
         expense.paidByUserId === user?.id,
     )
-    .reduce((sum, expense) => {
+    .reduce((totals, expense) => {
       const owedByOthers = expense.participants
         .filter((participant) => participant.userId !== user?.id)
         .reduce(
@@ -110,9 +123,9 @@ export function DashboardPage() {
             participantSum + participant.shareAmount,
           0,
         );
-
-      return sum + owedByOthers;
-    }, 0);
+      addCurrencyAmount(totals, expense.currency, owedByOthers);
+      return totals;
+    }, new Map<string, number>());
   const currentMonthExpenses = expenses.filter((expense) => {
     const expenseDate = new Date(expense.expenseDate);
     const today = new Date();
@@ -125,28 +138,31 @@ export function DashboardPage() {
   const categorySummaries = Array.from(
     currentMonthExpenses.reduce((categoryMap, expense) => {
       const categoryKey = expense.category || "other";
-      const currentAmount = categoryMap.get(categoryKey) ?? 0;
-
-      categoryMap.set(categoryKey, currentAmount + expense.amount);
+      const amountByCurrency = categoryMap.get(categoryKey) ?? new Map<string, number>();
+      addCurrencyAmount(amountByCurrency, expense.currency, expense.amount);
+      categoryMap.set(categoryKey, amountByCurrency);
       return categoryMap;
-    }, new Map<string, number>()),
-    ([category, amount]) => ({
+    }, new Map<string, Map<string, number>>()),
+    ([category, amounts]) => ({
       category,
       label:
         t.categories[category as keyof typeof t.categories] ??
         toTitleCase(category),
-      amount,
+      amounts,
+      sortValue: Array.from(amounts.values()).reduce((sum, amount) => sum + amount, 0),
     }),
-  ).sort((leftCategory, rightCategory) => rightCategory.amount - leftCategory.amount);
+  ).sort((leftCategory, rightCategory) => rightCategory.sortValue - leftCategory.sortValue);
   const totalCategoryAmount = categorySummaries.reduce(
-    (sum, categorySummary) => sum + categorySummary.amount,
+    (sum, categorySummary) => sum + categorySummary.sortValue,
     0,
   );
 
   const summaryCards = [
     {
       label: t.totalExpenses,
-      value: isLoadingExpenses ? "--" : formatCurrency(totalExpensesAmount, currency),
+      value: isLoadingExpenses
+        ? "--"
+        : formatCurrencyBreakdown(totalExpensesByCurrency, { emptyCurrency: currency }),
       icon: DollarSign,
       bg: "bg-[#F0FAF5]",
       iconBg: "bg-[#7EDDBA]",
@@ -154,7 +170,9 @@ export function DashboardPage() {
     },
     {
       label: t.youOwe,
-      value: isLoadingExpenses ? "--" : formatCurrency(youOweAmount, currency),
+      value: isLoadingExpenses
+        ? "--"
+        : formatCurrencyBreakdown(youOweByCurrency, { emptyCurrency: currency }),
       icon: TrendingDown,
       bg: "bg-[#FEF2F2]",
       iconBg: "bg-[#FCA5A5]",
@@ -162,7 +180,9 @@ export function DashboardPage() {
     },
     {
       label: t.youAreOwed,
-      value: isLoadingExpenses ? "--" : formatCurrency(youAreOwedAmount, currency),
+      value: isLoadingExpenses
+        ? "--"
+        : formatCurrencyBreakdown(youAreOwedByCurrency, { emptyCurrency: currency }),
       icon: TrendingUp,
       bg: "bg-[#EFF6FF]",
       iconBg: "bg-[#93C5FD]",
@@ -230,10 +250,10 @@ export function DashboardPage() {
                 <Icon className={`w-4 h-4 ${iconColor}`} />
               </div>
               <p
-                className="text-[#111827]"
+                className="text-[#111827] whitespace-pre-line"
                 style={{ fontSize: "1.5rem", fontWeight: 800 }}
               >
-                {value}
+                <CurrencyBreakdownValue value={value} />
               </p>
               <p className="text-[#6B7280] text-xs mt-0.5">{label}</p>
             </div>
@@ -324,9 +344,11 @@ export function DashboardPage() {
               <div className="space-y-4">
                 {categorySummaries.slice(0, 5).map((categorySummary) => {
                   const percent =
-                    totalCategoryAmount > 0
-                      ? Math.round((categorySummary.amount / totalCategoryAmount) * 100)
-                      : 0;
+                    categorySummary.sortValue > 0
+                      ? Math.round(
+                            (categorySummary.sortValue / totalCategoryAmount) * 100,
+                          )
+                        : 0;
 
                   return (
                     <div key={categorySummary.category}>
@@ -337,8 +359,10 @@ export function DashboardPage() {
                         >
                           {categorySummary.label}
                         </span>
-                        <span className="text-xs text-[#6B7280] flex-shrink-0">
-                          {formatCurrency(categorySummary.amount, currency)}
+                        <span className="text-xs text-[#6B7280] flex-shrink-0 whitespace-pre-line text-right">
+                          {formatCurrencyBreakdown(categorySummary.amounts, {
+                            emptyCurrency: currency,
+                          })}
                         </span>
                       </div>
                       <div className="h-2 rounded-full bg-[#F3F4F6] overflow-hidden">

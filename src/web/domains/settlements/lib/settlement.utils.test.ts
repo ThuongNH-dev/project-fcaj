@@ -210,15 +210,10 @@ describe("settlement.utils", () => {
 
   it("formats breakdowns and share helpers consistently", () => {
     const totals = new Map<string, number>();
-    const expectedEuroAmount = new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "EUR",
-      minimumFractionDigits: 2,
-    }).format(10);
 
     upsertCurrencyTotal(totals, "USD", 0.1);
     upsertCurrencyTotal(totals, "USD", 0.2);
-    upsertCurrencyTotal(totals, "EUR", -5);
+    upsertCurrencyTotal(totals, "VND", -5000);
 
     const expense = createExpense({
       participants: [
@@ -240,10 +235,10 @@ describe("settlement.utils", () => {
       formatCurrencyBreakdown(
         new Map([
           ["USD", 25],
-          ["EUR", -10],
+          ["VND", -10000],
         ]),
         { signed: true },
       ),
-    ).toBe(`+$25.00 | -${expectedEuroAmount}`);
+    ).toBe(`+$25.00\n-10.000 ₫`);
   });
 });
