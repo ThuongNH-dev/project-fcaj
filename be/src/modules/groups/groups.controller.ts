@@ -136,14 +136,6 @@ export async function createGroupHandler(req: Request, res: Response) {
     const message =
       error instanceof Error ? error.message : "Unable to create group.";
 
-<<<<<<< Updated upstream
-    const statusCode =
-      message === "One or more member emails do not exist." ||
-      message === "Group currency is required." ||
-      message === "Group currency must be either USD or VND."
-        ? 400
-        : 503;
-=======
     let statusCode = 503;
     if (
       message === "One or more member emails do not exist." ||
@@ -154,7 +146,6 @@ export async function createGroupHandler(req: Request, res: Response) {
     } else if (message === FREE_PLAN_GROUP_MEMBER_LIMIT_ERROR) {
       statusCode = 403;
     }
->>>>>>> Stashed changes
 
     return res.status(statusCode).json({
       ok: false,
