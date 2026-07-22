@@ -325,19 +325,17 @@ export function SettlementPage() {
                               expense.currency,
                             )}
                           </p>
-                          {isOwedToYou && (
-                            <button
-                              type="button"
-                              onClick={() => void handleSettleExpense(expense)}
-                              disabled={settlingExpenseId === expense.id}
-                              className="mt-3 rounded-xl bg-[#16A34A] px-3 py-2 text-xs text-white hover:bg-[#15803D] transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-                              style={{ fontWeight: 600 }}
-                            >
-                              {settlingExpenseId === expense.id
-                                ? t.updating
-                                : t.markAsPaid}
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => void handleSettleExpense(expense)}
+                            disabled={settlingExpenseId === expense.id}
+                            className="mt-3 rounded-xl bg-[#16A34A] px-3 py-2 text-xs text-white hover:bg-[#15803D] transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                            style={{ fontWeight: 600 }}
+                          >
+                            {settlingExpenseId === expense.id
+                              ? t.updating
+                              : t.markAsPaid}
+                          </button>
                         </div>
                       </div>
                     );
