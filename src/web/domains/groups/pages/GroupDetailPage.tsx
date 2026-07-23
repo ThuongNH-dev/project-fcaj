@@ -12,6 +12,11 @@ import {
   UserPlus,
 } from "lucide-react";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "../../../shared/ui/avatar";
 import { useStoredUser } from "../../auth";
 import { useFeedback } from "../../../shared/providers/FeedbackProvider";
 import {
@@ -573,17 +578,26 @@ export function GroupDetailPage() {
                       className="flex items-center justify-between rounded-xl bg-[#F9FAFB] px-3 py-2.5"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div
-                          className="w-9 h-9 rounded-full bg-[#D1FAE5] flex items-center justify-center text-[#065f46] text-xs"
-                          style={{ fontWeight: 700 }}
-                        >
-                          {member.name
-                            .split(" ")
-                            .map((part) => part.charAt(0))
-                            .join("")
-                            .slice(0, 2)
-                            .toUpperCase()}
-                        </div>
+                        <Avatar className="w-9 h-9 rounded-full bg-[#D1FAE5] text-[#065f46]">
+                          {member.avatarUrl?.trim() ? (
+                            <AvatarImage
+                              src={member.avatarUrl}
+                              alt={member.name}
+                              className="object-cover"
+                            />
+                          ) : null}
+                          <AvatarFallback
+                            className="rounded-full bg-[#D1FAE5] text-[#065f46] text-xs"
+                            style={{ fontWeight: 700 }}
+                          >
+                            {member.name
+                              .split(" ")
+                              .map((part) => part.charAt(0))
+                              .join("")
+                              .slice(0, 2)
+                              .toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
                         <div className="min-w-0">
                           <p className="text-sm text-[#111827]" style={{ fontWeight: 600 }}>
                             {member.name}
