@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import type { Collection, ObjectId } from "mongodb";
 import { ObjectId as MongoObjectId } from "mongodb";
 import { connectToMongo } from "../../db/mongo.js";
@@ -10,6 +11,7 @@ import { getUsersCollection } from "../auth/auth.service.js";
 import type { SupportedCurrency } from "../auth/auth.types.js";
 import type {
   AddGroupMemberInput,
+  AddGroupMemberResult,
   CreateGroupInput,
   GroupMember,
   PublicGroupMember,
@@ -170,7 +172,12 @@ async function toPublicGroupWithMembers(group: GroupDocument): Promise<PublicGro
   };
 }
 
-export async function createGroup(input: CreateGroupInput): Promise<PublicGroup> {
+export type CreateGroupResult = {
+  group: PublicGroup;
+  initialMembers: Array<{ userId: string; membershipEventId: string }>;
+};
+
+export async function createGroup(input: CreateGroupInput): Promise<CreateGroupResult> {
   const groups = await getGroupsCollection();
   const users = await getUsersCollection();
   const normalizedName = input.name.trim();
@@ -201,16 +208,21 @@ export async function createGroup(input: CreateGroupInput): Promise<PublicGroup>
     throw new Error("One or more member emails do not exist.");
   }
 
+  // Each initial non-owner member gets a unique membershipEventId so that
+  // group_invite notifications can be deduplicated per membership event.
+  const initialNonOwnerMembers = existingMembers.filter(
+    (member) => member._id?.toString() !== input.createdBy,
+  );
+
   const members: GroupMember[] = [
     {
       userId: input.createdBy,
       role: "owner",
     },
-    ...existingMembers
-      .filter((member) => member._id?.toString() !== input.createdBy)
-      .map((member) => ({
+    ...initialNonOwnerMembers.map((member) => ({
       userId: member._id!.toString(),
       role: "member" as const,
+      membershipEventId: randomUUID(),
     })),
   ];
 
@@ -231,7 +243,7 @@ export async function createGroup(input: CreateGroupInput): Promise<PublicGroup>
     updatedAt,
   });
 
-  return toPublicGroupWithMembers({
+  const group = await toPublicGroupWithMembers({
     _id: result.insertedId,
     name: normalizedName,
     icon: normalizedIcon,
@@ -242,6 +254,15 @@ export async function createGroup(input: CreateGroupInput): Promise<PublicGroup>
     createdAt,
     updatedAt,
   });
+
+  // Return group along with the initial members metadata so the controller
+  // can send group_invite notifications without coupling the service to
+  // the notification layer.
+  const initialMembersForNotification = members
+    .filter((m) => m.role === "member" && m.membershipEventId)
+    .map((m) => ({ userId: m.userId, membershipEventId: m.membershipEventId! }));
+
+  return { group, initialMembers: initialMembersForNotification };
 }
 
 export async function getGroupsByUserId(userId: string): Promise<PublicGroup[]> {
@@ -397,7 +418,9 @@ export async function deleteGroupById(groupId: string): Promise<boolean> {
   return result.deletedCount > 0;
 }
 
-export async function addGroupMember(input: AddGroupMemberInput): Promise<PublicGroup | null> {
+export async function addGroupMember(
+  input: AddGroupMemberInput,
+): Promise<AddGroupMemberResult | null> {
   const group = await getGroupDocumentById(input.groupId);
 
   if (!group) {
@@ -424,55 +447,75 @@ export async function addGroupMember(input: AddGroupMemberInput): Promise<Public
   }
 
   const memberId = userToAdd._id.toString();
-
-  if (group.members.some((member) => member.userId === memberId)) {
-    throw new Error("This user is already a member of the group.");
-  }
-
+  const membershipEventId = randomUUID();
   const ownerPlan = await getOwnerBillingPlan(group.createdBy);
 
-  if (ownerPlan === "free" && group.members.length >= FREE_PLAN_GROUP_MEMBER_LIMIT) {
-    throw new Error(FREE_PLAN_GROUP_MEMBER_LIMIT_ERROR);
-  }
+  // ── Atomic add ──────────────────────────────────────────────────────────────
+  // Filter ensures:
+  //   1. The group exists.
+  //   2. The user is NOT already a member (prevents duplicate membership).
+  //   3. (Free plan only) The members array has not yet reached the limit.
+  // Using $push instead of $set on the full array means two concurrent requests
+  // cannot overwrite each other's member additions.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const atomicFilter: any = {
+    _id: groupObjectId,
+    "members.userId": { $ne: memberId },
+  };
 
-  const updatedMembers: GroupMember[] = [
-    ...group.members,
-    {
-      userId: memberId,
-      role: "member",
-    },
-  ];
-
-  const filter: any = { _id: groupObjectId };
   if (ownerPlan === "free") {
-    // Atomic check: ensure the array length in the DB is strictly less than FREE_PLAN_GROUP_MEMBER_LIMIT
-    // For limit = 5, members.4 must not exist (max length 4).
-    filter[`members.${FREE_PLAN_GROUP_MEMBER_LIMIT - 1}`] = { $exists: false };
+    // For limit = 5, members.4 must not exist (max index 4 → length < 5).
+    atomicFilter[`members.${FREE_PLAN_GROUP_MEMBER_LIMIT - 1}`] = {
+      $exists: false,
+    };
   }
+
+  const newMember: GroupMember = {
+    userId: memberId,
+    role: "member",
+    membershipEventId,
+  };
 
   const updateResult = await groups.updateOne(
-    filter,
+    atomicFilter,
     {
-      $set: {
-        members: updatedMembers,
-        updatedAt: new Date(),
-      },
+      $push: { members: newMember },
+      $set: { updatedAt: new Date() },
     },
   );
 
   if (updateResult.matchedCount === 0) {
-    const groupStillExists = await groups.findOne({ _id: groupObjectId });
-    if (!groupStillExists) {
-      throw new Error("Group not found.");
+    // Re-read to give a precise error message.
+    const current = await groups.findOne({ _id: groupObjectId });
+
+    if (!current) {
+      // The group was deleted between our initial read and the updateOne.
+      return null;
     }
+
+    if (current.members.some((m) => m.userId === memberId)) {
+      throw new Error("This user is already a member of the group.");
+    }
+
+    // The only remaining reason the filter failed is the Free Plan limit.
     throw new Error(FREE_PLAN_GROUP_MEMBER_LIMIT_ERROR);
   }
 
-  return toPublicGroupWithMembers({
+  // Build the updated group document for the public response.
+  const updatedGroupDoc: GroupDocument = {
     ...group,
-    members: updatedMembers,
+    members: [...group.members, newMember],
     updatedAt: new Date(),
-  });
+  };
+
+  const publicGroup = await toPublicGroupWithMembers(updatedGroupDoc);
+
+  return {
+    group: publicGroup,
+    addedMemberId: memberId,
+    membershipEventId,
+    membershipCreated: true,
+  };
 }
 
 export async function removeGroupMember(input: RemoveGroupMemberInput): Promise<PublicGroup | null> {

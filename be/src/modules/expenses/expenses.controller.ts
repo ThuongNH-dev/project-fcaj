@@ -3,6 +3,7 @@ import { SettlementConflictError } from "../../errors/settlement-conflict.error.
 import { areUsersInGroup, isUserInGroup } from "../../policies/group.policy.js";
 import { getUserById } from "../auth/auth.service.js";
 import { getGroupByIdForUser } from "../groups/groups.service.js";
+import { notifyExpenseAdded } from "../notifications/notifications.service.js";
 import { getReceiptUploadByIdForUser } from "../receipts/receipts.service.js";
 import {
   createExpense,
@@ -278,6 +279,28 @@ export async function createExpenseHandler(req: Request, res: Response) {
       participants,
       receiptId,
     });
+
+    // Fire expense_added notifications after the transaction has committed.
+    // This must run outside the expense transaction — errors here must not
+    // fail the response or roll back the expense.
+    const actorName =
+      `${currentUser.firstName} ${currentUser.lastName}`.trim() ||
+      currentUser.email;
+    const groupMemberUserIds = group.members.map((m) => m.id);
+
+    notifyExpenseAdded({
+      expenseId: expense.id,
+      groupId: expense.groupId,
+      actorUserId: currentUser.id,
+      actorName,
+      expenseTitle: expense.title,
+      expenseDescription: expense.description ?? "",
+      amount: expense.amount,
+      currency: expense.currency,
+      groupMemberUserIds,
+    }).catch((err) =>
+      console.error("[notifications] createExpense notify failed:", err),
+    );
 
     return res.status(201).json({
       ok: true,

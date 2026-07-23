@@ -496,3 +496,255 @@ export async function createNotificationIdempotently(
     throw error;
   }
 }
+
+/**
+ * Insert multiple notifications idempotently using deduplicationKey.
+ * Uses bulkWrite with ordered:false so one duplicate does not stop the rest.
+ * Duplicate key errors (E11000) are treated as success.
+ * Other DB errors are logged but do NOT throw — callers must not fail because
+ * of notification errors.
+ */
+export async function createNotificationsIdempotently(
+  inputs: CreateNotificationInput[],
+): Promise<void> {
+  if (inputs.length === 0) {
+    return;
+  }
+
+  const collection = await getNotificationsCollection();
+  const now = new Date();
+
+  const operations = inputs.map((input) => ({
+    insertOne: {
+      document: {
+        recipientUserId: input.recipientUserId,
+        actorUserId: input.actorUserId,
+        type: input.type,
+        title: input.title,
+        message: input.message,
+        groupId: input.groupId,
+        expenseId: input.expenseId,
+        settlementId: input.settlementId,
+        isRead: false,
+        readAt: null,
+        deduplicationKey: input.deduplicationKey,
+        createdAt: now,
+      } satisfies NotificationDocument,
+    },
+  }));
+
+  try {
+    await collection.bulkWrite(operations, { ordered: false });
+  } catch (error: unknown) {
+    // bulkWrite with ordered:false throws a BulkWriteError that bundles all
+    // errors. We check if ALL of them are duplicate-key errors — if so, treat
+    // as idempotent success. If any non-duplicate error exists, log it.
+    const isBulkError =
+      error instanceof Error && error.constructor.name === "MongoBulkWriteError";
+
+    if (isBulkError) {
+      const bulkError = error as Error & {
+        writeErrors?: Array<{ code: number }>;
+      };
+      const writeErrors = bulkError.writeErrors ?? [];
+      const hasNonDuplicateError = writeErrors.some((e) => e.code !== 11000);
+
+      if (!hasNonDuplicateError) {
+        // All errors are duplicates — idempotent success
+        return;
+      }
+
+      // At least one non-duplicate error: log and continue
+      console.error(
+        "[notifications] Non-duplicate bulk write error:",
+        writeErrors.filter((e) => e.code !== 11000),
+      );
+      return;
+    }
+
+    // Non-bulk error (e.g. network failure)
+    console.error("[notifications] Unexpected error in createNotificationsIdempotently:", error);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Format helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Format amount for notification messages.
+ * VND: no decimal places (e.g. "500,000 VND")
+ * USD: 2 decimal places (e.g. "12.50 USD")
+ */
+function formatAmount(amount: number, currency: string): string {
+  if (currency === "VND") {
+    return `${amount.toLocaleString("en-US", { maximumFractionDigits: 0 })} VND`;
+  }
+  return `${amount.toFixed(2)} ${currency}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Business notification helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface NotifyExpenseAddedInput {
+  expenseId: string;
+  groupId: string;
+  actorUserId: string;
+  actorName: string;
+  expenseTitle: string;
+  expenseDescription: string;
+  amount: number;
+  currency: string;
+  /** All members of the group (userId strings). */
+  groupMemberUserIds: string[];
+}
+
+/**
+ * Send expense_added notifications to all group members except the actor.
+ * - Batch-fetches preferences for all candidate recipients.
+ * - Skips recipients with expenseAdded === false.
+ * - Uses deduplicationKey to prevent duplicate notifications.
+ * - Never throws — notification errors must not fail the expense creation.
+ */
+export async function notifyExpenseAdded(
+  input: NotifyExpenseAddedInput,
+): Promise<void> {
+  // Recipients = all members except the actor
+  const recipientIds = input.groupMemberUserIds.filter(
+    (id) => id !== input.actorUserId,
+  );
+
+  if (recipientIds.length === 0) {
+    return;
+  }
+
+  try {
+    // Batch-fetch user preferences for all candidates in one query
+    const users = await getUsersCollection();
+    const validObjectIds = recipientIds.filter((id) =>
+      MongoObjectId.isValid(id),
+    );
+
+    const userDocs = await users
+      .find(
+        { _id: { $in: validObjectIds.map((id) => new MongoObjectId(id)) } },
+        { projection: { _id: 1, notificationPreferences: 1 } },
+      )
+      .toArray();
+
+    // Build a map: userId → normalised preferences
+    const prefsByUserId = new Map(
+      userDocs.map((doc) => [
+        doc._id!.toString(),
+        normalizeNotificationPreferences(
+          doc.notificationPreferences as
+            | Partial<Record<string, unknown>>
+            | undefined,
+        ),
+      ]),
+    );
+
+    // Build the message
+    const descriptionPart = input.expenseDescription
+      ? ` — ${input.expenseDescription}`
+      : "";
+    const amountStr = formatAmount(input.amount, input.currency);
+    const message = `${input.actorName} added "${input.expenseTitle}"${descriptionPart}: ${amountStr}.`;
+
+    // Build notification inputs for recipients who have expenseAdded enabled
+    const notifications: CreateNotificationInput[] = recipientIds
+      .filter((recipientId) => {
+        const prefs = prefsByUserId.get(recipientId);
+        // Default true when prefs or field is missing
+        return prefs === undefined ? true : prefs.expenseAdded;
+      })
+      .map((recipientId) => ({
+        recipientUserId: recipientId,
+        actorUserId: input.actorUserId,
+        type: "expense_added" as const,
+        title: "Expense added",
+        message,
+        groupId: input.groupId,
+        expenseId: input.expenseId,
+        settlementId: null,
+        deduplicationKey: `expense-added:${input.expenseId}:${recipientId}`,
+      }));
+
+    await createNotificationsIdempotently(notifications);
+  } catch (error) {
+    console.error("[notifications] notifyExpenseAdded failed:", error);
+  }
+}
+
+export interface NotifyMembersAddedToGroupInput {
+  groupId: string;
+  groupName: string;
+  actorUserId: string;
+  /** Members who were actually added (not the owner/creator). */
+  addedMembers: Array<{ userId: string; membershipEventId: string }>;
+}
+
+/**
+ * Send group_invite notifications to newly added group members.
+ * - Skips recipients with groupInvites === false.
+ * - deduplicationKey includes membershipEventId so remove-then-re-add
+ *   produces a new notification while retries remain idempotent.
+ * - Never throws — notification errors must not fail group operations.
+ */
+export async function notifyMembersAddedToGroup(
+  input: NotifyMembersAddedToGroupInput,
+): Promise<void> {
+  if (input.addedMembers.length === 0) {
+    return;
+  }
+
+  try {
+    // Batch-fetch preferences for all added members
+    const users = await getUsersCollection();
+    const validIds = input.addedMembers
+      .map((m) => m.userId)
+      .filter((id) => MongoObjectId.isValid(id));
+
+    const userDocs = await users
+      .find(
+        { _id: { $in: validIds.map((id) => new MongoObjectId(id)) } },
+        { projection: { _id: 1, notificationPreferences: 1 } },
+      )
+      .toArray();
+
+    const prefsByUserId = new Map(
+      userDocs.map((doc) => [
+        doc._id!.toString(),
+        normalizeNotificationPreferences(
+          doc.notificationPreferences as
+            | Partial<Record<string, unknown>>
+            | undefined,
+        ),
+      ]),
+    );
+
+    const notifications: CreateNotificationInput[] = input.addedMembers
+      .filter((member) => {
+        const prefs = prefsByUserId.get(member.userId);
+        // Default true when prefs or field is missing
+        return prefs === undefined ? true : prefs.groupInvites;
+      })
+      .map((member) => ({
+        recipientUserId: member.userId,
+        actorUserId: input.actorUserId,
+        type: "group_invite" as const,
+        title: "Added to group",
+        message: `You were added to the group "${input.groupName}".`,
+        groupId: input.groupId,
+        expenseId: null,
+        settlementId: null,
+        deduplicationKey: `group-added:${input.groupId}:${member.userId}:${member.membershipEventId}`,
+      }));
+
+    await createNotificationsIdempotently(notifications);
+  } catch (error) {
+    console.error("[notifications] notifyMembersAddedToGroup failed:", error);
+  }
+}
+
