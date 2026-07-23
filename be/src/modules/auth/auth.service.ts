@@ -22,6 +22,7 @@ import type {
   VerifyResetOtpInput,
 } from "./auth.types.js";
 import type { NotificationPreferences } from "../notifications/notifications.types.js";
+import { DEFAULT_NOTIFICATION_PREFERENCES } from "../notifications/notifications.constants.js";
 
 export interface UserDocument {
   _id?: ObjectId;
@@ -384,6 +385,7 @@ export async function registerUser(
     bio: normalizedBio,
     avatarUrl: normalizedAvatarUrl,
     defaultCurrency: normalizedDefaultCurrency,
+    notificationPreferences: { ...DEFAULT_NOTIFICATION_PREFERENCES },
     role: normalizedRole,
     createdAt,
     updatedAt,
@@ -398,6 +400,7 @@ export async function registerUser(
     bio: normalizedBio,
     avatarUrl: normalizedAvatarUrl,
     defaultCurrency: normalizedDefaultCurrency,
+    notificationPreferences: { ...DEFAULT_NOTIFICATION_PREFERENCES },
     role: normalizedRole,
     createdAt,
     updatedAt,

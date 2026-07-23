@@ -452,91 +452,6 @@ swaggerSpec.paths = {
       },
     },
   },
-  "/api/notifications/preferences": {
-    get: {
-      summary: "Get the current logged-in user's notification preferences",
-      tags: ["Notifications"],
-      security: [{ bearerAuth: [] }],
-      responses: {
-        200: {
-          description: "Notification preferences fetched successfully",
-        },
-        401: {
-          description: "Missing or invalid bearer token",
-        },
-        404: {
-          description: "User not found",
-        },
-        503: {
-          description: "MongoDB connection failed",
-        },
-      },
-    },
-    patch: {
-      summary: "Update the current logged-in user's notification preferences",
-      tags: ["Notifications"],
-      security: [{ bearerAuth: [] }],
-      requestBody: {
-        required: true,
-        content: {
-          "application/json": {
-            schema: {
-              type: "object",
-              required: ["notificationPreferences"],
-              properties: {
-                notificationPreferences: {
-                  type: "object",
-                  properties: {
-                    expenseAdded: {
-                      type: "boolean",
-                      example: true,
-                    },
-                    paymentReceived: {
-                      type: "boolean",
-                      example: false,
-                    },
-                    settlementReminder: {
-                      type: "boolean",
-                      example: true,
-                    },
-                    weeklyDigest: {
-                      type: "boolean",
-                      example: false,
-                    },
-                    groupInvites: {
-                      type: "boolean",
-                      example: true,
-                    },
-                    marketingEmails: {
-                      type: "boolean",
-                      example: false,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-      responses: {
-        200: {
-          description: "Notification preferences updated successfully",
-        },
-        400: {
-          description: "Invalid notification preferences payload",
-        },
-        401: {
-          description: "Missing or invalid bearer token",
-        },
-        404: {
-          description: "User not found",
-        },
-        503: {
-          description: "MongoDB connection failed",
-        },
-      },
-    },
-  },
   "/api/users/me/billing": {
     get: {
       summary: "Get the current logged-in user's billing summary",
@@ -1698,6 +1613,267 @@ swaggerSpec.paths = {
         503: {
           description: "MongoDB or backend service failed",
         },
+      },
+    },
+  },
+  "/api/notifications/preferences": {
+    get: {
+      summary: "Get current user notification preferences",
+      tags: ["Notifications"],
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: "Notification preferences fetched successfully",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean", example: true },
+                  message: { type: "string" },
+                  notificationPreferences: {
+                    type: "object",
+                    properties: {
+                      expenseAdded: { type: "boolean", example: true },
+                      paymentReceived: { type: "boolean", example: true },
+                      settlementReminders: { type: "boolean", example: true },
+                      groupInvites: { type: "boolean", example: true },
+                      productUpdatesAndTips: { type: "boolean", example: false },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        401: { description: "Missing or invalid bearer token" },
+        404: { description: "User not found" },
+        503: { description: "MongoDB or backend service failed" },
+      },
+    },
+    patch: {
+      summary: "Update current user notification preferences (partial update)",
+      tags: ["Notifications"],
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["notificationPreferences"],
+              properties: {
+                notificationPreferences: {
+                  type: "object",
+                  description:
+                    "Partial update – only include the fields you want to change. Unknown fields are rejected.",
+                  properties: {
+                    expenseAdded: { type: "boolean" },
+                    paymentReceived: { type: "boolean" },
+                    settlementReminders: { type: "boolean" },
+                    groupInvites: { type: "boolean" },
+                    productUpdatesAndTips: { type: "boolean" },
+                  },
+                  example: {
+                    expenseAdded: true,
+                    productUpdatesAndTips: false,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: "Notification preferences updated successfully" },
+        400: {
+          description:
+            "Empty body, unknown field, or non-boolean value provided",
+        },
+        401: { description: "Missing or invalid bearer token" },
+        404: { description: "User not found" },
+        503: { description: "MongoDB or backend service failed" },
+      },
+    },
+  },
+  "/api/notifications": {
+    get: {
+      summary: "List in-app notifications for the current user",
+      tags: ["Notifications"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "query",
+          name: "page",
+          schema: { type: "integer", default: 1 },
+          description: "Page number (1-indexed)",
+        },
+        {
+          in: "query",
+          name: "limit",
+          schema: { type: "integer", default: 20, maximum: 100 },
+          description: "Number of notifications per page",
+        },
+      ],
+      responses: {
+        200: {
+          description: "Notifications fetched successfully",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean", example: true },
+                  message: { type: "string" },
+                  notifications: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: {
+                        id: { type: "string" },
+                        recipientUserId: { type: "string" },
+                        actorUserId: { type: "string", nullable: true },
+                        type: {
+                          type: "string",
+                          enum: [
+                            "expense_added",
+                            "payment_received",
+                            "settlement_reminder",
+                            "group_invite",
+                            "product_update",
+                          ],
+                        },
+                        title: { type: "string" },
+                        message: { type: "string" },
+                        groupId: { type: "string", nullable: true },
+                        expenseId: { type: "string", nullable: true },
+                        settlementId: { type: "string", nullable: true },
+                        isRead: { type: "boolean" },
+                        readAt: { type: "string", format: "date-time", nullable: true },
+                        deduplicationKey: { type: "string", nullable: true },
+                        createdAt: { type: "string", format: "date-time" },
+                      },
+                    },
+                  },
+                  pagination: {
+                    type: "object",
+                    properties: {
+                      page: { type: "integer" },
+                      limit: { type: "integer" },
+                      total: { type: "integer" },
+                      totalPages: { type: "integer" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        400: { description: "Invalid page or limit parameter" },
+        401: { description: "Missing or invalid bearer token" },
+        503: { description: "MongoDB or backend service failed" },
+      },
+    },
+  },
+  "/api/notifications/unread-count": {
+    get: {
+      summary: "Get unread notification count for the current user",
+      tags: ["Notifications"],
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: "Unread count fetched successfully",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean", example: true },
+                  message: { type: "string" },
+                  unreadCount: { type: "integer", example: 3 },
+                },
+              },
+            },
+          },
+        },
+        401: { description: "Missing or invalid bearer token" },
+        503: { description: "MongoDB or backend service failed" },
+      },
+    },
+  },
+  "/api/notifications/read-all": {
+    patch: {
+      summary: "Mark all notifications as read for the current user",
+      tags: ["Notifications"],
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: "All notifications marked as read",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean", example: true },
+                  message: { type: "string" },
+                  modifiedCount: { type: "integer", example: 5 },
+                },
+              },
+            },
+          },
+        },
+        401: { description: "Missing or invalid bearer token" },
+        503: { description: "MongoDB or backend service failed" },
+      },
+    },
+  },
+  "/api/notifications/{notificationId}/read": {
+    patch: {
+      summary: "Mark a single notification as read",
+      tags: ["Notifications"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "notificationId",
+          required: true,
+          schema: { type: "string" },
+          description: "MongoDB ObjectId of the notification",
+        },
+      ],
+      responses: {
+        200: { description: "Notification marked as read" },
+        401: { description: "Missing or invalid bearer token" },
+        404: {
+          description:
+            "Notification not found (or belongs to another user – treated as not found)",
+        },
+        503: { description: "MongoDB or backend service failed" },
+      },
+    },
+  },
+  "/api/notifications/{notificationId}": {
+    delete: {
+      summary: "Delete a notification",
+      tags: ["Notifications"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "notificationId",
+          required: true,
+          schema: { type: "string" },
+          description: "MongoDB ObjectId of the notification",
+        },
+      ],
+      responses: {
+        200: { description: "Notification deleted successfully" },
+        401: { description: "Missing or invalid bearer token" },
+        404: {
+          description:
+            "Notification not found (or belongs to another user – treated as not found)",
+        },
+        503: { description: "MongoDB or backend service failed" },
       },
     },
   },
