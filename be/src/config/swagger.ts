@@ -1981,6 +1981,97 @@ swaggerSpec.paths = {
       },
     },
   },
+  "/api/notifications/sync": {
+    post: {
+      summary: "Sync settlement reminders for the current user",
+      tags: ["Notifications"],
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: "Sync completed",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  message: { type: "string" },
+                  created: { type: "boolean" },
+                  pendingSettlementCount: { type: "integer" }
+                }
+              }
+            }
+          }
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        503: {
+          description: "Database failure",
+        },
+      },
+    },
+  },
+  "/api/admin/notifications/product-update": {
+    post: {
+      summary: "Broadcast a product update notification (Admin only)",
+      tags: ["Admin", "Notifications"],
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["title", "message"],
+              properties: {
+                title: {
+                  type: "string",
+                  maxLength: 120,
+                  example: "New Splitly feature",
+                },
+                message: {
+                  type: "string",
+                  maxLength: 1000,
+                  example: "You can now upload receipts directly from your phone.",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Product update notifications sent successfully",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  message: { type: "string" },
+                  recipientCount: { type: "integer" },
+                  createdCount: { type: "integer" }
+                }
+              }
+            }
+          }
+        },
+        400: {
+          description: "Invalid request body (e.g. title/message missing or too long)",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        403: {
+          description: "User is not an admin",
+        },
+        503: {
+          description: "Database failure",
+        },
+      },
+    },
+  },
 };
 
 export default swaggerSpec;

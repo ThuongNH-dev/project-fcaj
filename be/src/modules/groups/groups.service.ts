@@ -73,10 +73,6 @@ async function getGroupDocumentById(groupId: string): Promise<GroupDocument | nu
   });
 }
 
-function toPublicGroup(group: GroupDocument): PublicGroup {
-  throw new Error("Use toPublicGroupWithMembers instead.");
-}
-
 function normalizeGroupCurrency(currency?: string): SupportedCurrency {
   const normalizedCurrency = currency?.trim().toUpperCase();
 

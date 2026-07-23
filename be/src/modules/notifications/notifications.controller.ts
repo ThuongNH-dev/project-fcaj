@@ -14,6 +14,46 @@ import {
 // Notification Preferences
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * @swagger
+ * /api/notifications/preferences:
+ *   get:
+ *     summary: Get current user notification preferences
+ *     tags:
+ *       - Notifications
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Preferences fetched successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                   example: true
+ *                 notificationPreferences:
+ *                   type: object
+ *                   properties:
+ *                     expenseAdded:
+ *                       type: boolean
+ *                     paymentReceived:
+ *                       type: boolean
+ *                     settlementReminders:
+ *                       type: boolean
+ *                     groupInvites:
+ *                       type: boolean
+ *                     productUpdatesAndTips:
+ *                       type: boolean
+ *       401:
+ *         description: Unauthenticated.
+ *       404:
+ *         description: User not found.
+ *       503:
+ *         description: Database failure.
+ */
 export async function getCurrentUserNotificationPreferencesHandler(
   req: Request,
   res: Response,
@@ -57,6 +97,47 @@ export async function getCurrentUserNotificationPreferencesHandler(
   }
 }
 
+/**
+ * @swagger
+ * /api/notifications/preferences:
+ *   patch:
+ *     summary: Update current user notification preferences
+ *     tags:
+ *       - Notifications
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               notificationPreferences:
+ *                 type: object
+ *                 properties:
+ *                   expenseAdded:
+ *                     type: boolean
+ *                   paymentReceived:
+ *                     type: boolean
+ *                   settlementReminders:
+ *                     type: boolean
+ *                   groupInvites:
+ *                     type: boolean
+ *                   productUpdatesAndTips:
+ *                     type: boolean
+ *     responses:
+ *       200:
+ *         description: Preferences updated successfully.
+ *       400:
+ *         description: Invalid preference fields or values.
+ *       401:
+ *         description: Unauthenticated.
+ *       404:
+ *         description: User not found.
+ *       503:
+ *         description: Database failure.
+ */
 export async function updateCurrentUserNotificationPreferencesHandler(
   req: Request,
   res: Response,
@@ -140,6 +221,85 @@ export async function updateCurrentUserNotificationPreferencesHandler(
 // In-app Notifications
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * @swagger
+ * /api/notifications:
+ *   get:
+ *     summary: Get notifications for the current user
+ *     tags:
+ *       - Notifications
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: Page number.
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 20
+ *         description: Items per page.
+ *     responses:
+ *       200:
+ *         description: Notifications fetched successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                 notifications:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       recipientUserId:
+ *                         type: string
+ *                       actorUserId:
+ *                         type: string
+ *                         nullable: true
+ *                       type:
+ *                         type: string
+ *                         enum: [expense_added, payment_received, settlement_reminder, group_invite, product_update]
+ *                       title:
+ *                         type: string
+ *                       message:
+ *                         type: string
+ *                       isRead:
+ *                         type: boolean
+ *                       readAt:
+ *                         type: string
+ *                         nullable: true
+ *                       createdAt:
+ *                         type: string
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     total:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *       400:
+ *         description: Invalid page or limit.
+ *       401:
+ *         description: Unauthenticated.
+ *       503:
+ *         description: Database failure.
+ */
 export async function getNotificationsHandler(req: Request, res: Response) {
   const userId = req.auth?.userId;
 
@@ -199,6 +359,32 @@ export async function getNotificationsHandler(req: Request, res: Response) {
   }
 }
 
+/**
+ * @swagger
+ * /api/notifications/unread-count:
+ *   get:
+ *     summary: Get unread notification count for the current user
+ *     tags:
+ *       - Notifications
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Unread count fetched.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                 unreadCount:
+ *                   type: integer
+ *       401:
+ *         description: Unauthenticated.
+ *       503:
+ *         description: Database failure.
+ */
 export async function getUnreadNotificationCountHandler(
   req: Request,
   res: Response,
@@ -230,6 +416,32 @@ export async function getUnreadNotificationCountHandler(
   }
 }
 
+/**
+ * @swagger
+ * /api/notifications/{notificationId}/read:
+ *   patch:
+ *     summary: Mark a notification as read
+ *     tags:
+ *       - Notifications
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: notificationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Notification ID.
+ *     responses:
+ *       200:
+ *         description: Notification marked as read.
+ *       401:
+ *         description: Unauthenticated.
+ *       404:
+ *         description: Notification not found.
+ *       503:
+ *         description: Database failure.
+ */
 export async function markNotificationAsReadHandler(
   req: Request,
   res: Response,
@@ -270,6 +482,32 @@ export async function markNotificationAsReadHandler(
   }
 }
 
+/**
+ * @swagger
+ * /api/notifications/read-all:
+ *   patch:
+ *     summary: Mark all notifications as read for the current user
+ *     tags:
+ *       - Notifications
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: All notifications marked as read.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                 modifiedCount:
+ *                   type: integer
+ *       401:
+ *         description: Unauthenticated.
+ *       503:
+ *         description: Database failure.
+ */
 export async function markAllNotificationsAsReadHandler(
   req: Request,
   res: Response,
@@ -301,6 +539,32 @@ export async function markAllNotificationsAsReadHandler(
   }
 }
 
+/**
+ * @swagger
+ * /api/notifications/{notificationId}:
+ *   delete:
+ *     summary: Delete a notification
+ *     tags:
+ *       - Notifications
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: notificationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Notification ID.
+ *     responses:
+ *       200:
+ *         description: Notification deleted successfully.
+ *       401:
+ *         description: Unauthenticated.
+ *       404:
+ *         description: Notification not found.
+ *       503:
+ *         description: Database failure.
+ */
 export async function deleteNotificationHandler(req: Request, res: Response) {
   const userId = req.auth?.userId;
 
@@ -340,6 +604,84 @@ export async function deleteNotificationHandler(req: Request, res: Response) {
 // ─────────────────────────────────────────────────────────────────────────────
 // On-demand notification sync
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/notifications/sync:
+ *   post:
+ *     summary: Sync settlement reminder notification
+ *     description: |
+ *       On-demand sync that checks the current user's pending settlements and
+ *       creates at most one settlement_reminder notification per ISO week.
+ *
+ *       Call this from the frontend when the user logs in, opens the Home
+ *       screen, or opens the Notifications screen.
+ *
+ *       **Idempotent**: calling multiple times in the same week returns
+ *       `created: false` after the first successful call.
+ *
+ *       **Race-safe**: concurrent calls are protected by a unique index on
+ *       `deduplicationKey`; exactly one insert will succeed.
+ *     tags:
+ *       - Notifications
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Sync completed (whether or not a new notification was created).
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Notification sync completed.
+ *                 created:
+ *                   type: boolean
+ *                   description: >
+ *                     true only when a new settlement_reminder notification was
+ *                     inserted this call. false when the preference is disabled,
+ *                     there are no pending settlements, the reminder already
+ *                     exists for this week, or a concurrent request beat this one.
+ *                   example: true
+ *                 pendingSettlementCount:
+ *                   type: integer
+ *                   description: >
+ *                     Number of pending settlements for the current user at the
+ *                     time of the sync, regardless of whether a notification was
+ *                     created.
+ *                   example: 3
+ *       401:
+ *         description: Missing or invalid authentication token.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Authorization token is required.
+ *       503:
+ *         description: Database or service failure.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Unable to sync notifications.
+ */
 
 export async function syncNotificationsHandler(req: Request, res: Response) {
   const userId = req.auth?.userId;

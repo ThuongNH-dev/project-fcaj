@@ -753,27 +753,23 @@ export async function notifyMembersAddedToGroup(
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function getIsoWeekKey(date: Date): string {
-  // Work in UTC to avoid timezone-dependent results.
-  const utcDate = new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  const target = new Date(
+    Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate(),
+    ),
   );
 
-  // ISO weekday: Monday = 1 … Sunday = 7
-  const dayOfWeek = utcDate.getUTCDay() || 7; // convert Sunday (0) → 7
+  const isoWeekday = target.getUTCDay() || 7;
+  target.setUTCDate(target.getUTCDate() + 4 - isoWeekday);
 
-  // Shift to the Thursday of the current ISO week (Thursday is the anchor day).
-  // Adding (4 - dayOfWeek) days moves us to Thursday of the same week.
-  utcDate.setUTCDate(utcDate.getUTCDate() + 4 - dayOfWeek);
+  const isoYear = target.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(isoYear, 0, 1));
 
-  // The ISO week-year is simply the calendar year of that Thursday.
-  const isoYear = utcDate.getUTCFullYear();
-
-  // Week number: days since Jan 4 of isoYear (Jan 4 is always in week 1),
-  // divided by 7, + 1.
-  const jan4 = new Date(Date.UTC(isoYear, 0, 4));
-  const daysSinceJan4 =
-    (utcDate.getTime() - jan4.getTime()) / (86_400_000);
-  const weekNumber = Math.floor(daysSinceJan4 / 7) + 1;
+  const weekNumber = Math.ceil(
+    ((target.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7,
+  );
 
   return `${isoYear}-W${String(weekNumber).padStart(2, "0")}`;
 }
@@ -929,4 +925,98 @@ export async function syncSettlementRemindersForUser(
   }
 
   return { created, pendingSettlementCount };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Product Update & Tips — admin broadcast
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ProductUpdateResult {
+  recipientCount: number;
+  createdCount: number;
+}
+
+/**
+ * Broadcast a product_update notification to all opted-in users.
+ *
+ * - Queries users in a single batch (no N+1 loop).
+ * - Uses bulkWrite with ordered:false so one duplicate does not stop the rest.
+ * - Duplicate key (E11000) is silently skipped and NOT counted in createdCount.
+ * - Any other DB error is re-thrown so the controller returns 503.
+ *
+ * @param broadcastId  Caller-generated UUID; scopes deduplicationKey to this broadcast.
+ * @param actorUserId  Admin user ID.
+ * @param title        Notification title (already trimmed, max 120 chars).
+ * @param message      Notification message (already trimmed, max 1000 chars).
+ */
+export async function createProductUpdateNotifications(
+  broadcastId: string,
+  actorUserId: string,
+  title: string,
+  message: string,
+): Promise<ProductUpdateResult> {
+  const users = await getUsersCollection();
+
+  // ── Batch query opted-in users ────────────────────────────────────────────
+  // "productUpdatesAndTips" must be explicitly true.
+  // Missing or false → default false → excluded.
+  const optedInUsers = await users
+    .find(
+      { "notificationPreferences.productUpdatesAndTips": true },
+      { projection: { _id: 1 } },
+    )
+    .toArray();
+
+  const recipientCount = optedInUsers.length;
+
+  if (recipientCount === 0) {
+    return { recipientCount: 0, createdCount: 0 };
+  }
+
+  const now = new Date();
+
+  const operations = optedInUsers.map((user) => {
+    const recipientUserId = user._id.toString();
+    return {
+      insertOne: {
+        document: {
+          recipientUserId,
+          actorUserId,
+          type: "product_update" as const,
+          title,
+          message,
+          groupId: null,
+          expenseId: null,
+          settlementId: null,
+          isRead: false,
+          readAt: null,
+          deduplicationKey: `product-update:${broadcastId}:${recipientUserId}`,
+          createdAt: now,
+        } satisfies NotificationDocument,
+      },
+    };
+  });
+
+  const collection = await getNotificationsCollection();
+
+  let createdCount = 0;
+
+  try {
+    const bulkResult = await collection.bulkWrite(operations, { ordered: false });
+    createdCount = bulkResult.insertedCount ?? 0;
+  } catch (error: any) {
+    if (error && error.name === "MongoBulkWriteError") {
+      createdCount = error.insertedCount ?? 0;
+      // Throw if any error is NOT duplicate key (11000)
+      const writeErrors = error.writeErrors || [];
+      const hasOtherErrors = writeErrors.some((we: any) => we.code !== 11000);
+      if (hasOtherErrors) {
+        throw error;
+      }
+    } else {
+      throw error; // Not a bulk write error, bubble up
+    }
+  }
+
+  return { recipientCount, createdCount };
 }
