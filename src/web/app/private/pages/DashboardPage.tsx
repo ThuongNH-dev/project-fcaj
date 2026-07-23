@@ -454,12 +454,21 @@ export function DashboardPage() {
                   Account
                 </h3>
                 <div className="flex items-start gap-4">
-                  <div
-                    className="w-12 h-12 rounded-2xl bg-[#7EDDBA] flex items-center justify-center text-[#065f46]"
-                    style={{ fontWeight: 700 }}
-                  >
-                    {userInitials}
-                  </div>
+                  <Avatar className="w-12 h-12 rounded-2xl bg-[#7EDDBA] text-[#065f46] flex-shrink-0">
+                    {userAvatarUrl ? (
+                      <AvatarImage
+                        src={userAvatarUrl}
+                        alt={userName}
+                        className="object-cover"
+                      />
+                    ) : null}
+                    <AvatarFallback
+                      className="rounded-2xl bg-[#7EDDBA] text-[#065f46] text-sm"
+                      style={{ fontWeight: 700 }}
+                    >
+                      {userInitials}
+                    </AvatarFallback>
+                  </Avatar>
                   <div className="min-w-0">
                     <p className="text-[#111827]" style={{ fontWeight: 700 }}>
                       {userName}
