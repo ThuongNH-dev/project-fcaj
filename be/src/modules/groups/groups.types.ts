@@ -21,6 +21,25 @@ export interface UpdateGroupInput {
 export interface GroupMember {
   userId: string;
   role: "owner" | "member";
+  /**
+   * Unique ID generated each time a member is added.
+   * Used as part of the notification deduplication key so that
+   * removing then re-adding a user produces a new notification.
+   * Not exposed in PublicGroupMember / API responses.
+   */
+  membershipEventId?: string;
+}
+
+/**
+ * Internal result returned by addGroupMember so the controller
+ * knows whether a new membership was created and can trigger
+ * a notification without coupling the service to the notification layer.
+ */
+export interface AddGroupMemberResult {
+  group: PublicGroup;
+  addedMemberId: string;
+  membershipEventId: string;
+  membershipCreated: true;
 }
 
 export interface PublicGroupMember {

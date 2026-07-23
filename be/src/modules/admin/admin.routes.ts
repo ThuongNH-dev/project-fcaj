@@ -16,6 +16,7 @@ import {
   getAdminUserByIdHandler,
   getAdminUsersHandler,
   updateAdminUserRoleHandler,
+  sendProductUpdateHandler,
 } from "./admin.controller.js";
 
 const adminRouter = Router();
@@ -40,5 +41,11 @@ adminRouter.get(
 );
 adminRouter.get("/activity", authMiddleware, requireAdmin, getAdminActivityLogsHandler);
 adminRouter.get("/session", authMiddleware, requireAdmin, getAdminSessionHandler);
+adminRouter.post(
+  "/notifications/product-update",
+  authMiddleware,
+  requireAdmin,
+  sendProductUpdateHandler,
+);
 
 export default adminRouter;

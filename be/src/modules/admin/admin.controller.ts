@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { randomUUID } from "crypto";
 import {
   countUsersByRole,
   deleteUserById,
@@ -10,6 +11,9 @@ import {
   getAllGroups,
   getGroupById,
 } from "../groups/groups.service.js";
+import {
+  createProductUpdateNotifications,
+} from "../notifications/notifications.service.js";
 import {
   getAdminActivityLogs,
   getAdminDashboardStats,
@@ -510,6 +514,101 @@ export async function getAdminSettlementByIdHandler(req: Request, res: Response)
     return res.status(503).json({
       ok: false,
       message,
+    });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/admin/notifications/product-update
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function sendProductUpdateHandler(req: Request, res: Response) {
+  const userId = req.auth?.userId;
+
+  if (!userId) {
+    return res.status(401).json({
+      ok: false,
+      message: "Authorization token is required.",
+    });
+  }
+
+  // ── Validate body ────────────────────────────────────────────────────────
+  if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
+    return res.status(400).json({
+      ok: false,
+      message: "Request body must be an object.",
+    });
+  }
+
+  const body = req.body as Record<string, unknown>;
+
+  if (typeof body.title !== "string") {
+    return res.status(400).json({
+      ok: false,
+      message: "title is required and must be a string.",
+    });
+  }
+
+  if (typeof body.message !== "string") {
+    return res.status(400).json({
+      ok: false,
+      message: "message is required and must be a string.",
+    });
+  }
+
+  const title = body.title.trim();
+  const message = body.message.trim();
+
+  if (title.length === 0) {
+    return res.status(400).json({
+      ok: false,
+      message: "title must not be empty.",
+    });
+  }
+
+  if (message.length === 0) {
+    return res.status(400).json({
+      ok: false,
+      message: "message must not be empty.",
+    });
+  }
+
+  if (title.length > 120) {
+    return res.status(400).json({
+      ok: false,
+      message: "title must be at most 120 characters.",
+    });
+  }
+
+  if (message.length > 1000) {
+    return res.status(400).json({
+      ok: false,
+      message: "message must be at most 1000 characters.",
+    });
+  }
+
+  // ── Broadcast ────────────────────────────────────────────────────────────
+  const broadcastId = randomUUID();
+
+  try {
+    const { recipientCount, createdCount } =
+      await createProductUpdateNotifications(broadcastId, userId, title, message);
+
+    return res.status(200).json({
+      ok: true,
+      message: "Product update notifications sent successfully.",
+      recipientCount,
+      createdCount,
+    });
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : "Unable to send product update notifications.";
+
+    return res.status(503).json({
+      ok: false,
+      message: errorMessage,
     });
   }
 }

@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import type { SupportedCurrency } from "../auth/auth.types.js";
 import { getUserById } from "../auth/auth.service.js";
+import { notifyMembersAddedToGroup } from "../notifications/notifications.service.js";
 import {
   addGroupMember,
   createGroup,
@@ -118,7 +119,7 @@ export async function createGroupHandler(req: Request, res: Response) {
       });
     }
 
-    const group = await createGroup({
+    const result = await createGroup({
       name,
       icon,
       color,
@@ -127,10 +128,23 @@ export async function createGroupHandler(req: Request, res: Response) {
       members: req.body.members,
     });
 
+    // Fire group_invite notifications for initial members added at creation.
+    // This runs after the group is committed; errors here must not fail the response.
+    if (result.initialMembers.length > 0) {
+      notifyMembersAddedToGroup({
+        groupId: result.group.id,
+        groupName: result.group.name,
+        actorUserId: currentUser.id,
+        addedMembers: result.initialMembers,
+      }).catch((err) =>
+        console.error("[notifications] createGroup notify failed:", err),
+      );
+    }
+
     return res.status(201).json({
       ok: true,
       message: "Group created successfully.",
-      group,
+      group: result.group,
     });
   } catch (error) {
     const message =
@@ -373,23 +387,39 @@ export async function addGroupMemberHandler(req: Request, res: Response) {
       });
     }
 
-    const group = await addGroupMember({
+    const result = await addGroupMember({
       groupId,
       userId: currentUser.id,
       email,
     });
 
-    if (!group) {
+    if (!result) {
       return res.status(404).json({
         ok: false,
         message: "Group not found.",
       });
     }
 
+    // Fire group_invite notification for the newly added member.
+    // Runs after membership is committed; errors here must not fail the response.
+    notifyMembersAddedToGroup({
+      groupId,
+      groupName: result.group.name,
+      actorUserId: currentUser.id,
+      addedMembers: [
+        {
+          userId: result.addedMemberId,
+          membershipEventId: result.membershipEventId,
+        },
+      ],
+    }).catch((err) =>
+      console.error("[notifications] addGroupMember notify failed:", err),
+    );
+
     return res.status(200).json({
       ok: true,
       message: "Member added successfully.",
-      group,
+      group: result.group,
     });
   } catch (error) {
     const message =

@@ -20,6 +20,107 @@ import type { GetMySettlementsFilters } from "./settlements.types.js";
 // GET /api/settlements/my
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * @swagger
+ * /api/settlements/my:
+ *   get:
+ *     summary: Get settlements for the current user
+ *     tags:
+ *       - Settlements
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 20
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, sent]
+ *         description: Filter by settlement status.
+ *       - in: query
+ *         name: role
+ *         schema:
+ *           type: string
+ *           enum: [debtor, creditor]
+ *         description: Filter by user role in the settlement.
+ *       - in: query
+ *         name: groupId
+ *         schema:
+ *           type: string
+ *         description: Filter by group ID.
+ *       - in: query
+ *         name: expenseId
+ *         schema:
+ *           type: string
+ *         description: Filter by expense ID.
+ *     responses:
+ *       200:
+ *         description: Settlements fetched successfully.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                 settlements:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                       expenseId:
+ *                         type: string
+ *                       groupId:
+ *                         type: string
+ *                       debtorUserId:
+ *                         type: string
+ *                       creditorUserId:
+ *                         type: string
+ *                       amount:
+ *                         type: number
+ *                       currency:
+ *                         type: string
+ *                         enum: [USD, VND]
+ *                       status:
+ *                         type: string
+ *                         enum: [pending, sent]
+ *                       sentAt:
+ *                         type: string
+ *                         nullable: true
+ *                       createdAt:
+ *                         type: string
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     total:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *       400:
+ *         description: Invalid query parameters.
+ *       401:
+ *         description: Unauthenticated.
+ *       503:
+ *         description: Database failure.
+ */
 export async function getMySettlementsHandler(req: Request, res: Response) {
   const userId = req.auth?.userId;
 
@@ -132,6 +233,51 @@ export async function getMySettlementsHandler(req: Request, res: Response) {
 // PATCH /api/settlements/:settlementId/sent
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * @swagger
+ * /api/settlements/{settlementId}/sent:
+ *   patch:
+ *     summary: Mark a settlement as sent (debtor only)
+ *     description: |
+ *       Only the debtor can mark a settlement as sent.
+ *       This operation is idempotent — calling it again when already sent
+ *       returns the settlement with `wasAlreadySent: true`.
+ *       A payment_received notification is sent to the creditor if they have
+ *       opted in to paymentReceived notifications.
+ *     tags:
+ *       - Settlements
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: settlementId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Settlement ID.
+ *     responses:
+ *       200:
+ *         description: Settlement marked as sent.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 ok:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *                 settlement:
+ *                   type: object
+ *       400:
+ *         description: Invalid settlementId.
+ *       401:
+ *         description: Unauthenticated.
+ *       404:
+ *         description: Settlement not found or not owned by debtor.
+ *       503:
+ *         description: Database failure.
+ */
 export async function markSettlementAsSentHandler(
   req: Request,
   res: Response,
