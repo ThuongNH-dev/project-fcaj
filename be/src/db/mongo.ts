@@ -1,4 +1,4 @@
-import { Db, MongoClient } from "mongodb";
+import { Db, MongoClient, type ClientSession } from "mongodb";
 import { env } from "../config/env.js";
 
 let client: MongoClient | undefined;
@@ -53,3 +53,14 @@ export async function closeMongoConnection(): Promise<void> {
     db = undefined;
   }
 }
+
+export function getMongoClient(): MongoClient {
+  if (!client) {
+    throw new Error("MongoDB has not been connected yet.");
+  }
+
+  return client;
+}
+
+export type { ClientSession };
+

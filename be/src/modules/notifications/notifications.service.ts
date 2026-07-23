@@ -435,3 +435,64 @@ export async function deleteNotification(
 
   return result.deletedCount > 0;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Idempotent notification creation (used by Payment Sent flow)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface CreateNotificationInput {
+  recipientUserId: string;
+  actorUserId: string | null;
+  type: NotificationType;
+  title: string;
+  message: string;
+  groupId: string | null;
+  expenseId: string | null;
+  settlementId: string | null;
+  deduplicationKey: string;
+}
+
+/**
+ * Insert a notification idempotently using deduplicationKey.
+ * If a notification with the same deduplicationKey already exists (duplicate
+ * key error E11000), treat it as success and return true.
+ *
+ * @returns true if notification was created or already exists, false on unexpected error
+ */
+export async function createNotificationIdempotently(
+  input: CreateNotificationInput,
+): Promise<boolean> {
+  const collection = await getNotificationsCollection();
+
+  const doc: NotificationDocument = {
+    recipientUserId: input.recipientUserId,
+    actorUserId: input.actorUserId,
+    type: input.type,
+    title: input.title,
+    message: input.message,
+    groupId: input.groupId,
+    expenseId: input.expenseId,
+    settlementId: input.settlementId,
+    isRead: false,
+    readAt: null,
+    deduplicationKey: input.deduplicationKey,
+    createdAt: new Date(),
+  };
+
+  try {
+    await collection.insertOne(doc);
+    return true;
+  } catch (error: unknown) {
+    // Duplicate key error (E11000) on deduplicationKey → idempotent success
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      (error as { code: number }).code === 11000
+    ) {
+      return true;
+    }
+
+    // Unexpected error — propagate
+    throw error;
+  }
+}

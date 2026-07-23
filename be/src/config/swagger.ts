@@ -1111,6 +1111,10 @@ swaggerSpec.paths = {
         404: {
           description: "User, group, receipt, or expense not found",
         },
+        409: {
+          description:
+            "Conflict \u2013 one or more payments have been marked as sent and the update would affect them",
+        },
         503: {
           description: "MongoDB or backend service failed",
         },
@@ -1143,6 +1147,10 @@ swaggerSpec.paths = {
         },
         404: {
           description: "User or expense not found",
+        },
+        409: {
+          description:
+            "Conflict \u2013 expense has been settled or has payments marked as sent",
         },
         503: {
           description: "MongoDB or backend service failed",
@@ -1874,6 +1882,102 @@ swaggerSpec.paths = {
             "Notification not found (or belongs to another user – treated as not found)",
         },
         503: { description: "MongoDB or backend service failed" },
+      },
+    },
+  },
+  "/api/settlements/my": {
+    get: {
+      summary: "Get settlements for the current user (as debtor or creditor)",
+      description:
+        "Returns settlements where the current user is either the debtor or the creditor. Supports pagination and filtering by status, groupId, expenseId, and role.",
+      tags: ["Settlements"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "query",
+          name: "page",
+          schema: { type: "integer", minimum: 1, default: 1 },
+          description: "Page number (default 1)",
+        },
+        {
+          in: "query",
+          name: "limit",
+          schema: { type: "integer", minimum: 1, maximum: 100, default: 20 },
+          description: "Items per page (default 20, max 100)",
+        },
+        {
+          in: "query",
+          name: "status",
+          schema: { type: "string", enum: ["pending", "sent"] },
+          description: "Filter by settlement status",
+        },
+        {
+          in: "query",
+          name: "groupId",
+          schema: { type: "string" },
+          description: "Filter by group (MongoDB ObjectId)",
+        },
+        {
+          in: "query",
+          name: "expenseId",
+          schema: { type: "string" },
+          description: "Filter by expense (MongoDB ObjectId)",
+        },
+        {
+          in: "query",
+          name: "role",
+          schema: { type: "string", enum: ["debtor", "creditor"] },
+          description: "Filter by user role in the settlement",
+        },
+      ],
+      responses: {
+        200: {
+          description: "Settlements fetched successfully with pagination metadata",
+        },
+        400: {
+          description: "Invalid query parameters (page, limit, status, groupId, expenseId, or role)",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        503: {
+          description: "MongoDB or backend service failed",
+        },
+      },
+    },
+  },
+  "/api/settlements/{settlementId}/sent": {
+    patch: {
+      summary: "Mark a settlement as sent (debtor payment sent)",
+      description:
+        "Only the debtor of the settlement can call this endpoint. Transitions the settlement from pending to sent. Idempotent: if already sent, returns the current state without changes. Creates a payment_received notification for the creditor if their paymentReceived preference is enabled.",
+      tags: ["Settlements"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "settlementId",
+          required: true,
+          schema: { type: "string" },
+          description: "MongoDB ObjectId of the settlement",
+        },
+      ],
+      responses: {
+        200: {
+          description: "Settlement marked as sent successfully (or already sent \u2013 idempotent)",
+        },
+        400: {
+          description: "settlementId is not a valid ObjectId",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "Settlement not found or does not belong to the current user as debtor",
+        },
+        503: {
+          description: "MongoDB or backend service failed",
+        },
       },
     },
   },
