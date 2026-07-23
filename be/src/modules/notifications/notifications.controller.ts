@@ -7,6 +7,7 @@ import {
   markNotificationAsRead,
   deleteNotification,
   updateCurrentUserNotificationPreferences,
+  syncSettlementRemindersForUser,
 } from "./notifications.service.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -331,6 +332,38 @@ export async function deleteNotificationHandler(req: Request, res: Response) {
       error instanceof Error
         ? error.message
         : "Unable to delete notification.";
+
+    return res.status(503).json({ ok: false, message });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// On-demand notification sync
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function syncNotificationsHandler(req: Request, res: Response) {
+  const userId = req.auth?.userId;
+
+  if (!userId) {
+    return res.status(401).json({
+      ok: false,
+      message: "Authorization token is required.",
+    });
+  }
+
+  try {
+    const { created, pendingSettlementCount } =
+      await syncSettlementRemindersForUser(userId);
+
+    return res.status(200).json({
+      ok: true,
+      message: "Notification sync completed.",
+      created,
+      pendingSettlementCount,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to sync notifications.";
 
     return res.status(503).json({ ok: false, message });
   }

@@ -639,8 +639,8 @@ export async function notifyExpenseAdded(
         doc._id!.toString(),
         normalizeNotificationPreferences(
           doc.notificationPreferences as
-            | Partial<Record<string, unknown>>
-            | undefined,
+          | Partial<Record<string, unknown>>
+          | undefined,
         ),
       ]),
     );
@@ -718,8 +718,8 @@ export async function notifyMembersAddedToGroup(
         doc._id!.toString(),
         normalizeNotificationPreferences(
           doc.notificationPreferences as
-            | Partial<Record<string, unknown>>
-            | undefined,
+          | Partial<Record<string, unknown>>
+          | undefined,
         ),
       ]),
     );
@@ -748,3 +748,185 @@ export async function notifyMembersAddedToGroup(
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Settlement Reminder — on-demand sync
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function getIsoWeekKey(date: Date): string {
+  // Work in UTC to avoid timezone-dependent results.
+  const utcDate = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
+
+  // ISO weekday: Monday = 1 … Sunday = 7
+  const dayOfWeek = utcDate.getUTCDay() || 7; // convert Sunday (0) → 7
+
+  // Shift to the Thursday of the current ISO week (Thursday is the anchor day).
+  // Adding (4 - dayOfWeek) days moves us to Thursday of the same week.
+  utcDate.setUTCDate(utcDate.getUTCDate() + 4 - dayOfWeek);
+
+  // The ISO week-year is simply the calendar year of that Thursday.
+  const isoYear = utcDate.getUTCFullYear();
+
+  // Week number: days since Jan 4 of isoYear (Jan 4 is always in week 1),
+  // divided by 7, + 1.
+  const jan4 = new Date(Date.UTC(isoYear, 0, 4));
+  const daysSinceJan4 =
+    (utcDate.getTime() - jan4.getTime()) / (86_400_000);
+  const weekNumber = Math.floor(daysSinceJan4 / 7) + 1;
+
+  return `${isoYear}-W${String(weekNumber).padStart(2, "0")}`;
+}
+
+/**
+ * Currency display order for settlement reminder messages.
+ * Currencies are shown in this fixed order to keep messages stable.
+ */
+const CURRENCY_DISPLAY_ORDER = ["VND", "USD"] as const;
+
+//Format a settlement reminder message that aggregates amounts by currency.
+function buildReminderMessage(
+  settlementCount: number,
+  amountByCurrency: Map<string, number>,
+): string {
+  const label =
+    settlementCount === 1 ? "1 pending settlement" : `${settlementCount} pending settlements`;
+
+  // Build currency parts in fixed order; any currencies not in the known list
+  // are appended at the end sorted alphabetically for determinism.
+  const knownParts: string[] = [];
+  const unknownCurrencies: string[] = [];
+
+  for (const currency of CURRENCY_DISPLAY_ORDER) {
+    const amount = amountByCurrency.get(currency);
+    if (amount !== undefined) {
+      knownParts.push(formatAmount(amount, currency));
+    }
+  }
+
+  for (const [currency, amount] of amountByCurrency) {
+    if (!(CURRENCY_DISPLAY_ORDER as readonly string[]).includes(currency)) {
+      unknownCurrencies.push(currency);
+    }
+    void amount; // used below
+  }
+  unknownCurrencies.sort();
+  for (const currency of unknownCurrencies) {
+    const amount = amountByCurrency.get(currency)!;
+    knownParts.push(formatAmount(amount, currency));
+  }
+
+  const totalStr =
+    knownParts.length === 1
+      ? knownParts[0]
+      : `${knownParts.slice(0, -1).join(", ")} and ${knownParts[knownParts.length - 1]}`;
+
+  return `You have ${label} totaling ${totalStr}.`;
+}
+
+export interface SyncSettlementRemindersResult {
+  created: boolean;
+  pendingSettlementCount: number;
+}
+
+/**
+ * On-demand settlement reminder sync for the current user.
+ */
+export async function syncSettlementRemindersForUser(
+  userId: string,
+): Promise<SyncSettlementRemindersResult> {
+  // ── 1. Fetch pending settlements ──────────────────────────────────────────
+  const { getSettlementsCollection } = await import(
+    "../settlements/settlements.service.js"
+  );
+  const settlementsCollection = await getSettlementsCollection();
+
+  const pendingSettlements = await settlementsCollection
+    .find({ debtorUserId: userId, status: "pending" })
+    .project<{ amount: number; currency: string }>({ amount: 1, currency: 1 })
+    .toArray();
+
+  const pendingSettlementCount = pendingSettlements.length;
+
+  // ── 2. Resolve preference ─────────────────────────────────────────────────
+  const users = await getUsersCollection();
+  const { ObjectId: MongoObjectId2 } = await import("mongodb");
+
+  let settlementRemindersEnabled = true; // default true when field missing
+  if (MongoObjectId2.isValid(userId)) {
+    const userDoc = await users.findOne(
+      { _id: new MongoObjectId2(userId) },
+      { projection: { notificationPreferences: 1 } },
+    );
+    const prefs = normalizeNotificationPreferences(
+      userDoc?.notificationPreferences as
+      | Partial<Record<string, unknown>>
+      | undefined,
+    );
+    settlementRemindersEnabled = prefs.settlementReminders;
+  }
+
+  // ── 3 & 4. Early exit without inserting ──────────────────────────────────
+  if (!settlementRemindersEnabled || pendingSettlementCount === 0) {
+    return { created: false, pendingSettlementCount };
+  }
+
+  // ── 5. Build notification content ─────────────────────────────────────────
+  const weekKey = getIsoWeekKey(new Date());
+  const deduplicationKey = `settlement-reminder:${userId}:${weekKey}`;
+
+  // Aggregate amounts by currency
+  const amountByCurrency = new Map<string, number>();
+  for (const s of pendingSettlements) {
+    const currency = s.currency as string;
+    amountByCurrency.set(currency, (amountByCurrency.get(currency) ?? 0) + s.amount);
+  }
+
+  const message = buildReminderMessage(pendingSettlementCount, amountByCurrency);
+
+  // ── 6. Idempotent insert ──────────────────────────────────────────────────
+  // createNotificationIdempotently returns true for both new inserts AND
+  // duplicate-key successes — we cannot distinguish them from its return value.
+  // To accurately report `created`, we attempt the raw insert ourselves and
+  // inspect the outcome directly.
+
+  const collection = await getNotificationsCollection();
+  const now = new Date();
+
+  const doc: NotificationDocument = {
+    recipientUserId: userId,
+    actorUserId: null,
+    type: "settlement_reminder",
+    title: "Settlement reminder",
+    message,
+    groupId: null,
+    expenseId: null,
+    settlementId: null,
+    isRead: false,
+    readAt: null,
+    deduplicationKey,
+    createdAt: now,
+  };
+
+  let created = false;
+
+  try {
+    await collection.insertOne(doc);
+    created = true;
+  } catch (error: unknown) {
+    // Duplicate key (E11000) → this week's reminder already exists.
+    // Treat as idempotent success but created = false.
+    const isDuplicate =
+      error instanceof Error &&
+      "code" in error &&
+      (error as { code: number }).code === 11000;
+
+    if (!isDuplicate) {
+      // Unexpected DB error — propagate so the handler can return 503.
+      throw error;
+    }
+    // isDuplicate → created stays false
+  }
+
+  return { created, pendingSettlementCount };
+}

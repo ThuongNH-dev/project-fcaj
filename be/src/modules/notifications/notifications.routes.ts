@@ -8,6 +8,7 @@ import {
   markNotificationAsReadHandler,
   markAllNotificationsAsReadHandler,
   deleteNotificationHandler,
+  syncNotificationsHandler,
 } from "./notifications.controller.js";
 
 const notificationsRouter = Router();
@@ -40,6 +41,9 @@ notificationsRouter.patch(
   authMiddleware,
   markAllNotificationsAsReadHandler,
 );
+
+// ─── On-demand notification sync ─────────────────────────────────────────────
+notificationsRouter.post("/sync", authMiddleware, syncNotificationsHandler);
 
 // ─── Single notification actions ─────────────────────────────────────────────
 notificationsRouter.patch(
