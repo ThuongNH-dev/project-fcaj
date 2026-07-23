@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { SettlementConflictError } from "../../errors/settlement-conflict.error.js";
 import { areUsersInGroup, isUserInGroup } from "../../policies/group.policy.js";
 import { getUserById } from "../auth/auth.service.js";
 import { getGroupByIdForUser } from "../groups/groups.service.js";
@@ -487,6 +488,13 @@ export async function updateExpenseHandler(req: Request, res: Response) {
       expense,
     });
   } catch (error) {
+    if (error instanceof SettlementConflictError) {
+      return res.status(409).json({
+        ok: false,
+        message: error.message,
+      });
+    }
+
     const message =
       error instanceof Error ? error.message : "Unable to update expense.";
 
@@ -499,7 +507,10 @@ export async function updateExpenseHandler(req: Request, res: Response) {
             message === "Expense split mode is invalid." ||
             message === "Expense participant user id is required." ||
             message === "Expense participant share amount must be greater than zero." ||
-            message === "Expense participant share amounts must equal the total amount."
+            message === "Expense participant share amounts must equal the total amount." ||
+            message === "Paid by user must be a member of the selected group." ||
+            message === "All expense participants must belong to the selected group." ||
+            message === "Receipt not found or does not belong to the selected group."
           ? 400
           : 503;
 
@@ -546,6 +557,13 @@ export async function deleteExpenseHandler(req: Request, res: Response) {
       message: "Expense deleted successfully.",
     });
   } catch (error) {
+    if (error instanceof SettlementConflictError) {
+      return res.status(409).json({
+        ok: false,
+        message: error.message,
+      });
+    }
+
     const message =
       error instanceof Error ? error.message : "Unable to delete expense.";
 

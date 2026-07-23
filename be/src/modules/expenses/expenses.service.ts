@@ -1,11 +1,22 @@
 import { ObjectId as MongoObjectId } from "mongodb";
 import type { Collection, IndexDescription, ObjectId } from "mongodb";
-import { connectToMongo } from "../../db/mongo.js";
+import { connectToMongo, getMongoClient } from "../../db/mongo.js";
+import { SettlementConflictError } from "../../errors/settlement-conflict.error.js";
 import {
   canSettleExpense,
+  isUserInGroup,
+  areUsersInGroup,
 } from "../../policies/group.policy.js";
 import type { SupportedCurrency } from "../auth/auth.types.js";
 import { getGroupByIdForUser, getGroupIdsByUserId } from "../groups/groups.service.js";
+import { getReceiptUploadByIdForUser } from "../receipts/receipts.service.js";
+import {
+  createSettlementsForExpense,
+  reconcileSettlements,
+  deleteSettlementsByExpenseId,
+  hasAnySentSettlement,
+  cascadeSettleByExpenseId,
+} from "../settlements/settlements.service.js";
 import type {
   CreateExpenseInput,
   ExpenseCategory,
@@ -271,56 +282,82 @@ export async function createExpense(
 
   const createdAt = new Date();
   const updatedAt = createdAt;
-  const result = await expenses.insertOne({
-    groupId: input.groupId,
-    createdBy: input.createdBy,
-    paidByUserId: input.paidByUserId,
-    title: normalizedTitle,
-    description: normalizedDescription,
-    expenseDate: normalizedExpenseDate,
-    category: normalizedCategory,
-    currency: normalizedCurrency,
-    amount: normalizedAmount,
-    splitMode: normalizedSplitMode,
-    participants: normalizedParticipants,
-    receiptId: normalizedReceiptId,
-    settlementStatus: "pending",
-    settledAt: null,
-    settledBy: null,
-    settlementNote: null,
-    reviewStatus: "pending",
-    rejectionReason: null,
-    reviewedBy: null,
-    reviewedAt: null,
-    createdAt,
-    updatedAt,
-  });
 
-  return toPublicExpense({
-    _id: result.insertedId,
-    groupId: input.groupId,
-    createdBy: input.createdBy,
-    paidByUserId: input.paidByUserId,
-    title: normalizedTitle,
-    description: normalizedDescription,
-    expenseDate: normalizedExpenseDate,
-    category: normalizedCategory,
-    currency: normalizedCurrency,
-    amount: normalizedAmount,
-    splitMode: normalizedSplitMode,
-    participants: normalizedParticipants,
-    receiptId: normalizedReceiptId,
-    settlementStatus: "pending",
-    settledAt: null,
-    settledBy: null,
-    settlementNote: null,
-    reviewStatus: "pending",
-    rejectionReason: null,
-    reviewedBy: null,
-    reviewedAt: null,
-    createdAt,
-    updatedAt,
-  });
+  const client = getMongoClient();
+  const session = client.startSession();
+
+  try {
+    let insertedId: ObjectId;
+
+    await session.withTransaction(async () => {
+      const result = await expenses.insertOne(
+        {
+          groupId: input.groupId,
+          createdBy: input.createdBy,
+          paidByUserId: input.paidByUserId,
+          title: normalizedTitle,
+          description: normalizedDescription,
+          expenseDate: normalizedExpenseDate,
+          category: normalizedCategory,
+          currency: normalizedCurrency,
+          amount: normalizedAmount,
+          splitMode: normalizedSplitMode,
+          participants: normalizedParticipants,
+          receiptId: normalizedReceiptId,
+          settlementStatus: "pending",
+          settledAt: null,
+          settledBy: null,
+          settlementNote: null,
+          reviewStatus: "pending",
+          rejectionReason: null,
+          reviewedBy: null,
+          reviewedAt: null,
+          createdAt,
+          updatedAt,
+        },
+        { session },
+      );
+
+      insertedId = result.insertedId;
+
+      await createSettlementsForExpense(
+        insertedId.toString(),
+        input.groupId,
+        input.paidByUserId,
+        normalizedParticipants,
+        normalizedCurrency,
+        session,
+      );
+    });
+
+    return toPublicExpense({
+      _id: insertedId!,
+      groupId: input.groupId,
+      createdBy: input.createdBy,
+      paidByUserId: input.paidByUserId,
+      title: normalizedTitle,
+      description: normalizedDescription,
+      expenseDate: normalizedExpenseDate,
+      category: normalizedCategory,
+      currency: normalizedCurrency,
+      amount: normalizedAmount,
+      splitMode: normalizedSplitMode,
+      participants: normalizedParticipants,
+      receiptId: normalizedReceiptId,
+      settlementStatus: "pending",
+      settledAt: null,
+      settledBy: null,
+      settlementNote: null,
+      reviewStatus: "pending",
+      rejectionReason: null,
+      reviewedBy: null,
+      reviewedAt: null,
+      createdAt,
+      updatedAt,
+    });
+  } finally {
+    await session.endSession();
+  }
 }
 
 export async function updateExpense(
@@ -343,6 +380,39 @@ export async function updateExpense(
     throw new Error("You are not allowed to update this expense.");
   }
 
+  // 1. Chặn update expense đã settled
+  if (existingExpense.settlementStatus === "settled") {
+    throw new SettlementConflictError(
+      "Cannot update this expense because it has already been settled.",
+    );
+  }
+
+  // 2. Validate group membership
+  const group = await getGroupByIdForUser(existingExpense.groupId, input.userId);
+  if (!group) {
+    return null;
+  }
+
+  if (!isUserInGroup(group.members, input.paidByUserId)) {
+    throw new Error("Paid by user must be a member of the selected group.");
+  }
+
+  if (
+    !areUsersInGroup(
+      group.members,
+      input.participants.map((p) => p.userId),
+    )
+  ) {
+    throw new Error("All expense participants must belong to the selected group.");
+  }
+
+  if (input.receiptId) {
+    const receipt = await getReceiptUploadByIdForUser(input.receiptId, input.userId);
+    if (!receipt || receipt.groupId !== existingExpense.groupId) {
+      throw new Error("Receipt not found or does not belong to the selected group.");
+    }
+  }
+
   const normalizedTitle = normalizeExpenseTitle(input.title);
   const normalizedDescription = normalizeExpenseDescription(input.description);
   const normalizedExpenseDate = normalizeExpenseDate(input.expenseDate);
@@ -359,32 +429,62 @@ export async function updateExpense(
   }
 
   const updatedAt = new Date();
-  const result = await expenses.findOneAndUpdate(
-    {
-      _id: new MongoObjectId(input.expenseId),
-      createdBy: input.userId,
-    },
-    {
-      $set: {
-        paidByUserId: input.paidByUserId,
-        title: normalizedTitle,
-        description: normalizedDescription,
-        expenseDate: normalizedExpenseDate,
-        category: normalizedCategory,
-        currency: normalizedCurrency,
-        amount: normalizedAmount,
-        splitMode: normalizedSplitMode,
-        participants: normalizedParticipants,
-        receiptId: normalizedReceiptId,
-        updatedAt,
-      },
-    },
-    {
-      returnDocument: "after",
-    },
-  );
+  const client = getMongoClient();
+  const session = client.startSession();
 
-  return result ? toPublicExpense(result) : null;
+  try {
+    let result: ExpenseDocument | null = null;
+
+    await session.withTransaction(async () => {
+      // Reconcile settlements FIRST — may throw SettlementConflictError
+      await reconcileSettlements(
+        input.expenseId,
+        existingExpense.groupId,
+        input.paidByUserId,
+        normalizedParticipants,
+        normalizedCurrency,
+        session,
+      );
+
+      // Then update the expense
+      result = await expenses.findOneAndUpdate(
+        {
+          _id: new MongoObjectId(input.expenseId),
+          createdBy: input.userId,
+          settlementStatus: "pending",
+        },
+        {
+          $set: {
+            paidByUserId: input.paidByUserId,
+            title: normalizedTitle,
+            description: normalizedDescription,
+            expenseDate: normalizedExpenseDate,
+            category: normalizedCategory,
+            currency: normalizedCurrency,
+            amount: normalizedAmount,
+            splitMode: normalizedSplitMode,
+            participants: normalizedParticipants,
+            receiptId: normalizedReceiptId,
+            updatedAt,
+          },
+        },
+        {
+          returnDocument: "after",
+          session,
+        },
+      );
+
+      if (!result) {
+        throw new SettlementConflictError(
+          "Cannot update this expense because it has already been settled.",
+        );
+      }
+    });
+
+    return result ? toPublicExpense(result) : null;
+  } finally {
+    await session.endSession();
+  }
 }
 
 export async function deleteExpense(
@@ -408,12 +508,59 @@ export async function deleteExpense(
     throw new Error("You are not allowed to delete this expense.");
   }
 
-  const result = await expenses.deleteOne({
-    _id: new MongoObjectId(expenseId),
-    createdBy: userId,
-  });
+  const client = getMongoClient();
+  const session = client.startSession();
 
-  return result.deletedCount > 0;
+  try {
+    let deleted = false;
+
+    await session.withTransaction(async () => {
+      // Đọc lại expense bằng cùng session
+      const currentExpense = await expenses.findOne(
+        { _id: new MongoObjectId(expenseId) },
+        { session }
+      );
+
+      if (!currentExpense || currentExpense.createdBy !== userId) {
+        throw new Error("You are not allowed to delete this expense.");
+      }
+
+      if (currentExpense.settlementStatus === "settled") {
+        throw new SettlementConflictError(
+          "Cannot delete this expense because it has already been settled.",
+        );
+      }
+
+      const hasSent = await hasAnySentSettlement(expenseId, session);
+      if (hasSent) {
+        throw new SettlementConflictError(
+          "Cannot delete this expense because one or more payments have already been marked as sent.",
+        );
+      }
+
+      // Delete all pending settlements first
+      await deleteSettlementsByExpenseId(expenseId, session);
+
+      // Then delete the expense
+      const result = await expenses.deleteOne(
+        {
+          _id: new MongoObjectId(expenseId),
+          createdBy: userId,
+        },
+        { session },
+      );
+
+      if (result.deletedCount === 0) {
+        throw new Error("Failed to delete expense.");
+      }
+
+      deleted = result.deletedCount > 0;
+    });
+
+    return deleted;
+  } finally {
+    await session.endSession();
+  }
 }
 
 export async function getExpensesByUserId(userId: string): Promise<PublicExpense[]> {
@@ -497,30 +644,51 @@ export async function markExpenseAsSettled(
   }
 
   const updatedAt = new Date();
-  const result = await expenses.findOneAndUpdate(
-    {
-      _id: new MongoObjectId(input.expenseId),
-      settlementStatus: "pending",
-    },
-    {
-      $set: {
-        settlementStatus: "settled",
-        settledAt: updatedAt,
-        settledBy: input.userId,
-        settlementNote: normalizeExpenseSettlementNote(input.settlementNote),
-        updatedAt,
-      },
-    },
-    {
-      returnDocument: "after",
-    },
-  );
+  const client = getMongoClient();
+  const session = client.startSession();
 
-  if (!result) {
-    throw new Error("Expense settlement could not be updated.");
+  try {
+    let result: ExpenseDocument | null = null;
+
+    await session.withTransaction(async () => {
+      // Cascade: mark all pending settlements as sent
+      await cascadeSettleByExpenseId(input.expenseId, session);
+
+      // Then update expense status
+      result = await expenses.findOneAndUpdate(
+        {
+          _id: new MongoObjectId(input.expenseId),
+          paidByUserId: input.userId,
+          settlementStatus: "pending",
+        },
+        {
+          $set: {
+            settlementStatus: "settled",
+            settledAt: updatedAt,
+            settledBy: input.userId,
+            settlementNote: normalizeExpenseSettlementNote(input.settlementNote),
+            updatedAt,
+          },
+        },
+        {
+          returnDocument: "after",
+          session,
+        },
+      );
+
+      if (!result) {
+        throw new Error("Failed to update expense status.");
+      }
+    });
+
+    if (!result) {
+      throw new Error("Expense settlement could not be updated.");
+    }
+
+    return toPublicExpense(result);
+  } finally {
+    await session.endSession();
   }
-
-  return toPublicExpense(result);
 }
 
 export function toPublicExpense(expense: ExpenseDocument): PublicExpense {
