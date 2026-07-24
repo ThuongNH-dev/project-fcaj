@@ -46,6 +46,7 @@ export interface PublicGroupMember {
   id: string;
   name: string;
   email: string;
+  avatarUrl: string;
   role: "owner" | "member";
 }
 
