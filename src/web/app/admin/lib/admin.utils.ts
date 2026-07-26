@@ -7,6 +7,7 @@ import {
   XCircle,
   type LucideIcon,
 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   AdminActivityLog,
   AdminSettlementRecord,
@@ -21,6 +22,28 @@ import {
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
 
 type Translator = ReturnType<typeof useLanguage>["t"];
+
+export const ADMIN_PAGE_SIZE = 5;
+
+export function useAdminPagination<T>(items: T[], pageSize: number = ADMIN_PAGE_SIZE) {
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+
+  useEffect(() => {
+    setPage(1);
+  }, [items.length]);
+
+  useEffect(() => {
+    setPage((currentPage) => Math.min(currentPage, totalPages));
+  }, [totalPages]);
+
+  const pageItems = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return items.slice(start, start + pageSize);
+  }, [items, page, pageSize]);
+
+  return { page, pageItems, setPage, totalPages };
+}
 
 export interface AdminTabDefinition {
   icon: LucideIcon;
@@ -61,6 +84,23 @@ export function getLogTypeLabel(eventType: AdminActivityLog["eventType"]) {
       return "Receipt";
     default:
       return "Activity";
+  }
+}
+
+export function getLogTypeIcon(eventType: AdminActivityLog["eventType"]): LucideIcon {
+  switch (eventType) {
+    case "user_registered":
+      return Users;
+    case "group_created":
+      return Activity;
+    case "expense_created":
+      return Receipt;
+    case "expense_settled":
+      return TrendingUp;
+    case "receipt_uploaded":
+      return Receipt;
+    default:
+      return Activity;
   }
 }
 

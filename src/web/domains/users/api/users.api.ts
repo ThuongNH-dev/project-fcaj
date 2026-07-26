@@ -32,7 +32,7 @@ export function changeCurrentUserPassword(
 }
 
 export function getCurrentUserNotificationPreferences() {
-  return getJson<NotificationPreferencesResponse>("/api/users/me/notifications");
+  return getJson<NotificationPreferencesResponse>("/api/notifications/preferences");
 }
 
 export function updateCurrentUserNotificationPreferences(
@@ -41,7 +41,7 @@ export function updateCurrentUserNotificationPreferences(
   return patchJson<
     UpdateNotificationPreferencesPayload,
     NotificationPreferencesResponse
-  >("/api/users/me/notifications", payload);
+  >("/api/notifications/preferences", payload);
 }
 
 export function getCurrentUserBilling() {

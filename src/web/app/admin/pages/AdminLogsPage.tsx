@@ -6,8 +6,9 @@ import {
 } from "../../../domains/admin-reporting";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
 import { AdminEmptyState } from "../components/AdminEmptyState";
+import { AdminPagination } from "../components/AdminPagination";
 import { AdminSearchInput } from "../components/AdminSearchInput";
-import { formatDateTime, getLogTypeLabel } from "../lib/admin.utils";
+import { formatDateTime, getLogTypeIcon, getLogTypeLabel, useAdminPagination } from "../lib/admin.utils";
 
 export function AdminLogsPage() {
   const [activityLogs, setActivityLogs] = useState<AdminActivityLog[]>([]);
@@ -63,6 +64,13 @@ export function AdminLogsPage() {
     });
   }, [activityLogs, search]);
 
+  const {
+    page: logsPage,
+    pageItems: pagedActivityLogs,
+    setPage: setLogsPage,
+    totalPages: logsTotalPages,
+  } = useAdminPagination(filteredActivityLogs);
+
   return (
     <>
       {errorMessage && (
@@ -79,35 +87,53 @@ export function AdminLogsPage() {
 
       <div className="overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white">
         {isLoadingActivity ? (
-          <div className="px-5 py-8 text-sm text-[#6B7280]">
-            Loading activity logs...
+          <div className="space-y-3 p-5">
+            <div className="h-16 animate-pulse rounded-xl bg-[#F3F4F6]" />
+            <div className="h-16 animate-pulse rounded-xl bg-[#F3F4F6]" />
+            <div className="h-16 animate-pulse rounded-xl bg-[#F3F4F6]" />
+            <div className="h-16 animate-pulse rounded-xl bg-[#F3F4F6]" />
+            <div className="h-16 animate-pulse rounded-xl bg-[#F3F4F6]" />
           </div>
         ) : filteredActivityLogs.length > 0 ? (
           <div className="divide-y divide-[#F3F4F6]">
-            {filteredActivityLogs.map((activityLog) => (
-              <div
-                key={activityLog.id}
-                className="flex items-start justify-between gap-4 px-5 py-4"
-              >
-                <div className="min-w-0">
-                  <div className="mb-1 flex items-center gap-2">
-                    <span
-                      className="inline-flex rounded-full bg-[#F0FAF5] px-2.5 py-1 text-xs text-[#166534]"
-                      style={{ fontWeight: 700 }}
-                    >
-                      {getLogTypeLabel(activityLog.eventType)}
-                    </span>
-                    <p className="text-[#111827]" style={{ fontWeight: 700 }}>
-                      {activityLog.title}
-                    </p>
+            {pagedActivityLogs.map((activityLog) => {
+              const LogIcon = getLogTypeIcon(activityLog.eventType);
+
+              return (
+                <div
+                  key={activityLog.id}
+                  className="flex items-start justify-between gap-4 px-5 py-4 transition-colors hover:bg-[#FAFAFA]"
+                >
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#F0FAF5] shadow-sm">
+                      <LogIcon className="h-4 w-4 text-[#16A34A]" strokeWidth={2.25} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="mb-1 flex flex-wrap items-center gap-2">
+                        <span
+                          className="inline-flex rounded-full bg-[#F0FAF5] px-2.5 py-1 text-xs text-[#166534]"
+                          style={{ fontWeight: 700 }}
+                        >
+                          {getLogTypeLabel(activityLog.eventType)}
+                        </span>
+                        <p className="text-[#111827]" style={{ fontWeight: 700 }}>
+                          {activityLog.title}
+                        </p>
+                      </div>
+                      <p className="text-sm text-[#6B7280]">{activityLog.description}</p>
+                    </div>
                   </div>
-                  <p className="text-sm text-[#6B7280]">{activityLog.description}</p>
+                  <p className="whitespace-nowrap text-xs text-[#9CA3AF]">
+                    {formatDateTime(activityLog.createdAt)}
+                  </p>
                 </div>
-                <p className="whitespace-nowrap text-xs text-[#9CA3AF]">
-                  {formatDateTime(activityLog.createdAt)}
-                </p>
-              </div>
-            ))}
+              );
+            })}
+            <AdminPagination
+              page={logsPage}
+              totalPages={logsTotalPages}
+              onPageChange={setLogsPage}
+            />
           </div>
         ) : (
           <AdminEmptyState

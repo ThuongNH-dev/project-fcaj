@@ -1,4 +1,4 @@
-import { Eye, Trash2, Users } from "lucide-react";
+import { Eye, Search, Trash2, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   deleteAdminGroup,
@@ -9,15 +9,22 @@ import type { Group } from "../../../domains/groups";
 import { formatLocalDate } from "../../../shared/lib/formatters";
 import { useFeedback } from "../../../shared/providers/FeedbackProvider";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "../../../shared/ui/dialog";
 import { AdminEmptyState } from "../components/AdminEmptyState";
-import { AdminSearchInput } from "../components/AdminSearchInput";
+import { AdminPagination } from "../components/AdminPagination";
 import { useAdminLayoutContext } from "../layout/AdminLayout";
-import { formatDateTime } from "../lib/admin.utils";
+import { formatDateTime, useAdminPagination } from "../lib/admin.utils";
 
 export function AdminGroupsPage() {
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [groups, setGroups] = useState<Group[]>([]);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isLoadingGroupDetail, setIsLoadingGroupDetail] = useState(false);
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
   const [search, setSearch] = useState("");
@@ -42,14 +49,6 @@ export function AdminGroupsPage() {
         }
 
         setGroups(loadedGroups);
-        if (loadedGroups.length > 0) {
-          setSelectedGroupId((currentSelectedGroupId) =>
-            currentSelectedGroupId ?? loadedGroups[0].id,
-          );
-        } else {
-          setSelectedGroupId(null);
-          setSelectedGroup(null);
-        }
       } catch (error) {
         if (isMounted) {
           setErrorMessage(
@@ -105,6 +104,11 @@ export function AdminGroupsPage() {
     };
   }, [selectedGroupId]);
 
+  function handleViewGroup(groupId: string) {
+    setSelectedGroupId(groupId);
+    setIsDetailOpen(true);
+  }
+
   const filteredGroups = useMemo(() => {
     const keyword = search.trim().toLowerCase();
 
@@ -128,7 +132,14 @@ export function AdminGroupsPage() {
     });
   }, [groups, search]);
 
-  async function handleDeleteGroup(group: Group) {
+  const {
+    page: groupsPage,
+    pageItems: pagedGroups,
+    setPage: setGroupsPage,
+    totalPages: groupsTotalPages,
+  } = useAdminPagination(filteredGroups);
+
+  async function handleDeleteGroup(group: { id: string; name: string }) {
     const confirmed = await confirm({
       cancelLabel: t.cancel,
       confirmLabel: t.deleteGroup,
@@ -148,25 +159,10 @@ export function AdminGroupsPage() {
       const refreshedGroups = groupsResponse.groups ?? [];
 
       setGroups(refreshedGroups);
-      setSelectedGroup((currentSelectedGroup) =>
-        currentSelectedGroup &&
-        refreshedGroups.some((currentGroup) => currentGroup.id === currentSelectedGroup.id)
-          ? currentSelectedGroup.id === group.id
-            ? null
-            : currentSelectedGroup
-          : null,
-      );
-      setSelectedGroupId((currentSelectedGroupId) => {
-        if (
-          currentSelectedGroupId &&
-          currentSelectedGroupId !== group.id &&
-          refreshedGroups.some((currentGroup) => currentGroup.id === currentSelectedGroupId)
-        ) {
-          return currentSelectedGroupId;
-        }
-
-        return refreshedGroups[0]?.id ?? null;
-      });
+      if (selectedGroupId === group.id) {
+        setIsDetailOpen(false);
+        setSelectedGroup(null);
+      }
       showToast({
         message: response.message,
         variant: "success",
@@ -190,107 +186,166 @@ export function AdminGroupsPage() {
         </div>
       )}
 
-      <AdminSearchInput
-        placeholder={t.searchGroups}
-        value={search}
-        onChange={setSearch}
-      />
-
-      <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-        <div className="overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white">
-          {isLoadingGroups ? (
-            <div className="px-5 py-8 text-sm text-[#6B7280]">
-              Loading admin groups...
-            </div>
-          ) : filteredGroups.length > 0 ? (
-            <div className="divide-y divide-[#F3F4F6]">
-              <div className="px-5 py-4">
-                <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
-                  All Groups
-                </h3>
-                <p className="mt-1 text-sm text-[#6B7280]">
-                  Groups across the whole system.
-                </p>
-              </div>
-              {filteredGroups.map((group) => {
-                const owner =
-                  group.members.find((member) => member.role === "owner") ??
-                  group.members[0];
-                const isSelected = selectedGroupId === group.id;
-
-                return (
-                  <button
-                    key={group.id}
-                    type="button"
-                    onClick={() => setSelectedGroupId(group.id)}
-                    className={`w-full px-5 py-4 text-left transition-colors ${
-                      isSelected ? "bg-[#F0FAF5]" : "hover:bg-[#FAFAFA]"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg"
-                          style={{ background: group.color }}
-                        >
-                          {group.icon}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[#111827]" style={{ fontWeight: 600 }}>
-                            {group.name}
-                          </p>
-                          <p className="truncate text-sm text-[#6B7280]">
-                            Owner: {owner?.name ?? "Unknown"} / {group.members.length}{" "}
-                            {t.members}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <div
-                          className="inline-flex items-center gap-1 rounded-full border border-[#D1FAE5] bg-white px-3 py-1 text-xs text-[#166534]"
-                          style={{ fontWeight: 600 }}
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                          View
-                        </div>
-                        <p className="mt-2 text-xs text-[#9CA3AF]">
-                          Updated {formatLocalDate(group.updatedAt)}
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <AdminEmptyState
-              icon={Users}
-              title={t.noGroupsYet}
-              description={t.noGroupsDesc}
+      <div className="overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#F3F4F6] px-5 py-4">
+          <div>
+            <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
+              All Groups
+            </h3>
+            <p className="mt-1 text-sm text-[#6B7280]">
+              Groups across the whole system.
+            </p>
+          </div>
+          <div className="relative h-9 w-56">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
+            <input
+              type="text"
+              placeholder={t.searchGroups}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="box-border h-9 w-full rounded-xl border border-[#E5E7EB] bg-white pl-9 pr-4 text-sm leading-9 text-[#374151] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA]"
             />
-          )}
+          </div>
         </div>
 
-        <div className="rounded-2xl border border-[#E5E7EB] bg-white p-5">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
-              Group Detail
-            </h3>
-            {selectedGroup && (
-              <button
-                type="button"
-                onClick={() => void handleDeleteGroup(selectedGroup)}
-                disabled={deletingGroupId === selectedGroup.id}
-                className="inline-flex items-center gap-2 rounded-xl bg-[#FEF2F2] px-3 py-2 text-sm text-[#B91C1C] transition-colors hover:bg-[#FEE2E2] disabled:cursor-not-allowed disabled:opacity-60"
-                style={{ fontWeight: 600 }}
-              >
-                <Trash2 className="h-4 w-4" />
-                {deletingGroupId === selectedGroup.id ? t.deleting : t.deleteGroup}
-              </button>
-            )}
+        {isLoadingGroups ? (
+          <div className="space-y-3 p-5">
+            <div className="h-14 animate-pulse rounded-xl bg-[#F3F4F6]" />
+            <div className="h-14 animate-pulse rounded-xl bg-[#F3F4F6]" />
+            <div className="h-14 animate-pulse rounded-xl bg-[#F3F4F6]" />
+            <div className="h-14 animate-pulse rounded-xl bg-[#F3F4F6]" />
+            <div className="h-14 animate-pulse rounded-xl bg-[#F3F4F6]" />
           </div>
+        ) : filteredGroups.length > 0 ? (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-[#F3F4F6] bg-[#FAFAFA]">
+                    {["Group", "Owner", "Members", "Updated", "Actions"].map(
+                      (heading) => (
+                        <th
+                          key={heading}
+                          className="whitespace-nowrap px-5 py-3 text-left text-xs uppercase tracking-wider text-[#9CA3AF]"
+                          style={{ fontWeight: 700 }}
+                        >
+                          {heading}
+                        </th>
+                      ),
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedGroups.map((group) => {
+                    const owner =
+                      group.members.find((member) => member.role === "owner") ??
+                      group.members[0];
+
+                    return (
+                      <tr
+                        key={group.id}
+                        onClick={() => handleViewGroup(group.id)}
+                        className="cursor-pointer border-b border-[#F9FAFB] transition-colors hover:bg-[#F0FAF5]"
+                      >
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base shadow-sm"
+                              style={{ background: group.color }}
+                            >
+                              {group.icon}
+                            </div>
+                            <p
+                              className="text-sm text-[#111827]"
+                              style={{ fontWeight: 700 }}
+                            >
+                              {group.name}
+                            </p>
+                          </div>
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-3.5 text-sm text-[#374151]">
+                          {owner?.name ?? "Unknown"}
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-3.5 text-sm text-[#374151]">
+                          {group.members.length} {t.members}
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-3.5 text-sm text-[#374151]">
+                          {formatLocalDate(group.updatedAt)}
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-3.5">
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleViewGroup(group.id);
+                              }}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-[#6B7280] transition-colors hover:bg-[#F0FAF5] hover:text-[#16A34A]"
+                              title="View group detail"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void handleDeleteGroup(group);
+                              }}
+                              disabled={deletingGroupId === group.id}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg text-[#6B7280] transition-colors hover:bg-[#FEF2F2] hover:text-[#B91C1C] disabled:cursor-not-allowed disabled:opacity-40"
+                              title={t.deleteGroup}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <AdminPagination
+              page={groupsPage}
+              totalPages={groupsTotalPages}
+              onPageChange={setGroupsPage}
+            />
+          </>
+        ) : (
+          <AdminEmptyState
+            icon={Users}
+            title={t.noGroupsYet}
+            description={t.noGroupsDesc}
+          />
+        )}
+      </div>
+
+      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center justify-between gap-3 pr-6">
+              <DialogTitle>Group Detail</DialogTitle>
+              {selectedGroup && (
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteGroup(selectedGroup)}
+                  disabled={deletingGroupId === selectedGroup.id}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#FEF2F2] px-3 py-1.5 text-xs text-[#B91C1C] transition-colors hover:bg-[#FEE2E2] disabled:cursor-not-allowed disabled:opacity-60"
+                  style={{ fontWeight: 600 }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  {deletingGroupId === selectedGroup.id ? t.deleting : t.deleteGroup}
+                </button>
+              )}
+            </div>
+          </DialogHeader>
+
           {isLoadingGroupDetail ? (
-            <p className="text-sm text-[#6B7280]">Loading group detail...</p>
+            <div className="space-y-3">
+              <div className="h-16 animate-pulse rounded-2xl bg-[#F3F4F6]" />
+              <div className="h-20 animate-pulse rounded-2xl bg-[#F3F4F6]" />
+              <div className="h-28 animate-pulse rounded-2xl bg-[#F3F4F6]" />
+            </div>
           ) : selectedGroup ? (
             <div className="space-y-5">
               <div className="flex items-center gap-3">
@@ -359,8 +414,8 @@ export function AdminGroupsPage() {
           ) : (
             <p className="text-sm text-[#6B7280]">Select a group to see details.</p>
           )}
-        </div>
-      </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

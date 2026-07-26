@@ -32,17 +32,25 @@ export function Sidebar({ currentPath }: SidebarProps) {
   const user = useStoredUser();
   const navigate = useNavigate();
 
-  const navItems = [
+  const isAdminUser = user?.role === "admin";
+
+  const fullNavItems = [
     { icon: LayoutDashboard, label: t.dashboard, path: "/dashboard" },
     { icon: Users, label: t.groups, path: "/groups" },
     { icon: Receipt, label: t.expenses, path: "/expenses" },
     { icon: TrendingUp, label: t.settlements, path: "/settlement" },
     { icon: FileText, label: t.receipts, path: "/receipts" },
-    ...(user?.role === "admin"
-      ? [{ icon: Shield, label: t.admin, path: "/admin" }]
-      : []),
-    { icon: Settings, label: t.settings, path: "/profile" },
+    { icon: Settings, label: t.settings, path: "/settings" },
   ];
+
+
+  const adminNavItems = [
+    { icon: LayoutDashboard, label: t.dashboard, path: "/dashboard" },
+    { icon: Shield, label: t.admin, path: "/admin" },
+    { icon: Settings, label: t.settings, path: "/settings" },
+  ];
+
+  const navItems = isAdminUser ? adminNavItems : fullNavItems;
 
   const displayName = user ? `${user.firstName} ${user.lastName}` : "Guest";
   const displayEmail = user?.email ?? "No active session";
@@ -57,7 +65,10 @@ export function Sidebar({ currentPath }: SidebarProps) {
     <div className="flex flex-col h-full">
       <div className="border-b border-[#E5E7EB]">
         <div className="flex items-center gap-3 px-5 py-4">
-          <div className="w-8 h-8 bg-[#7EDDBA] rounded-xl flex items-center justify-center flex-shrink-0">
+          <div
+            className="w-8 h-8 bg-[#7EDDBA] rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ boxShadow: "0 2px 6px rgba(126, 221, 186, 0.45)" }}
+          >
             <Leaf className="w-4 h-4 text-[#065f46]" strokeWidth={2.5} />
           </div>
           {!collapsed ? (
@@ -69,11 +80,12 @@ export function Sidebar({ currentPath }: SidebarProps) {
             </span>
           ) : null}
           <button
-            className="ml-auto p-1 rounded-lg text-[#9CA3AF] hover:text-[#374151] hover:bg-[#F0FAF5] hidden lg:flex"
+            className="ml-auto p-1 rounded-lg text-[#9CA3AF] hover:text-[#374151] hover:bg-[#F0FAF5] hidden lg:flex transition-colors"
             onClick={() => setCollapsed(!collapsed)}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             <ChevronRight
-              className={`w-4 h-4 transition-transform ${
+              className={`w-4 h-4 transition-transform duration-200 ${
                 collapsed ? "" : "rotate-180"
               }`}
             />
@@ -83,7 +95,7 @@ export function Sidebar({ currentPath }: SidebarProps) {
           <div className="flex items-center gap-0.5 bg-[#F3F4F6] rounded-xl p-0.5 w-full">
             <button
               onClick={() => setLang("en")}
-              className={`flex-1 py-1.5 rounded-lg text-xs transition-all ${
+              className={`flex-1 py-1.5 rounded-lg text-xs transition-all duration-150 ${
                 lang === "en"
                   ? "bg-white text-[#111827] shadow-sm"
                   : "text-[#6B7280] hover:text-[#374151]"
@@ -94,7 +106,7 @@ export function Sidebar({ currentPath }: SidebarProps) {
             </button>
             <button
               onClick={() => setLang("vi")}
-              className={`flex-1 py-1.5 rounded-lg text-xs transition-all ${
+              className={`flex-1 py-1.5 rounded-lg text-xs transition-all duration-150 ${
                 lang === "vi"
                   ? "bg-white text-[#111827] shadow-sm"
                   : "text-[#6B7280] hover:text-[#374151]"
@@ -107,37 +119,43 @@ export function Sidebar({ currentPath }: SidebarProps) {
         </div>
       </div>
 
-      <nav className="flex-1 px-3 py-4 flex flex-col gap-0.5 overflow-y-auto">
+      <nav className="flex-1 px-3 py-4 flex flex-col gap-1 overflow-y-auto">
         {navItems.map(({ icon: Icon, label, path }) => {
           const active =
             currentPath === path ||
-            (path === "/groups" && currentPath.startsWith("/groups/"));
+            (path === "/groups" && currentPath.startsWith("/groups/")) ||
+            (path === "/admin" && currentPath.startsWith("/admin"));
 
           return (
             <button
               key={path}
+              title={collapsed ? label : undefined}
               onClick={() => {
                 navigate(path);
                 setMobileOpen(false);
               }}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all group w-full ${
+              className={`relative flex items-center gap-3 rounded-xl text-sm transition-all duration-150 group w-full ${
+                collapsed ? "justify-center px-2 py-2.5" : "px-2.5 py-2"
+              } ${
                 active
-                  ? "bg-[#F0FAF5] text-[#16A34A]"
+                  ? "bg-[#EAFBF3] text-[#15803D]"
                   : "text-[#6B7280] hover:text-[#111827] hover:bg-[#F9FAFB]"
               }`}
               style={{ fontWeight: active ? 600 : 500 }}
             >
-              <Icon
-                className={`w-4.5 h-4.5 flex-shrink-0 ${
+              {active ? (
+                <span className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-r-full bg-[#16A34A]" />
+              ) : null}
+              <span
+                className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg transition-colors duration-150 ${
                   active
-                    ? "text-[#16A34A]"
+                    ? "bg-white text-[#16A34A] shadow-sm"
                     : "text-[#9CA3AF] group-hover:text-[#374151]"
                 }`}
-              />
-              {!collapsed ? <span>{label}</span> : null}
-              {active && !collapsed ? (
-                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-[#16A34A]" />
-              ) : null}
+              >
+                <Icon className="h-[18px] w-[18px]" />
+              </span>
+              {!collapsed ? <span className="truncate">{label}</span> : null}
             </button>
           );
         })}
@@ -145,24 +163,42 @@ export function Sidebar({ currentPath }: SidebarProps) {
 
       <div className="border-t border-[#E5E7EB] px-3 py-4">
         <div
-          className={`flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-[#F0FAF5] transition-colors ${
+          className={`flex items-center gap-3 rounded-xl border border-transparent px-2 py-2 transition-colors duration-150 hover:border-[#E5E7EB] hover:bg-[#F9FAFB] ${
             collapsed ? "justify-center" : ""
           }`}
         >
           <div
-            className="w-8 h-8 rounded-full bg-[#7EDDBA] flex items-center justify-center text-[#065f46] flex-shrink-0"
+            className="w-8 h-8 rounded-full bg-[#7EDDBA] flex items-center justify-center text-[#065f46] flex-shrink-0 overflow-hidden"
             style={{ fontWeight: 700, fontSize: "0.8125rem" }}
           >
-            {userInitials}
+            {user?.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                alt={displayName}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              userInitials
+            )}
           </div>
           {!collapsed ? (
             <div className="flex-1 min-w-0">
-              <p
-                className="text-sm text-[#111827] truncate"
-                style={{ fontWeight: 600 }}
-              >
-                {displayName}
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p
+                  className="text-sm text-[#111827] truncate"
+                  style={{ fontWeight: 600 }}
+                >
+                  {displayName}
+                </p>
+                {isAdminUser ? (
+                  <span
+                    className="flex-shrink-0 rounded-full bg-[#FEF3C7] px-1.5 py-0.5 text-[10px] uppercase leading-none tracking-wide text-[#92400E]"
+                    style={{ fontWeight: 700 }}
+                  >
+                    admin
+                  </span>
+                ) : null}
+              </div>
               <p className="text-xs text-[#9CA3AF] truncate">{displayEmail}</p>
             </div>
           ) : null}
@@ -192,7 +228,7 @@ export function Sidebar({ currentPath }: SidebarProps) {
   return (
     <>
       <button
-        className="fixed top-4 left-4 z-50 lg:hidden bg-white border border-[#E5E7EB] rounded-xl p-2 shadow-sm"
+        className="fixed top-4 left-4 z-50 lg:hidden bg-white border border-[#E5E7EB] rounded-xl p-2 shadow-sm hover:shadow-md transition-shadow"
         onClick={() => setMobileOpen(true)}
       >
         <Menu className="w-5 h-5 text-[#374151]" />
@@ -201,12 +237,12 @@ export function Sidebar({ currentPath }: SidebarProps) {
       {mobileOpen ? (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div
-            className="absolute inset-0 bg-black/20"
+            className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-xl">
+          <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-2xl animate-in slide-in-from-left duration-200">
             <button
-              className="absolute top-4 right-4 p-1.5 rounded-xl hover:bg-[#F0FAF5]"
+              className="absolute top-4 right-4 p-1.5 rounded-xl hover:bg-[#F0FAF5] transition-colors"
               onClick={() => setMobileOpen(false)}
             >
               <X className="w-4 h-4 text-[#6B7280]" />
@@ -220,6 +256,7 @@ export function Sidebar({ currentPath }: SidebarProps) {
         className={`hidden lg:flex flex-col fixed left-0 top-0 h-full bg-white border-r border-[#E5E7EB] transition-all duration-200 z-30 ${
           collapsed ? "w-16" : "w-60"
         }`}
+        style={{ boxShadow: "2px 0 10px rgba(17, 24, 39, 0.03)" }}
       >
         {sidebarContent}
       </div>

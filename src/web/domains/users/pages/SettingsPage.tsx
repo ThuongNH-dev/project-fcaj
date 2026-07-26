@@ -7,13 +7,13 @@ import {
   Shield,
   CreditCard,
   Palette,
-  ChevronRight,
   Check,
   Camera,
   Trash2,
   LogOut,
 } from "lucide-react";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
+import { formatLocalDate } from "../../../shared/lib/formatters";
 import {
   type AccentColor,
   useAppearance,
@@ -598,8 +598,8 @@ export function SettingsPage() {
 
   return (
     <div className="lg:pl-60 min-h-screen bg-[#F6FBF8]">
-      <div className="max-w-5xl mx-auto px-6 py-8 pt-16 lg:pt-8">
-        <div className="mb-8">
+      <div className="max-w-7xl mx-auto px-6 py-6 pt-16 lg:pt-6">
+        <div className="mb-6">
           <h1
             className="text-[#111827]"
             style={{ fontSize: "1.5rem", fontWeight: 800 }}
@@ -609,39 +609,122 @@ export function SettingsPage() {
           <p className="text-[#6B7280] text-sm mt-0.5">{t.settingsDesc}</p>
         </div>
 
-        <div className="grid lg:grid-cols-4 gap-6">
+        <div className="grid lg:grid-cols-4 gap-5">
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl border border-[#E5E7EB] p-2">
-              {tabs.map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
-                  onClick={() => setActiveTab(id)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all mb-0.5 last:mb-0 ${activeTab === id ? "bg-[#F0FAF5] text-[#16A34A]" : "text-[#6B7280] hover:bg-[#F9FAFB] hover:text-[#111827]"}`}
-                  style={{ fontWeight: activeTab === id ? 600 : 500 }}
+            <div className="bg-white rounded-2xl border border-[#E5E7EB] p-6 text-center">
+              {avatarUrl.trim() ? (
+                <img
+                  src={avatarUrl}
+                  alt={t.userAvatarAlt}
+                  className="mx-auto rounded-2xl object-cover"
+                  style={{ width: "5.5rem", height: "5.5rem" }}
+                />
+              ) : (
+                <div
+                  className="mx-auto rounded-2xl bg-[#7EDDBA] flex items-center justify-center text-[#065f46]"
+                  style={{
+                    fontWeight: 800,
+                    fontSize: "1.5rem",
+                    width: "5.5rem",
+                    height: "5.5rem",
+                  }}
                 >
-                  <Icon
-                    className={`w-4 h-4 flex-shrink-0 ${activeTab === id ? "text-[#16A34A]" : "text-[#9CA3AF]"}`}
-                  />
-                  {label}
-                  {activeTab === id && (
-                    <ChevronRight className="w-3.5 h-3.5 ml-auto" />
-                  )}
-                </button>
-              ))}
-              <div className="border-t border-[#E5E7EB] mt-2 pt-2">
-                <button
-                  onClick={handleSignOut}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-[#EF4444] hover:bg-[#FEF2F2] transition-colors"
-                  style={{ fontWeight: 500 }}
-                >
-                  <LogOut className="w-4 h-4" />
-                  {t.signOut}
-                </button>
+                  {initials}
+                </div>
+              )}
+
+              <p
+                className="text-[#111827] mt-3"
+                style={{ fontWeight: 700, fontSize: "1.05rem" }}
+              >
+                {firstName || lastName ? `${firstName} ${lastName}`.trim() : "-"}
+              </p>
+
+              <span
+                className={`inline-block mt-2 rounded-full px-2.5 py-1 text-xs ${
+                  currentUser?.role === "admin"
+                    ? "bg-[#FEE2E2] text-[#991B1B]"
+                    : "bg-[#EFF6FF] text-[#1D4ED8]"
+                }`}
+                style={{ fontWeight: 600 }}
+              >
+                {currentUser?.role ?? "user"}
+              </span>
+
+              <div className="grid grid-cols-2 gap-3 mt-4">
+                <div className="rounded-xl bg-[#F9FAFB] py-3">
+                  <p className="text-[#111827]" style={{ fontWeight: 700 }}>
+                    {billingSummary.usage.groupCount}
+                  </p>
+                  <p className="text-xs text-[#6B7280] mt-0.5">{t.groups}</p>
+                </div>
+                <div className="rounded-xl bg-[#F9FAFB] py-3">
+                  <p className="text-[#111827]" style={{ fontWeight: 700 }}>
+                    {billingSummary.usage.expenseCount}
+                  </p>
+                  <p className="text-xs text-[#6B7280] mt-0.5">{t.expenses}</p>
+                </div>
               </div>
+
+              <div className="mt-5 pt-4 border-t border-[#F3F4F6] text-left">
+                <p
+                  className="text-sm text-[#111827] mb-3"
+                  style={{ fontWeight: 700 }}
+                >
+                  {t.profileInfo}
+                </p>
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <p className="text-xs text-[#9CA3AF]">{t.emailAddress}</p>
+                    <p className="text-[#111827] truncate" style={{ fontWeight: 500 }}>
+                      {email || "-"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-[#9CA3AF]">{t.defaultCurrency}</p>
+                    <p className="text-[#111827]" style={{ fontWeight: 500 }}>
+                      {currency}
+                    </p>
+                  </div>
+                  {currentUser && (
+                    <div>
+                      <p className="text-xs text-[#9CA3AF]">{t.joinedOn}</p>
+                      <p className="text-[#111827]" style={{ fontWeight: 500 }}>
+                        {formatLocalDate(currentUser.createdAt)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <button
+                onClick={handleSignOut}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm text-[#EF4444] hover:bg-[#FEF2F2] transition-colors mt-5 border-t border-[#F3F4F6] pt-4"
+                style={{ fontWeight: 500 }}
+              >
+                <LogOut className="w-4 h-4" />
+                {t.signOut}
+              </button>
             </div>
           </div>
 
           <div className="lg:col-span-3">
+            <div className="flex flex-wrap items-center gap-2 bg-white rounded-2xl border border-[#E5E7EB] p-2 mb-5">
+              {tabs.map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id)}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm transition-all ${activeTab === id ? "bg-[#16A34A] text-white shadow-sm" : "text-[#6B7280] hover:bg-[#F9FAFB] hover:text-[#111827]"}`}
+                  style={{ fontWeight: activeTab === id ? 600 : 500 }}
+                >
+                  <Icon
+                    className={`w-4 h-4 flex-shrink-0 ${activeTab === id ? "text-white" : "text-[#9CA3AF]"}`}
+                  />
+                  {label}
+                </button>
+              ))}
+            </div>
+
             {activeTab === "profile" && (
               <div className="bg-white rounded-2xl border border-[#E5E7EB] p-6">
                 <h2
@@ -1320,5 +1403,3 @@ export function SettingsPage() {
     </div>
   );
 }
-
-
