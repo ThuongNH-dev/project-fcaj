@@ -21,6 +21,7 @@ export interface CurrentUserBillingSummary {
   profile: {
     plan: BillingPlan;
     status: "active";
+    autoRenew: boolean;
     updatedAt: string;
   };
   usage: {
@@ -42,32 +43,6 @@ export interface CurrentUserBillingResponse {
   ok: boolean;
   message: string;
   billing?: CurrentUserBillingSummary;
-}
-
-export type PaymentCardBrand =
-  | "visa"
-  | "mastercard"
-  | "amex"
-  | "discover"
-  | "jcb"
-  | "diners"
-  | "unionpay"
-  | "card";
-
-export interface CurrentUserPaymentMethod {
-  brand: PaymentCardBrand;
-  last4: string;
-  expiryMonth: number;
-  expiryYear: number;
-  cardholderName: string;
-  billingEmail: string;
-  updatedAt: string;
-}
-
-export interface CurrentUserPaymentMethodResponse {
-  ok: boolean;
-  message: string;
-  paymentMethod?: CurrentUserPaymentMethod | null;
 }
 
 export interface DeleteCurrentUserResponse {
@@ -96,11 +71,6 @@ export interface UpdateCurrentUserBillingPayload {
   plan: BillingPlan;
 }
 
-export interface UpdateCurrentUserPaymentMethodPayload {
-  cardholderName: string;
-  cardNumber: string;
-  expiryMonth: number;
-  expiryYear: number;
-  cvc: string;
-  billingEmail?: string;
+export interface UpdateCurrentUserBillingAutoRenewPayload {
+  autoRenew: boolean;
 }

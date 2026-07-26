@@ -7,16 +7,14 @@ import type {
   BillingPlan,
   ChangeCurrentUserPasswordInput,
   CurrentUserBillingSummary,
-  CurrentUserPaymentMethod,
   ForgotPasswordInput,
   LoginUserInput,
-  PaymentCardBrand,
   PublicUser,
   RegisterUserInput,
   ResetPasswordInput,
   SupportedCurrency,
+  UpdateCurrentUserBillingAutoRenewInput,
   UpdateCurrentUserBillingInput,
-  UpdateCurrentUserPaymentMethodInput,
   UpdateCurrentUserInput,
   UserBillingProfile,
   VerifyResetOtpInput,
@@ -36,15 +34,7 @@ export interface UserDocument {
   billingProfile?: {
     plan: BillingPlan;
     status: "active";
-    updatedAt: Date;
-  };
-  paymentMethod?: {
-    brand: PaymentCardBrand;
-    last4: string;
-    expiryMonth: number;
-    expiryYear: number;
-    cardholderName: string;
-    billingEmail: string;
+    autoRenew: boolean;
     updatedAt: Date;
   };
   role: "admin" | "user";
@@ -61,16 +51,6 @@ const SUPPORTED_BILLING_PLANS = new Set<BillingPlan>(["free", "pro"]);
 const SUPPORTED_USER_ROLES = new Set<UserDocument["role"]>(["admin", "user"]);
 
 const PASSWORD_RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
-const PAYMENT_CARD_BRAND_LABELS: Record<PaymentCardBrand, PaymentCardBrand> = {
-  visa: "visa",
-  mastercard: "mastercard",
-  amex: "amex",
-  discover: "discover",
-  jcb: "jcb",
-  diners: "diners",
-  unionpay: "unionpay",
-  card: "card",
-};
 
 export async function getUsersCollection(): Promise<Collection<UserDocument>> {
   const db = await connectToMongo();
@@ -111,75 +91,6 @@ function normalizePaymentText(value: string, fieldName: string) {
 
   return normalizedValue;
 }
-
-function normalizeCardNumber(cardNumber: string) {
-  const digitsOnlyCardNumber = cardNumber.replace(/\D/g, "");
-
-  if (digitsOnlyCardNumber.length < 12 || digitsOnlyCardNumber.length > 19) {
-    throw new Error("Card number must contain between 12 and 19 digits.");
-  }
-
-  return digitsOnlyCardNumber;
-}
-
-function isValidCardNumber(cardNumber: string) {
-  let sum = 0;
-  let shouldDouble = false;
-
-  for (let index = cardNumber.length - 1; index >= 0; index -= 1) {
-    let digit = Number(cardNumber[index]);
-
-    if (shouldDouble) {
-      digit *= 2;
-
-      if (digit > 9) {
-        digit -= 9;
-      }
-    }
-
-    sum += digit;
-    shouldDouble = !shouldDouble;
-  }
-
-  return sum % 10 === 0;
-}
-
-function detectPaymentCardBrand(cardNumber: string): PaymentCardBrand {
-  if (/^4\d{11,18}$/.test(cardNumber)) {
-    return "visa";
-  }
-
-  if (
-    /^(5[1-5]\d{14}|2(2[2-9]\d{12}|[3-6]\d{13}|7[01]\d{12}|720\d{12}))$/.test(
-      cardNumber,
-    )
-  ) {
-    return "mastercard";
-  }
-
-  if (/^3[47]\d{13}$/.test(cardNumber)) {
-    return "amex";
-  }
-
-  if (/^(6011\d{12}|65\d{14}|64[4-9]\d{13})$/.test(cardNumber)) {
-    return "discover";
-  }
-
-  if (/^(35(2[89]|[3-8]\d)\d{12})$/.test(cardNumber)) {
-    return "jcb";
-  }
-
-  if (/^(3(0[0-5]|[68]\d)\d{11})$/.test(cardNumber)) {
-    return "diners";
-  }
-
-  if (/^(62\d{14,17})$/.test(cardNumber)) {
-    return "unionpay";
-  }
-
-  return "card";
-}
-
 function normalizeExpiryMonth(expiryMonth: number) {
   if (!Number.isInteger(expiryMonth) || expiryMonth < 1 || expiryMonth > 12) {
     throw new Error("Expiry month must be between 1 and 12.");
@@ -222,19 +133,6 @@ function normalizeBillingEmail(
   return normalizedBillingEmail;
 }
 
-function normalizePaymentCvc(cvc: string, brand: PaymentCardBrand) {
-  const normalizedCvc = cvc.replace(/\D/g, "");
-  const validLength = brand === "amex" ? normalizedCvc.length === 4 : normalizedCvc.length >= 3 && normalizedCvc.length <= 4;
-
-  if (!validLength) {
-    throw new Error(
-      brand === "amex"
-        ? "American Express CVC must contain 4 digits."
-        : "CVC must contain 3 or 4 digits.",
-    );
-  }
-}
-
 function toPublicBillingProfile(
   billingProfile: UserDocument["billingProfile"] | undefined,
   fallbackUpdatedAt: Date,
@@ -247,27 +145,8 @@ function toPublicBillingProfile(
   return {
     plan: normalizeBillingPlan(billingProfile?.plan),
     status: "active",
+    autoRenew: billingProfile?.autoRenew ?? false,
     updatedAt: normalizedUpdatedAt.toISOString(),
-  };
-}
-
-function toPublicPaymentMethod(
-  paymentMethod: UserDocument["paymentMethod"] | undefined,
-): CurrentUserPaymentMethod | null {
-  if (!paymentMethod) {
-    return null;
-  }
-
-  const updatedAt = normalizeDocumentDate(paymentMethod.updatedAt, new Date());
-
-  return {
-    brand: PAYMENT_CARD_BRAND_LABELS[paymentMethod.brand] ?? "card",
-    last4: paymentMethod.last4,
-    expiryMonth: paymentMethod.expiryMonth,
-    expiryYear: paymentMethod.expiryYear,
-    cardholderName: paymentMethod.cardholderName,
-    billingEmail: paymentMethod.billingEmail,
-    updatedAt: updatedAt.toISOString(),
   };
 }
 
@@ -664,110 +543,6 @@ export async function getCurrentUserBillingSummary(
   };
 }
 
-export async function getCurrentUserPaymentMethod(
-  userId: string,
-): Promise<CurrentUserPaymentMethod | null | undefined> {
-  if (!MongoObjectId.isValid(userId)) {
-    return undefined;
-  }
-
-  const users = await getUsersCollection();
-  const user = await users.findOne({ _id: new MongoObjectId(userId) });
-
-  if (!user) {
-    return undefined;
-  }
-
-  return toPublicPaymentMethod(user.paymentMethod);
-}
-
-export async function updateCurrentUserPaymentMethod(
-  userId: string,
-  input: UpdateCurrentUserPaymentMethodInput,
-): Promise<CurrentUserPaymentMethod | undefined> {
-  if (!MongoObjectId.isValid(userId)) {
-    return undefined;
-  }
-
-  const users = await getUsersCollection();
-  const userObjectId = new MongoObjectId(userId);
-  const user = await users.findOne({ _id: userObjectId });
-
-  if (!user) {
-    return undefined;
-  }
-
-  const cardholderName = normalizePaymentText(
-    input.cardholderName,
-    "Cardholder name",
-  );
-  const cardNumber = normalizeCardNumber(input.cardNumber);
-
-  if (!isValidCardNumber(cardNumber)) {
-    throw new Error("Card number is invalid.");
-  }
-
-  const brand = detectPaymentCardBrand(cardNumber);
-  const expiryMonth = normalizeExpiryMonth(input.expiryMonth);
-  const expiryYear = normalizeExpiryYear(input.expiryYear);
-
-  validateExpiryDate(expiryMonth, expiryYear);
-
-  const billingEmail = normalizeBillingEmail(input.billingEmail, user.email);
-
-  normalizePaymentCvc(input.cvc, brand);
-
-  const updatedAt = new Date();
-  const paymentMethod: NonNullable<UserDocument["paymentMethod"]> = {
-    brand,
-    last4: cardNumber.slice(-4),
-    expiryMonth,
-    expiryYear,
-    cardholderName,
-    billingEmail,
-    updatedAt,
-  };
-
-  await users.updateOne(
-    { _id: userObjectId },
-    {
-      $set: {
-        paymentMethod,
-        updatedAt,
-      },
-    },
-  );
-
-  return toPublicPaymentMethod(paymentMethod) ?? undefined;
-}
-
-export async function deleteCurrentUserPaymentMethod(
-  userId: string,
-): Promise<boolean | null> {
-  if (!MongoObjectId.isValid(userId)) {
-    return null;
-  }
-
-  const users = await getUsersCollection();
-  const result = await users.updateOne(
-    { _id: new MongoObjectId(userId) },
-    {
-      $unset: {
-        paymentMethod: "",
-      },
-      $set: {
-        updatedAt: new Date(),
-      },
-    },
-  );
-
-  if (result.matchedCount === 0) {
-    return null;
-  }
-
-  return true;
-}
-
 export async function updateCurrentUserBillingPlan(
   userId: string,
   input: UpdateCurrentUserBillingInput,
@@ -779,6 +554,11 @@ export async function updateCurrentUserBillingPlan(
   const normalizedPlan = normalizeBillingPlan(input.plan);
   const users = await getUsersCollection();
   const userObjectId = new MongoObjectId(userId);
+  const existingUser = await users.findOne({ _id: userObjectId });
+
+  if (!existingUser) {
+    return null;
+  }
   const updatedAt = new Date();
 
   const result = await users.updateOne(
@@ -788,6 +568,7 @@ export async function updateCurrentUserBillingPlan(
         billingProfile: {
           plan: normalizedPlan,
           status: "active",
+          autoRenew: existingUser.billingProfile?.autoRenew ?? false,
           updatedAt,
         },
         updatedAt,
@@ -798,6 +579,44 @@ export async function updateCurrentUserBillingPlan(
   if (result.matchedCount === 0) {
     return null;
   }
+
+  return getCurrentUserBillingSummary(userId);
+}
+
+export async function updateCurrentUserBillingAutoRenew(
+  userId: string,
+  input: UpdateCurrentUserBillingAutoRenewInput,
+): Promise<CurrentUserBillingSummary | null> {
+  if (!MongoObjectId.isValid(userId)) {
+    return null;
+  }
+
+  const users = await getUsersCollection();
+  const userObjectId = new MongoObjectId(userId);
+  const existingUser = await users.findOne({ _id: userObjectId });
+
+  if (!existingUser) {
+    return null;
+  }
+
+  const currentPlan = normalizeBillingPlan(existingUser.billingProfile?.plan);
+  const autoRenew = Boolean(input.autoRenew);
+  const updatedAt = new Date();
+
+  await users.updateOne(
+    { _id: userObjectId },
+    {
+      $set: {
+        billingProfile: {
+          plan: currentPlan,
+          status: "active",
+          autoRenew: currentPlan === "pro" ? autoRenew : false,
+          updatedAt,
+        },
+        updatedAt,
+      },
+    },
+  );
 
   return getCurrentUserBillingSummary(userId);
 }

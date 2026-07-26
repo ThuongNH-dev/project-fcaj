@@ -19,6 +19,7 @@ import {
   useAppearance,
 } from "../../../shared/providers/AppearanceProvider";
 import { useFeedback } from "../../../shared/providers/FeedbackProvider";
+import { createVnpayBillingPayment } from "../../payments/api/payments.api";
 import {
   clearStoredUser,
   getUserInitials,
@@ -28,17 +29,14 @@ import {
 import {
   changeCurrentUserPassword,
   type CurrentUserBillingSummary,
-  type CurrentUserPaymentMethod,
   deleteCurrentUser,
-  deleteCurrentUserPaymentMethod,
   getCurrentUserBilling,
   getCurrentUser,
   getCurrentUserNotificationPreferences,
-  getCurrentUserPaymentMethod,
   type NotificationPreferences,
   updateCurrentUser,
   updateCurrentUserBilling,
-  updateCurrentUserPaymentMethod,
+  updateCurrentUserBillingAutoRenew,
   updateCurrentUserNotificationPreferences,
 } from "..";
 
@@ -55,6 +53,7 @@ const DEFAULT_BILLING_SUMMARY: CurrentUserBillingSummary = {
   profile: {
     plan: "free",
     status: "active",
+    autoRenew: false,
     updatedAt: new Date(0).toISOString(),
   },
   usage: {
@@ -66,14 +65,6 @@ const DEFAULT_BILLING_SUMMARY: CurrentUserBillingSummary = {
   },
 };
 
-const DEFAULT_PAYMENT_METHOD_FORM = {
-  billingEmail: "",
-  cardNumber: "",
-  cardholderName: "",
-  cvc: "",
-  expiryMonth: "",
-  expiryYear: "",
-};
 const MAX_AVATAR_FILE_SIZE_BYTES = 2 * 1024 * 1024;
 const SUPPORTED_AVATAR_MIME_TYPES = new Set([
   "image/jpeg",
@@ -126,10 +117,6 @@ export function SettingsPage() {
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isLoadingBilling, setIsLoadingBilling] = useState(true);
   const [isUpdatingBilling, setIsUpdatingBilling] = useState(false);
-  const [isLoadingPaymentMethod, setIsLoadingPaymentMethod] = useState(true);
-  const [isSavingPaymentMethod, setIsSavingPaymentMethod] = useState(false);
-  const [isRemovingPaymentMethod, setIsRemovingPaymentMethod] = useState(false);
-  const [isEditingPaymentMethod, setIsEditingPaymentMethod] = useState(false);
   const [isAppearanceReady, setIsAppearanceReady] = useState(false);
   const [appearanceSaved, setAppearanceSaved] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -138,7 +125,6 @@ export function SettingsPage() {
   const [passwordErrorMessage, setPasswordErrorMessage] = useState("");
   const [passwordSuccessMessage, setPasswordSuccessMessage] = useState("");
   const [billingErrorMessage, setBillingErrorMessage] = useState("");
-  const [paymentMethodErrorMessage, setPaymentMethodErrorMessage] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -164,12 +150,6 @@ export function SettingsPage() {
   const [billingSummary, setBillingSummary] = useState<CurrentUserBillingSummary>(
     DEFAULT_BILLING_SUMMARY,
   );
-  const [paymentMethod, setPaymentMethod] = useState<CurrentUserPaymentMethod | null>(
-    null,
-  );
-  const [paymentMethodForm, setPaymentMethodForm] = useState(
-    DEFAULT_PAYMENT_METHOD_FORM,
-  );
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -189,29 +169,13 @@ export function SettingsPage() {
   }, []);
 
   useEffect(() => {
-    if (!email) {
-      return;
-    }
-
-    setPaymentMethodForm((currentForm) =>
-      currentForm.billingEmail.trim()
-        ? currentForm
-        : {
-            ...currentForm,
-            billingEmail: email,
-          },
-    );
-  }, [email]);
-
-  useEffect(() => {
     async function loadProfile() {
       try {
-        const [profileResult, notificationsResult, billingResult, paymentMethodResult] =
+        const [profileResult, notificationsResult, billingResult] =
           await Promise.allSettled([
             getCurrentUser(),
             getCurrentUserNotificationPreferences(),
             getCurrentUserBilling(),
-            getCurrentUserPaymentMethod(),
           ]);
 
         if (profileResult.status === "fulfilled" && profileResult.value.user) {
@@ -260,33 +224,10 @@ export function SettingsPage() {
           );
         }
 
-        if (paymentMethodResult.status === "fulfilled") {
-          const nextPaymentMethod = paymentMethodResult.value.paymentMethod ?? null;
-
-          setPaymentMethod(nextPaymentMethod);
-
-          if (nextPaymentMethod) {
-            setPaymentMethodForm({
-              billingEmail: nextPaymentMethod.billingEmail,
-              cardNumber: "",
-              cardholderName: nextPaymentMethod.cardholderName,
-              cvc: "",
-              expiryMonth: nextPaymentMethod.expiryMonth.toString(),
-              expiryYear: nextPaymentMethod.expiryYear.toString(),
-            });
-          }
-        } else {
-          setPaymentMethodErrorMessage(
-            paymentMethodResult.reason instanceof Error
-              ? paymentMethodResult.reason.message
-              : t.loadPaymentMethodError,
-          );
-        }
       } finally {
         setIsLoadingProfile(false);
         setIsLoadingNotifications(false);
         setIsLoadingBilling(false);
-        setIsLoadingPaymentMethod(false);
       }
     }
 
@@ -483,9 +424,46 @@ export function SettingsPage() {
 
     try {
       setIsUpdatingBilling(true);
+      const response = await createVnpayBillingPayment();
+
+      if (!response.paymentUrl) {
+        throw new Error("VNPay payment URL was not returned.");
+      }
+
+      window.location.href = response.paymentUrl;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t.updateBillingError;
+
+      setBillingErrorMessage(message);
+      showToast({
+        variant: "error",
+        message,
+      });
+    } finally {
+      setIsUpdatingBilling(false);
+    }
+  };
+
+  const handleCancelPlan = async () => {
+    setBillingErrorMessage("");
+
+    const confirmed = await confirm({
+      title: t.cancelPlan,
+      message: t.cancelPlanDesc,
+      cancelLabel: t.cancel,
+      confirmLabel: t.cancelPlan,
+      variant: "danger",
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setIsUpdatingBilling(true);
 
       const response = await updateCurrentUserBilling({
-        plan: "pro",
+        plan: "free",
       });
 
       if (response.billing) {
@@ -509,129 +487,34 @@ export function SettingsPage() {
     }
   };
 
-  const handlePaymentMethodFieldChange = (
-    field: keyof typeof DEFAULT_PAYMENT_METHOD_FORM,
-    value: string,
-  ) => {
-    setPaymentMethodForm((currentForm) => ({
-      ...currentForm,
-      [field]: value,
-    }));
-  };
-
-  const handleStartPaymentMethodEdit = () => {
-    setPaymentMethodErrorMessage("");
-    setIsEditingPaymentMethod(true);
-  };
-
-  const handleCancelPaymentMethodEdit = () => {
-    setPaymentMethodErrorMessage("");
-    setIsEditingPaymentMethod(false);
-    setPaymentMethodForm((currentForm) => ({
-      billingEmail: paymentMethod?.billingEmail ?? currentForm.billingEmail,
-      cardNumber: "",
-      cardholderName: paymentMethod?.cardholderName ?? "",
-      cvc: "",
-      expiryMonth: paymentMethod?.expiryMonth?.toString() ?? "",
-      expiryYear: paymentMethod?.expiryYear?.toString() ?? "",
-    }));
-  };
-
-  const handleSavePaymentMethod = async () => {
-    setPaymentMethodErrorMessage("");
-
-    if (
-      !paymentMethodForm.cardholderName.trim() ||
-      !paymentMethodForm.cardNumber.trim() ||
-      !paymentMethodForm.expiryMonth.trim() ||
-      !paymentMethodForm.expiryYear.trim() ||
-      !paymentMethodForm.cvc.trim()
-    ) {
-      setPaymentMethodErrorMessage(
-        t.paymentMethodRequiredFields,
-      );
-      return;
-    }
+  const handleToggleAutoRenew = async () => {
+    setBillingErrorMessage("");
 
     try {
-      setIsSavingPaymentMethod(true);
+      setIsUpdatingBilling(true);
 
-      const response = await updateCurrentUserPaymentMethod({
-        billingEmail: paymentMethodForm.billingEmail.trim() || undefined,
-        cardNumber: paymentMethodForm.cardNumber,
-        cardholderName: paymentMethodForm.cardholderName.trim(),
-        cvc: paymentMethodForm.cvc,
-        expiryMonth: Number(paymentMethodForm.expiryMonth),
-        expiryYear: Number(paymentMethodForm.expiryYear),
+      const response = await updateCurrentUserBillingAutoRenew({
+        autoRenew: !billingSummary.profile.autoRenew,
       });
 
-      const nextPaymentMethod = response.paymentMethod ?? null;
+      if (response.billing) {
+        setBillingSummary(response.billing);
+      }
 
-      setPaymentMethod(nextPaymentMethod);
-      setIsEditingPaymentMethod(false);
-      setPaymentMethodForm({
-        billingEmail: nextPaymentMethod?.billingEmail ?? email,
-        cardNumber: "",
-        cardholderName: nextPaymentMethod?.cardholderName ?? "",
-        cvc: "",
-        expiryMonth: nextPaymentMethod?.expiryMonth?.toString() ?? "",
-        expiryYear: nextPaymentMethod?.expiryYear?.toString() ?? "",
-      });
       showToast({
         variant: "success",
         message: response.message,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : t.savePaymentMethodError;
+      const message = error instanceof Error ? error.message : t.updateBillingError;
 
-      setPaymentMethodErrorMessage(message);
+      setBillingErrorMessage(message);
       showToast({
         variant: "error",
         message,
       });
     } finally {
-      setIsSavingPaymentMethod(false);
-    }
-  };
-
-  const handleRemovePaymentMethod = async () => {
-    const confirmed = await confirm({
-      title: t.removePaymentMethodTitle,
-      message: t.removePaymentMethodMessage,
-      cancelLabel: t.cancel,
-      confirmLabel: t.remove,
-      variant: "danger",
-    });
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      setIsRemovingPaymentMethod(true);
-      const response = await deleteCurrentUserPaymentMethod();
-
-      setPaymentMethod(null);
-      setIsEditingPaymentMethod(true);
-      setPaymentMethodForm({
-        ...DEFAULT_PAYMENT_METHOD_FORM,
-        billingEmail: email,
-      });
-      showToast({
-        variant: "success",
-        message: response.message,
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : t.removePaymentMethodError;
-
-      setPaymentMethodErrorMessage(message);
-      showToast({
-        variant: "error",
-        message,
-      });
-    } finally {
-      setIsRemovingPaymentMethod(false);
+      setIsUpdatingBilling(false);
     }
   };
 
@@ -684,25 +567,34 @@ export function SettingsPage() {
     ? t.billingProDesc
     : t.onFreePlan;
   const billingActionLabel = isProPlan ? t.proActive : t.upgradePro;
+  const billingCurrency = currency;
+  const billingPriceLabel =
+    billingCurrency === "VND" ? "99,000 VND/mo" : "$4/mo";
   const formatUsageValue = (used: number, limit: number | null) =>
     limit === null ? `${used} / ${t.unlimited}` : `${used} / ${limit}`;
   const receiptScanValue = billingSummary.usage.receiptScanIncluded
     ? t.included
     : t.notIncluded;
-  const paymentMethodBrandLabelMap: Record<NonNullable<CurrentUserPaymentMethod["brand"]>, string> =
-    {
-      amex: "American Express",
-      card: "Card",
-      diners: "Diners Club",
-      discover: "Discover",
-      jcb: "JCB",
-      mastercard: "Mastercard",
-      unionpay: "UnionPay",
-      visa: "Visa",
-    };
-  const paymentMethodBrandLabel = paymentMethod
-    ? paymentMethodBrandLabelMap[paymentMethod.brand] ?? "Card"
-    : "Card";
+  const autoRenewEnabled = billingSummary.profile.autoRenew;
+  const currentPlanLimits = isProPlan
+    ? [
+        "Unlimited groups",
+        "Unlimited expenses",
+        "Receipt scan included",
+      ]
+    : [
+        `Groups limited to ${billingSummary.usage.groupLimit ?? 0}`,
+        `Expenses limited to ${billingSummary.usage.expenseLimit ?? 0} per month`,
+        "Receipt scan not included",
+      ];
+  const proBenefits = [
+    billingSummary.profile.plan === "pro"
+      ? `Unlimited groups and expenses`
+      : `Unlimited groups and expenses after upgrade`,
+    billingSummary.profile.plan === "pro"
+      ? `Receipt scan is included`
+      : `Receipt scan unlocks with Pro`,
+  ];
 
   return (
     <div className="lg:pl-60 min-h-screen bg-[#F6FBF8]">
@@ -1195,332 +1087,105 @@ export function SettingsPage() {
             {activeTab === "billing" && (
               <div className="space-y-5">
                 <div className="bg-white rounded-2xl border border-[#E5E7EB] p-6">
-                  {billingErrorMessage && (
-                    <div className="rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C] mb-5">
-                      {billingErrorMessage}
-                    </div>
-                  )}
-                  {isLoadingBilling && (
-                    <div className="rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 text-sm text-[#166534] mb-5">
-                      {t.loadingBilling}
-                    </div>
-                  )}
-                  <div className="flex items-start justify-between mb-5">
-                    <div>
-                      <h2
-                        className="text-[#111827]"
-                        style={{ fontWeight: 700, fontSize: "1rem" }}
-                      >
-                        {t.currentPlan}
-                      </h2>
-                      <p className="text-[#6B7280] text-sm mt-0.5">
-                        {billingPlanDescription}
-                      </p>
-                    </div>
-                    <span
-                      className="bg-[#F3F4F6] text-[#6B7280] text-xs px-3 py-1.5 rounded-full"
-                      style={{ fontWeight: 600 }}
-                    >
-                      {billingPlanLabel}
-                    </span>
-                  </div>
-                  <div className="bg-[#F6FBF8] rounded-xl p-4 border border-[#E5E7EB] mb-5">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      {[
-                        {
-                          label: t.groupsUsed,
-                          used: formatUsageValue(
-                            billingSummary.usage.groupCount,
-                            billingSummary.usage.groupLimit,
-                          ),
-                        },
-                        {
-                          label: t.expensesUsed,
-                          used: formatUsageValue(
-                            billingSummary.usage.expenseCount,
-                            billingSummary.usage.expenseLimit,
-                          ),
-                        },
-                        { label: t.membersLabel, used: t.unlimited },
-                        { label: t.receiptScan, used: receiptScanValue },
-                      ].map(({ label, used }) => (
-                        <div key={label}>
-                          <p className="text-[#9CA3AF] text-xs">{label}</p>
-                          <p
-                            className="text-[#111827] mt-0.5"
-                            style={{ fontWeight: 600 }}
-                          >
-                            {used}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => void handleUpgradePlan()}
-                    disabled={isLoadingBilling || isUpdatingBilling || isProPlan}
-                    className="bg-[#16A34A] text-white px-6 py-2.5 rounded-xl text-sm hover:bg-[#15803d] transition-colors shadow-sm"
-                    style={{ fontWeight: 600 }}
-                  >
-                    {isUpdatingBilling ? t.updatingPlan : billingActionLabel}
-                  </button>
-                </div>
-                <div className="bg-white rounded-2xl border border-[#E5E7EB] p-6">
                   <h2
                     className="text-[#111827] mb-4"
                     style={{ fontWeight: 700, fontSize: "1rem" }}
                   >
-                    {t.paymentMethod}
+                    {t.currentPlan}
                   </h2>
-                  {paymentMethodErrorMessage && (
-                    <div className="rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm text-[#B91C1C] mb-5">
-                      {paymentMethodErrorMessage}
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-sm text-[#6B7280]">{billingPlanLabel}</p>
+                        <p className="text-[#111827] mt-1" style={{ fontWeight: 700 }}>
+                          {billingPriceLabel}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-[#6B7280]">{t.groupsUsed}</p>
+                        <p className="text-[#111827] mt-1" style={{ fontWeight: 700 }}>
+                          {formatUsageValue(
+                            billingSummary.usage.groupCount,
+                            billingSummary.usage.groupLimit,
+                          )}
+                        </p>
+                      </div>
                     </div>
-                  )}
-                  {isLoadingPaymentMethod ? (
-                    <div className="rounded-xl border border-[#BBF7D0] bg-[#F0FDF4] px-4 py-3 text-sm text-[#166534]">
-                      {t.loadingPaymentMethod}
+                    <p className="text-sm text-[#374151]">{billingPlanDescription}</p>
+                    <div className="rounded-2xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
+                      <p className="text-sm text-[#111827]" style={{ fontWeight: 700 }}>
+                        {t.currentPlan}
+                      </p>
+                      <ul className="mt-3 space-y-2 text-sm text-[#374151]">
+                        {currentPlanLimits.map((limitText) => (
+                          <li key={limitText} className="flex items-start gap-2">
+                            <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#16A34A]" />
+                            <span>{limitText}</span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
-                  ) : paymentMethod && !isEditingPaymentMethod ? (
-                    <div className="space-y-5">
-                      <div className="rounded-2xl bg-[#F9FAFB] border border-[#E5E7EB] px-5 py-5">
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <p
-                              className="text-[#111827] text-base"
-                              style={{ fontWeight: 700 }}
-                            >
-                              {paymentMethodBrandLabel} {t.endingIn} {paymentMethod.last4}
-                            </p>
-                            <p className="text-sm text-[#6B7280] mt-1">
-                              {t.expires}{" "}
-                              {paymentMethod.expiryMonth.toString().padStart(2, "0")}/
-                              {paymentMethod.expiryYear}
-                            </p>
-                          </div>
+                    <div className="rounded-2xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
+                      <p className="text-sm text-[#111827]" style={{ fontWeight: 700 }}>
+                        {isProPlan ? "What Pro includes" : "What you'll get with Pro"}
+                      </p>
+                      <ul className="mt-3 space-y-2 text-sm text-[#374151]">
+                        {proBenefits.map((benefit) => (
+                          <li key={benefit} className="flex items-start gap-2">
+                            <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#16A34A]" />
+                            <span>{benefit}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="rounded-2xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <p className="text-sm text-[#111827]" style={{ fontWeight: 700 }}>
+                            {t.autoRenew}
+                          </p>
+                          <p className="text-xs text-[#6B7280] mt-1">{t.autoRenewDesc}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void handleToggleAutoRenew()}
+                          disabled={isLoadingBilling || isUpdatingBilling || !isProPlan}
+                          aria-pressed={autoRenewEnabled}
+                          className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${autoRenewEnabled ? "bg-[#16A34A]" : "bg-[#D1D5DB]"}`}
+                        >
                           <span
-                            className="rounded-full bg-[#F0FAF5] px-3 py-1.5 text-xs text-[#166534]"
-                            style={{ fontWeight: 700 }}
-                          >
-                            {t.saved}
-                          </span>
-                        </div>
-                        <div className="grid sm:grid-cols-2 gap-4 mt-5 text-sm">
-                          <div>
-                            <p className="text-[#9CA3AF] text-xs">{t.cardholder}</p>
-                            <p className="text-[#111827] mt-0.5" style={{ fontWeight: 600 }}>
-                              {paymentMethod.cardholderName}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-[#9CA3AF] text-xs">{t.billingEmailLabel}</p>
-                            <p className="text-[#111827] mt-0.5" style={{ fontWeight: 600 }}>
-                              {paymentMethod.billingEmail}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-3">
-                        <button
-                          onClick={handleStartPaymentMethodEdit}
-                          className="bg-[#16A34A] text-white px-5 py-2.5 rounded-xl text-sm hover:bg-[#15803d] transition-colors shadow-sm"
-                          style={{ fontWeight: 600 }}
-                        >
-                          {t.updatePaymentMethod}
-                        </button>
-                        <button
-                          onClick={() => void handleRemovePaymentMethod()}
-                          disabled={isRemovingPaymentMethod}
-                          className="border border-[#FCA5A5] text-[#B91C1C] px-5 py-2.5 rounded-xl text-sm hover:bg-[#FEF2F2] transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-                          style={{ fontWeight: 600 }}
-                        >
-                          {isRemovingPaymentMethod ? t.removing : t.removePaymentMethod}
+                            className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform ${autoRenewEnabled ? "translate-x-7" : "translate-x-1"}`}
+                          />
                         </button>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-5">
-                      {!isEditingPaymentMethod && !paymentMethod && (
-                        <div className="flex flex-col items-center justify-center py-6 text-center">
-                          <div className="w-12 h-12 bg-[#F0FAF5] rounded-2xl flex items-center justify-center mx-auto mb-3">
-                            <CreditCard className="w-6 h-6 text-[#7EDDBA]" />
-                          </div>
-                          <p
-                            className="text-[#374151] text-sm mb-1"
-                            style={{ fontWeight: 600 }}
-                          >
-                            {t.noPaymentMethod}
-                          </p>
-                          <p className="text-[#9CA3AF] text-xs mb-4">
-                            {t.noPaymentDesc}
-                          </p>
-                          <button
-                            onClick={handleStartPaymentMethodEdit}
-                            className="text-sm text-[#16A34A] hover:underline"
-                            style={{ fontWeight: 600 }}
-                          >
-                            {t.addPaymentMethod}
-                          </button>
-                        </div>
-                      )}
-
-                      {isEditingPaymentMethod && (
-                        <div className="space-y-4">
-                          <div className="grid sm:grid-cols-2 gap-4">
-                            <div>
-                              <label
-                                className="block text-sm text-[#374151] mb-1.5"
-                                style={{ fontWeight: 600 }}
-                              >
-                                {t.cardholderName}
-                              </label>
-                              <input
-                                type="text"
-                                value={paymentMethodForm.cardholderName}
-                                onChange={(event) =>
-                                  handlePaymentMethodFieldChange(
-                                    "cardholderName",
-                                    event.target.value,
-                                  )
-                                }
-                                placeholder={t.cardholderNamePlaceholder}
-                                className="w-full bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-4 py-3 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent"
-                              />
-                            </div>
-                            <div>
-                              <label
-                                className="block text-sm text-[#374151] mb-1.5"
-                                style={{ fontWeight: 600 }}
-                              >
-                                {t.billingEmailLabel}
-                              </label>
-                              <input
-                                type="email"
-                                value={paymentMethodForm.billingEmail}
-                                onChange={(event) =>
-                                  handlePaymentMethodFieldChange(
-                                    "billingEmail",
-                                    event.target.value,
-                                  )
-                                }
-                                placeholder={t.emailPlaceholder}
-                                className="w-full bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-4 py-3 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent"
-                              />
-                            </div>
-                          </div>
-                          <div>
-                            <label
-                              className="block text-sm text-[#374151] mb-1.5"
-                              style={{ fontWeight: 600 }}
-                            >
-                              {t.cardNumber}
-                            </label>
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              value={paymentMethodForm.cardNumber}
-                              onChange={(event) =>
-                                handlePaymentMethodFieldChange(
-                                  "cardNumber",
-                                  event.target.value,
-                                )
-                              }
-                              placeholder="4242 4242 4242 4242"
-                              className="w-full bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-4 py-3 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent"
-                            />
-                          </div>
-                          <div className="grid grid-cols-3 gap-4">
-                            <div>
-                              <label
-                                className="block text-sm text-[#374151] mb-1.5"
-                                style={{ fontWeight: 600 }}
-                              >
-                                {t.expiryMonth}
-                              </label>
-                              <input
-                                type="number"
-                                min="1"
-                                max="12"
-                                value={paymentMethodForm.expiryMonth}
-                                onChange={(event) =>
-                                  handlePaymentMethodFieldChange(
-                                    "expiryMonth",
-                                    event.target.value,
-                                  )
-                                }
-                                placeholder="12"
-                                className="w-full bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-4 py-3 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent"
-                              />
-                            </div>
-                            <div>
-                              <label
-                                className="block text-sm text-[#374151] mb-1.5"
-                                style={{ fontWeight: 600 }}
-                              >
-                                {t.expiryYear}
-                              </label>
-                              <input
-                                type="number"
-                                min="2026"
-                                value={paymentMethodForm.expiryYear}
-                                onChange={(event) =>
-                                  handlePaymentMethodFieldChange(
-                                    "expiryYear",
-                                    event.target.value,
-                                  )
-                                }
-                                placeholder="2030"
-                                className="w-full bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-4 py-3 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent"
-                              />
-                            </div>
-                            <div>
-                              <label
-                                className="block text-sm text-[#374151] mb-1.5"
-                                style={{ fontWeight: 600 }}
-                              >
-                                CVC
-                              </label>
-                              <input
-                                type="password"
-                                inputMode="numeric"
-                                value={paymentMethodForm.cvc}
-                                onChange={(event) =>
-                                  handlePaymentMethodFieldChange(
-                                    "cvc",
-                                    event.target.value,
-                                  )
-                                }
-                                placeholder="123"
-                                className="w-full bg-[#F9FAFB] border border-[#E5E7EB] rounded-xl px-4 py-3 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent"
-                              />
-                            </div>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-3">
-                            <button
-                              onClick={() => void handleSavePaymentMethod()}
-                              disabled={isSavingPaymentMethod}
-                              className="bg-[#16A34A] text-white px-5 py-2.5 rounded-xl text-sm hover:bg-[#15803d] transition-colors shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
-                              style={{ fontWeight: 600 }}
-                            >
-                              {isSavingPaymentMethod
-                                ? t.saving
-                                : paymentMethod
-                                  ? t.saveUpdatedMethod
-                                  : t.savePaymentMethodLabel}
-                            </button>
-                            <button
-                              onClick={handleCancelPaymentMethodEdit}
-                              disabled={isSavingPaymentMethod}
-                              className="border border-[#E5E7EB] text-[#374151] px-5 py-2.5 rounded-xl text-sm hover:bg-[#F9FAFB] transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-                              style={{ fontWeight: 600 }}
-                            >
-                              {paymentMethod ? t.cancel : t.close}
-                            </button>
-                          </div>
-                        </div>
+                      <p className="text-xs text-[#6B7280] mt-3">
+                        {autoRenewEnabled ? t.autoRenewEnabled : t.autoRenewDisabled}
+                      </p>
+                      {!isProPlan && (
+                        <p className="text-xs text-[#B45309] mt-2">
+                          Auto-renew is available only while Pro is active.
+                        </p>
                       )}
                     </div>
-                  )}
+                    <button
+                      onClick={() => void handleUpgradePlan()}
+                      disabled={isLoadingBilling || isUpdatingBilling || isProPlan}
+                      className="bg-[#16A34A] text-white px-6 py-2.5 rounded-xl text-sm hover:bg-[#15803d] transition-colors shadow-sm"
+                      style={{ fontWeight: 600 }}
+                    >
+                      {isUpdatingBilling ? t.updatingPlan : billingActionLabel}
+                    </button>
+                    {isProPlan && (
+                      <button
+                        onClick={() => void handleCancelPlan()}
+                        disabled={isLoadingBilling || isUpdatingBilling}
+                        className="ml-3 border border-[#FCA5A5] text-[#B91C1C] px-6 py-2.5 rounded-xl text-sm hover:bg-[#FEF2F2] transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                        style={{ fontWeight: 600 }}
+                      >
+                        {isUpdatingBilling ? t.updatingPlan : t.cancelPlan}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -1655,3 +1320,5 @@ export function SettingsPage() {
     </div>
   );
 }
+
+

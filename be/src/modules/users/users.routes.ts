@@ -3,13 +3,11 @@ import { authMiddleware } from "../../middleware/auth-middleware.js";
 import {
   changeCurrentUserPasswordHandler,
   deleteCurrentUserHandler,
-  deleteCurrentUserPaymentMethodHandler,
   getCurrentUserBillingHandler,
   getCurrentUserHandler,
-  getCurrentUserPaymentMethodHandler,
   updateCurrentUserHandler,
   updateCurrentUserBillingHandler,
-  updateCurrentUserPaymentMethodHandler,
+  updateCurrentUserBillingAutoRenewHandler,
 } from "./users.controller.js";
 
 const usersRouter = Router();
@@ -19,16 +17,10 @@ usersRouter.patch("/me", authMiddleware, updateCurrentUserHandler);
 usersRouter.delete("/me", authMiddleware, deleteCurrentUserHandler);
 usersRouter.get("/me/billing", authMiddleware, getCurrentUserBillingHandler);
 usersRouter.patch("/me/billing", authMiddleware, updateCurrentUserBillingHandler);
-usersRouter.get("/me/payment-method", authMiddleware, getCurrentUserPaymentMethodHandler);
 usersRouter.patch(
-  "/me/payment-method",
+  "/me/billing/auto-renew",
   authMiddleware,
-  updateCurrentUserPaymentMethodHandler,
-);
-usersRouter.delete(
-  "/me/payment-method",
-  authMiddleware,
-  deleteCurrentUserPaymentMethodHandler,
+  updateCurrentUserBillingAutoRenewHandler,
 );
 usersRouter.patch("/me/password", authMiddleware, changeCurrentUserPasswordHandler);
 export default usersRouter;
