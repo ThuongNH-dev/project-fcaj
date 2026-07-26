@@ -1,14 +1,12 @@
 export {
   changeCurrentUserPassword,
   deleteCurrentUser,
-  deleteCurrentUserPaymentMethod,
   getCurrentUserBilling,
   getCurrentUser,
   getCurrentUserNotificationPreferences,
-  getCurrentUserPaymentMethod,
   updateCurrentUser,
   updateCurrentUserBilling,
-  updateCurrentUserPaymentMethod,
+  updateCurrentUserBillingAutoRenew,
   updateCurrentUserNotificationPreferences,
 } from "./api/users.api";
 export type {
@@ -16,15 +14,12 @@ export type {
   ChangeCurrentUserPasswordPayload,
   CurrentUserBillingResponse,
   CurrentUserBillingSummary,
-  CurrentUserPaymentMethod,
-  CurrentUserPaymentMethodResponse,
   CurrentUserResponse,
   DeleteCurrentUserResponse,
   NotificationPreferences,
   NotificationPreferencesResponse,
-  PaymentCardBrand,
   UpdateCurrentUserBillingPayload,
-  UpdateCurrentUserPaymentMethodPayload,
+  UpdateCurrentUserBillingAutoRenewPayload,
   UpdateNotificationPreferencesPayload,
   UpdateCurrentUserPayload,
 } from "./models/users.types";

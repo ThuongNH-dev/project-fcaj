@@ -20,6 +20,8 @@ const emailProvider = (
 export const env = {
   nodeEnv: process.env.NODE_ENV || "development",
   port: Number(process.env.PORT) || 5000,
+  backendUrl:
+    process.env.BACKEND_URL?.replace(/\/$/, "") || "http://localhost:5000",
   mongoUri: process.env.MONGODB_URI || "mongodb://127.0.0.1:27017",
   mongoDb: process.env.MONGODB_DB || "project_fcaj",
   jwtSecret: process.env.JWT_SECRET || "project-fcaj-dev-secret",
@@ -38,4 +40,17 @@ export const env = {
   gmailAppPassword: process.env.GMAIL_APP_PASSWORD || "",
   resendApiKey: process.env.RESEND_API_KEY || "",
   resendApiUrl: process.env.RESEND_API_URL || "https://api.resend.com/emails",
+  vnpayTmnCode: process.env.VNPAY_TMN_CODE?.trim() || "ZCEEB8D3",
+  vnpayHashSecret:
+    process.env.VNPAY_HASH_SECRET?.trim() || "16BX6UDZJ3TE0I0D679VIYZC0057PUT3",
+  vnpayUrl:
+    process.env.VNPAY_URL?.trim() ||
+    "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html",
+  billingProPriceUsd: Number(process.env.BILLING_PRO_PRICE_USD),
+  billingUsdToVndRate: Number(process.env.BILLING_USD_TO_VND_RATE),
+  billingProPriceVnd: Number(process.env.BILLING_PRO_PRICE_VND),
+  vnpayReturnPath:
+    process.env.VNPAY_RETURN_PATH?.trim() || "/payment/vnpay/return",
+  vnpayIpnPath:
+    process.env.VNPAY_IPN_PATH?.trim() || "/api/payments/vnpay/ipn",
 } as const;

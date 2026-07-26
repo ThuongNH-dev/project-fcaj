@@ -513,6 +513,131 @@ swaggerSpec.paths = {
       },
     },
   },
+  "/api/users/me/billing/auto-renew": {
+    patch: {
+      summary: "Toggle auto-renew for the current logged-in user's Pro plan",
+      tags: ["Users"],
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["autoRenew"],
+              properties: {
+                autoRenew: {
+                  type: "boolean",
+                  example: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Auto-renew updated successfully",
+        },
+        400: {
+          description: "Missing or invalid auto-renew payload",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
+  "/api/payments/vnpay/billing/create": {
+    post: {
+      summary: "Create a VNPay billing payment URL for upgrading to Pro",
+      tags: ["Payments"],
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["plan"],
+              properties: {
+                plan: {
+                  type: "string",
+                  enum: ["pro"],
+                  example: "pro",
+                },
+                currency: {
+                  type: "string",
+                  enum: ["USD", "VND"],
+                  example: "VND",
+                },
+                bankCode: {
+                  type: "string",
+                  example: "NCB",
+                },
+                locale: {
+                  type: "string",
+                  enum: ["vn", "en"],
+                  example: "vn",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "VNPay payment URL created successfully",
+        },
+        400: {
+          description: "Invalid billing payment payload",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        404: {
+          description: "User not found",
+        },
+        409: {
+          description: "Pro plan is already active",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
+  "/api/payments/vnpay/return": {
+    get: {
+      summary: "VNPay return URL for billing payments",
+      tags: ["Payments"],
+      responses: {
+        200: {
+          description: "VNPay return processed successfully",
+        },
+        400: {
+          description: "VNPay return verification failed",
+        },
+      },
+    },
+  },
+  "/api/payments/vnpay/ipn": {
+    get: {
+      summary: "VNPay IPN callback for billing payments",
+      tags: ["Payments"],
+      responses: {
+        200: {
+          description: "VNPay IPN processed",
+        },
+      },
+    },
+  },
   "/api/users/me/payment-method": {
     get: {
       summary: "Get the current logged-in user's saved payment method",

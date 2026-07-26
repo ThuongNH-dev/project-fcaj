@@ -1,6 +1,7 @@
 import type { RouteObject } from "react-router";
 import { ForgotPasswordPage } from "../../../domains/auth/pages/ForgotPasswordPage";
 import { LoginPage } from "../../../domains/auth/pages/LoginPage";
+import { VnpayReturnPage } from "../../../domains/payments/pages/VnpayReturnPage";
 import { ResetPasswordPage } from "../../../domains/auth/pages/ResetPasswordPage";
 import { PublicLayout } from "../layout/PublicLayout";
 import { LandingPage } from "../pages/LandingPage";
@@ -17,6 +18,7 @@ export const publicRoutes: RouteObject[] = [
       { path: "login", element: <LoginPage initialMode="login" /> },
       { path: "register", element: <LoginPage initialMode="register" /> },
       { path: "forgot-password", element: <ForgotPasswordPage /> },
+      { path: "payment/vnpay/return", element: <VnpayReturnPage /> },
       { path: "reset-password", element: <ResetPasswordPage /> },
     ],
   },
