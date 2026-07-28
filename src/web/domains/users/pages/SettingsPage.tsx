@@ -19,6 +19,8 @@ import {
   useAppearance,
 } from "../../../shared/providers/AppearanceProvider";
 import { useFeedback } from "../../../shared/providers/FeedbackProvider";
+import { AdminPagination } from "../../../app/admin/components/AdminPagination";
+import { useAdminPagination } from "../../../app/admin/lib/admin.utils";
 import { createVnpayBillingPayment } from "../../payments/api/payments.api";
 import {
   clearStoredUser,
@@ -164,6 +166,12 @@ export function SettingsPage() {
     DEFAULT_BILLING_SUMMARY,
   );
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const {
+    page: billingHistoryPage,
+    pageItems: pagedBillingHistory,
+    setPage: setBillingHistoryPage,
+    totalPages: billingHistoryTotalPages,
+  } = useAdminPagination(billingHistory);
 
   useEffect(() => {
     if (currentUser) {
@@ -1239,19 +1247,21 @@ export function SettingsPage() {
                         ))}
                       </ul>
                     </div>
-                    <div className="rounded-2xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
-                    <p className="text-sm text-[#111827]" style={{ fontWeight: 700 }}>
-                        {isProPlan ? t.proInclusionsTitle : t.billingFreeInclusionsTitle}
-                      </p>
-                      <ul className="mt-3 space-y-2 text-sm text-[#374151]">
-                        {proBenefits.map((benefit) => (
-                          <li key={benefit} className="flex items-start gap-2">
-                            <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#16A34A]" />
-                            <span>{benefit}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                    {!isProPlan && (
+                      <div className="rounded-2xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
+                        <p className="text-sm text-[#111827]" style={{ fontWeight: 700 }}>
+                          {t.billingFreeInclusionsTitle}
+                        </p>
+                        <ul className="mt-3 space-y-2 text-sm text-[#374151]">
+                          {proBenefits.map((benefit) => (
+                            <li key={benefit} className="flex items-start gap-2">
+                              <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#16A34A]" />
+                              <span>{benefit}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                     <div className="rounded-2xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
                       <div className="flex items-center justify-between gap-4">
                         <div>
@@ -1327,7 +1337,7 @@ export function SettingsPage() {
                       </p>
                       {billingHistory.length > 0 ? (
                         <div className="mt-3 space-y-2">
-                          {billingHistory.map((record) => (
+                          {pagedBillingHistory.map((record) => (
                             <div
                               key={record.id}
                               className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2"
@@ -1358,6 +1368,15 @@ export function SettingsPage() {
                         <p className="mt-3 text-sm text-[#6B7280]">
                           {t.billingNoHistory}
                         </p>
+                      )}
+                      {billingHistoryTotalPages > 1 && (
+                        <div className="mt-4">
+                          <AdminPagination
+                            page={billingHistoryPage}
+                            totalPages={billingHistoryTotalPages}
+                            onPageChange={setBillingHistoryPage}
+                          />
+                        </div>
                       )}
                     </div>
                   </div>

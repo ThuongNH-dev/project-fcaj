@@ -38,7 +38,7 @@ export async function createVnpayBillingPaymentHandler(req: Request, res: Respon
       {
         userId: currentUser.id,
         plan,
-        currency: currentUser.defaultCurrency === "VND" ? "VND" : "USD",
+        currency: "VND",
         bankCode,
         locale,
       },
