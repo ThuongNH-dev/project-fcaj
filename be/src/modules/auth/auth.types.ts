@@ -4,8 +4,9 @@ export type BillingPlan = "free" | "pro";
 
 export interface UserBillingProfile {
   plan: BillingPlan;
-  status: "active";
+  status: "active" | "expired";
   autoRenew: boolean;
+  expiresAt: string | null;
   updatedAt: string;
 }
 

@@ -1,5 +1,6 @@
 import { deleteJson, getJson, patchJson } from "../../../shared/api/client";
 import type {
+  BillingHistoryResponse,
   CurrentUserBillingResponse,
   ChangeCurrentUserPasswordPayload,
   CurrentUserResponse,
@@ -46,6 +47,10 @@ export function updateCurrentUserNotificationPreferences(
 
 export function getCurrentUserBilling() {
   return getJson<CurrentUserBillingResponse>("/api/users/me/billing");
+}
+
+export function getCurrentUserBillingHistory() {
+  return getJson<BillingHistoryResponse>("/api/users/me/billing/history");
 }
 
 export function updateCurrentUserBilling(

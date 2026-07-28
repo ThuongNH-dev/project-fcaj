@@ -5,6 +5,7 @@ import { connectToMongo } from "../../db/mongo.js";
 import { env } from "../../config/env.js";
 import { getCurrentUserBillingSummary, updateCurrentUserBillingPlan } from "../auth/auth.service.js";
 import type {
+  BillingPaymentHistoryRecord,
   CreateVnpayBillingPaymentInput,
   PaymentStatus,
   VnpayReturnResult,
@@ -29,6 +30,7 @@ interface BillingPaymentDocument {
   bankTranNo: string | null;
   paidAt: Date | null;
   activatedAt: Date | null;
+  expiresAt: Date | null;
   returnQuery: Record<string, string> | null;
   ipnQuery: Record<string, string> | null;
   createdAt: Date;
@@ -162,6 +164,12 @@ async function getPaymentsCollection() {
   return collection;
 }
 
+function addOneMonth(date: Date) {
+  const nextDate = new Date(date);
+  nextDate.setMonth(nextDate.getMonth() + 1);
+  return nextDate;
+}
+
 function getReturnUrl() {
   return `${env.frontendUrl}${env.vnpayReturnPath}`;
 }
@@ -239,6 +247,7 @@ export async function createVnpayBillingPaymentUrl(
     bankTranNo: null,
     paidAt: null,
     activatedAt: null,
+    expiresAt: null,
     returnQuery: null,
     ipnQuery: null,
     createdAt,
@@ -315,12 +324,14 @@ export async function handleVnpayReturn(
   await payments.updateOne({ txnRef }, { $set: updateFields });
 
   if (isSuccess) {
+    const activatedAt = new Date();
     await updateCurrentUserBillingPlan(payment.userId, { plan: payment.plan });
     await payments.updateOne(
       { txnRef },
       {
         $set: {
-          activatedAt: new Date(),
+          activatedAt,
+          expiresAt: addOneMonth(activatedAt),
         },
       },
     );
@@ -334,4 +345,28 @@ export async function handleVnpayReturn(
     paymentStatus: isSuccess ? "success" : "failed",
     redirectPath: "/settings?tab=billing",
   };
+}
+
+export async function getBillingPaymentHistory(
+  userId: string,
+): Promise<BillingPaymentHistoryRecord[]> {
+  const payments = await getPaymentsCollection();
+  const paymentDocuments = await payments
+    .find({ scope: "billing", userId })
+    .sort({ createdAt: -1 })
+    .limit(20)
+    .toArray();
+
+  return paymentDocuments.map((paymentDocument) => ({
+    id: paymentDocument._id?.toString() ?? paymentDocument.txnRef,
+    txnRef: paymentDocument.txnRef,
+    amount: paymentDocument.amount,
+    currency: paymentDocument.currency,
+    status: paymentDocument.status,
+    plan: paymentDocument.plan,
+    paidAt: paymentDocument.paidAt?.toISOString() ?? null,
+    activatedAt: paymentDocument.activatedAt?.toISOString() ?? null,
+    createdAt: paymentDocument.createdAt.toISOString(),
+    updatedAt: paymentDocument.updatedAt.toISOString(),
+  }));
 }

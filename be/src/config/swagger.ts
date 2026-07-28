@@ -455,7 +455,7 @@ swaggerSpec.paths = {
   "/api/users/me/billing": {
     get: {
       summary: "Get the current logged-in user's billing summary",
-      tags: ["Users"],
+      tags: ["Billing"],
       security: [{ bearerAuth: [] }],
       responses: {
         200: {
@@ -474,7 +474,7 @@ swaggerSpec.paths = {
     },
     patch: {
       summary: "Update the current logged-in user's billing plan",
-      tags: ["Users"],
+      tags: ["Billing"],
       security: [{ bearerAuth: [] }],
       requestBody: {
         required: true,
@@ -513,10 +513,28 @@ swaggerSpec.paths = {
       },
     },
   },
+  "/api/users/me/billing/history": {
+    get: {
+      summary: "Get the current logged-in user's billing purchase history",
+      tags: ["Billing"],
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: {
+          description: "Billing history fetched successfully",
+        },
+        401: {
+          description: "Missing or invalid bearer token",
+        },
+        503: {
+          description: "MongoDB connection failed",
+        },
+      },
+    },
+  },
   "/api/users/me/billing/auto-renew": {
     patch: {
       summary: "Toggle auto-renew for the current logged-in user's Pro plan",
-      tags: ["Users"],
+      tags: ["Billing"],
       security: [{ bearerAuth: [] }],
       requestBody: {
         required: true,
@@ -557,7 +575,7 @@ swaggerSpec.paths = {
   "/api/payments/vnpay/billing/create": {
     post: {
       summary: "Create a VNPay billing payment URL for upgrading to Pro",
-      tags: ["Payments"],
+      tags: ["Billing"],
       security: [{ bearerAuth: [] }],
       requestBody: {
         required: true,
@@ -616,7 +634,7 @@ swaggerSpec.paths = {
   "/api/payments/vnpay/return": {
     get: {
       summary: "VNPay return URL for billing payments",
-      tags: ["Payments"],
+      tags: ["Billing"],
       responses: {
         200: {
           description: "VNPay return processed successfully",
@@ -630,7 +648,7 @@ swaggerSpec.paths = {
   "/api/payments/vnpay/ipn": {
     get: {
       summary: "VNPay IPN callback for billing payments",
-      tags: ["Payments"],
+      tags: ["Billing"],
       responses: {
         200: {
           description: "VNPay IPN processed",

@@ -20,8 +20,9 @@ export type BillingPlan = "free" | "pro";
 export interface CurrentUserBillingSummary {
   profile: {
     plan: BillingPlan;
-    status: "active";
+    status: "active" | "expired";
     autoRenew: boolean;
+    expiresAt: string | null;
     updatedAt: string;
   };
   usage: {
@@ -43,6 +44,25 @@ export interface CurrentUserBillingResponse {
   ok: boolean;
   message: string;
   billing?: CurrentUserBillingSummary;
+}
+
+export interface BillingHistoryRecord {
+  id: string;
+  txnRef: string;
+  amount: number;
+  currency: "VND";
+  status: "pending" | "success" | "failed";
+  plan: "pro";
+  paidAt: string | null;
+  activatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BillingHistoryResponse {
+  ok: boolean;
+  message: string;
+  history?: BillingHistoryRecord[];
 }
 
 export interface DeleteCurrentUserResponse {

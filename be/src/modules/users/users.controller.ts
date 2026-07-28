@@ -14,6 +14,7 @@ import type {
   UpdateCurrentUserBillingAutoRenewInput,
   UpdateCurrentUserBillingInput,
 } from "../auth/auth.types.js";
+import { getBillingPaymentHistory } from "../payments/payments.service.js";
 
 export async function getCurrentUserHandler(req: Request, res: Response) {
   const userId = req.auth?.userId;
@@ -406,6 +407,35 @@ export async function updateCurrentUserBillingAutoRenewHandler(
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to update auto renew.";
+
+    return res.status(503).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function getCurrentUserBillingHistoryHandler(req: Request, res: Response) {
+  const userId = req.auth?.userId;
+
+  if (!userId) {
+    return res.status(401).json({
+      ok: false,
+      message: "Authorization token is required.",
+    });
+  }
+
+  try {
+    const history = await getBillingPaymentHistory(userId);
+
+    return res.status(200).json({
+      ok: true,
+      message: "Billing history fetched successfully.",
+      history,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to fetch billing history.";
 
     return res.status(503).json({
       ok: false,

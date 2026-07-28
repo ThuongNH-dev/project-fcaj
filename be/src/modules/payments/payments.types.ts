@@ -14,3 +14,16 @@ export interface VnpayReturnResult {
   paymentStatus: PaymentStatus;
   redirectPath: string;
 }
+
+export interface BillingPaymentHistoryRecord {
+  id: string;
+  txnRef: string;
+  amount: number;
+  currency: "VND";
+  status: PaymentStatus;
+  plan: "pro";
+  paidAt: string | null;
+  activatedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}

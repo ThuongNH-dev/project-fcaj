@@ -34,8 +34,9 @@ export interface UserDocument {
   notificationPreferences?: NotificationPreferences;
   billingProfile?: {
     plan: BillingPlan;
-    status: "active";
+    status: "active" | "expired";
     autoRenew: boolean;
+    expiresAt?: Date | null;
     updatedAt: Date;
   };
   role: "admin" | "user";
@@ -142,11 +143,17 @@ function toPublicBillingProfile(
     billingProfile?.updatedAt,
     fallbackUpdatedAt,
   );
+  const normalizedExpiresAt = billingProfile?.expiresAt
+    ? normalizeDocumentDate(billingProfile.expiresAt, normalizedUpdatedAt)
+    : null;
+  const isExpired =
+    Boolean(normalizedExpiresAt) && normalizedExpiresAt.getTime() <= Date.now();
 
   return {
-    plan: normalizeBillingPlan(billingProfile?.plan),
-    status: "active",
-    autoRenew: billingProfile?.autoRenew ?? false,
+    plan: isExpired ? "free" : normalizeBillingPlan(billingProfile?.plan),
+    status: isExpired ? "expired" : "active",
+    autoRenew: isExpired ? false : billingProfile?.autoRenew ?? false,
+    expiresAt: normalizedExpiresAt?.toISOString() ?? null,
     updatedAt: normalizedUpdatedAt.toISOString(),
   };
 }
@@ -531,11 +538,26 @@ export async function getCurrentUserBillingSummary(
     }),
   ]);
 
-  const fallbackUpdatedAt = normalizeDocumentDate(
-    user.updatedAt,
-    user._id.getTimestamp(),
-  );
+  const fallbackUpdatedAt = normalizeDocumentDate(user.updatedAt, user._id.getTimestamp());
   const profile = toPublicBillingProfile(user.billingProfile, fallbackUpdatedAt);
+
+  if (user.billingProfile?.plan === "pro" && profile.status === "expired") {
+    await users.updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          billingProfile: {
+            plan: "free",
+            status: "expired",
+            autoRenew: false,
+            expiresAt: user.billingProfile.expiresAt ?? null,
+            updatedAt: new Date(),
+          },
+          updatedAt: new Date(),
+        },
+      },
+    );
+  }
 
   return {
     profile,
@@ -572,6 +594,7 @@ export async function updateCurrentUserBillingPlan(
           plan: normalizedPlan,
           status: "active",
           autoRenew: existingUser.billingProfile?.autoRenew ?? false,
+          expiresAt: normalizedPlan === "pro" ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null,
           updatedAt,
         },
         updatedAt,
@@ -614,6 +637,7 @@ export async function updateCurrentUserBillingAutoRenew(
           plan: currentPlan,
           status: "active",
           autoRenew: currentPlan === "pro" ? autoRenew : false,
+          expiresAt: existingUser.billingProfile?.expiresAt ?? (currentPlan === "pro" ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null),
           updatedAt,
         },
         updatedAt,

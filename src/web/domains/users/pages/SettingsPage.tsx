@@ -28,6 +28,8 @@ import {
 } from "../../auth";
 import {
   changeCurrentUserPassword,
+  getCurrentUserBillingHistory,
+  type BillingHistoryRecord,
   type CurrentUserBillingSummary,
   deleteCurrentUser,
   getCurrentUserBilling,
@@ -125,6 +127,7 @@ export function SettingsPage() {
   const [passwordErrorMessage, setPasswordErrorMessage] = useState("");
   const [passwordSuccessMessage, setPasswordSuccessMessage] = useState("");
   const [billingErrorMessage, setBillingErrorMessage] = useState("");
+  const [billingHistory, setBillingHistory] = useState<BillingHistoryRecord[]>([]);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -181,11 +184,12 @@ export function SettingsPage() {
   useEffect(() => {
     async function loadProfile() {
       try {
-        const [profileResult, notificationsResult, billingResult] =
+        const [profileResult, notificationsResult, billingResult, historyResult] =
           await Promise.allSettled([
             getCurrentUser(),
             getCurrentUserNotificationPreferences(),
             getCurrentUserBilling(),
+            getCurrentUserBillingHistory(),
           ]);
 
         if (profileResult.status === "fulfilled" && profileResult.value.user) {
@@ -232,6 +236,10 @@ export function SettingsPage() {
               ? billingResult.reason.message
               : t.loadBillingError,
           );
+        }
+
+        if (historyResult.status === "fulfilled" && historyResult.value.history) {
+          setBillingHistory(historyResult.value.history);
         }
 
       } finally {
@@ -582,6 +590,12 @@ export function SettingsPage() {
   const billingCurrency = currency;
   const billingPriceLabel =
     billingCurrency === "VND" ? "99,000 VND/mo" : "$4/mo";
+  const billingExpiresAt = billingSummary.profile.expiresAt;
+  const billingExpiryLabel = billingExpiresAt
+    ? `${formatLocalDate(billingExpiresAt)}`
+    : isProPlan
+      ? t.billingExpiryDescActive
+      : t.billingExpiryDescInactive;
   const formatUsageValue = (used: number, limit: number | null) =>
     limit === null ? `${used} / ${t.unlimited}` : `${used} / ${limit}`;
   const receiptScanValue = billingSummary.usage.receiptScanIncluded
@@ -1290,6 +1304,62 @@ export function SettingsPage() {
                         {isUpdatingBilling ? t.updatingPlan : t.cancelSubscription}
                       </button>
                     )}
+                    <div className="rounded-2xl border border-[#E5E7EB] bg-white p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm text-[#111827]" style={{ fontWeight: 700 }}>
+                            {t.billingExpiryTitle}
+                          </p>
+                          <p className="text-xs text-[#6B7280] mt-1">
+                            {isProPlan
+                              ? t.billingExpiryDescActive
+                              : t.billingExpiryDescInactive}
+                          </p>
+                        </div>
+                        <p className="text-sm text-[#111827]" style={{ fontWeight: 700 }}>
+                          {billingExpiryLabel}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
+                      <p className="text-sm text-[#111827]" style={{ fontWeight: 700 }}>
+                        {t.billingHistoryTitle}
+                      </p>
+                      {billingHistory.length > 0 ? (
+                        <div className="mt-3 space-y-2">
+                          {billingHistory.map((record) => (
+                            <div
+                              key={record.id}
+                              className="flex items-center justify-between gap-3 rounded-xl bg-white px-3 py-2"
+                            >
+                              <div className="min-w-0">
+                                <p className="text-sm text-[#111827]" style={{ fontWeight: 600 }}>
+                                  {t.billingPurchaseLabel}
+                                </p>
+                                <p className="text-xs text-[#6B7280]">
+                                  {t.billingPaidAtLabel}{" "}
+                                  {record.paidAt ? formatLocalDate(record.paidAt) : formatLocalDate(record.createdAt)}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm text-[#111827]" style={{ fontWeight: 700 }}>
+                                  {record.amount.toLocaleString()} {record.currency}
+                                </p>
+                                <p className="text-xs text-[#6B7280]">
+                                  {record.status === "success"
+                                    ? t.billingSuccessLabel
+                                    : record.status}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-3 text-sm text-[#6B7280]">
+                          {t.billingNoHistory}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
