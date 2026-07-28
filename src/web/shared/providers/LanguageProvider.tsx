@@ -169,7 +169,7 @@ export const translations = {
 
     // Settlements
     settlementsTitle: "Settlements", settlementsDesc: "Track and manage payments between group members.",
-    youAreOwedLabel: "You Are Owed", settledThisMonth: "Settled This Month",
+    youAreOwedLabel: "You Are Owed", youOweLabel: "You Owe", settledThisMonth: "Settled This Month",
     pendingSettlements: "Pending Settlements", allClear: "All clear!",
     noSettlementsDesc: "No settlements yet. Add expenses to groups and debts will appear here.",
     settlementTimeline: "Settlement Timeline", noActivityLogged: "No activity yet",
@@ -438,7 +438,7 @@ export const translations = {
 
     // Settlements
     settlementsTitle: "Thanh toán", settlementsDesc: "Theo dõi và quản lý các khoản thanh toán giữa các thành viên.",
-    youAreOwedLabel: "Bạn được nợ", settledThisMonth: "Đã thanh toán tháng này",
+    youAreOwedLabel: "Bạn được nợ", youOweLabel: "Bạn nợ", settledThisMonth: "Đã thanh toán tháng này",
     pendingSettlements: "Chờ thanh toán", allClear: "Tất cả đã ổn!",
     noSettlementsDesc: "Chưa có thanh toán. Thêm chi phí vào nhóm và các khoản nợ sẽ hiện ở đây.",
     settlementTimeline: "Lịch sử thanh toán", noActivityLogged: "Chưa có hoạt động",
