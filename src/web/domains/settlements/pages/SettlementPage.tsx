@@ -5,6 +5,8 @@ import { getGroups, type Group } from "../../groups";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
 import { useFeedback } from "../../../shared/providers/FeedbackProvider";
 import { getExpenses, settleExpense, type Expense } from "../../expenses";
+import { AdminPagination } from "../../../app/admin/components/AdminPagination";
+import { useAdminPagination } from "../../../app/admin/lib/admin.utils";
 import {
   formatCurrency,
   formatCurrencyBreakdown,
@@ -93,6 +95,19 @@ export function SettlementPage() {
     () => getSettledExpenses(relevantExpenses),
     [relevantExpenses],
   );
+
+  const {
+    page: pendingSettlementsPage,
+    pageItems: pagedPendingExpenses,
+    setPage: setPendingSettlementsPage,
+    totalPages: pendingSettlementsTotalPages,
+  } = useAdminPagination(pendingExpenses);
+  const {
+    page: timelinePage,
+    pageItems: pagedSettledExpenses,
+    setPage: setTimelinePage,
+    totalPages: timelineTotalPages,
+  } = useAdminPagination(settledExpenses);
 
   const primaryCurrency =
     currentUser?.defaultCurrency ??
@@ -190,10 +205,7 @@ export function SettlementPage() {
     <div className="lg:pl-60 min-h-screen bg-[#F6FBF8]">
       <div className="max-w-7xl mx-auto px-6 py-8 pt-16 lg:pt-8">
         <div className="mb-8">
-          <h1
-            className="text-[#111827]"
-            style={{ fontSize: "1.5rem", fontWeight: 800 }}
-          >
+          <h1 className="text-[#111827]" style={{ fontSize: "1.5rem", fontWeight: 800 }}>
             {t.settlementsTitle}
           </h1>
           <p className="text-[#6B7280] text-sm mt-0.5">{t.settlementsDesc}</p>
@@ -230,15 +242,10 @@ export function SettlementPage() {
             },
           ].map(({ label, value, icon: Icon, bg, iconBg }) => (
             <div key={label} className={`${bg} rounded-2xl p-5 border border-white`}>
-              <div
-                className={`w-9 h-9 ${iconBg} rounded-xl flex items-center justify-center mb-3`}
-              >
+              <div className={`w-9 h-9 ${iconBg} rounded-xl flex items-center justify-center mb-3`}>
                 <Icon className="w-4 h-4 text-[#065f46]" />
               </div>
-              <p
-                className="text-[#111827] whitespace-pre-line"
-                style={{ fontSize: "1.5rem", fontWeight: 800 }}
-              >
+              <p className="text-[#111827] whitespace-pre-line" style={{ fontSize: "1.5rem", fontWeight: 800 }}>
                 <CurrencyBreakdownValue value={value} />
               </p>
               <p className="text-[#6B7280] text-xs mt-0.5">{label}</p>
@@ -256,93 +263,94 @@ export function SettlementPage() {
               </div>
 
               {isLoading ? (
-                <div className="px-5 py-8 text-sm text-[#6B7280]">
-                  {t.pendingSettlements}...
-                </div>
+                <div className="px-5 py-8 text-sm text-[#6B7280]">{t.pendingSettlements}...</div>
               ) : pendingExpenses.length > 0 ? (
-                <div className="divide-y divide-[#F3F4F6]">
-                  {pendingExpenses.map((expense) => {
-                    const groupName = groupsById.get(expense.groupId)?.name ?? "Unknown group";
-                    const currentUserShare = getCurrentUserShare(expense, currentUser?.id);
-                    const othersShare = getOthersShare(expense, currentUser?.id);
-                    const isOwedToYou = expense.paidByUserId === currentUser?.id;
-                    const counterpartyName = isOwedToYou
-                      ? expense.participants.filter(
-                          (participant) => participant.userId !== currentUser?.id,
-                        ).length > 1
-                        ? `${expense.participants.filter(
+                <>
+                  <div className="divide-y divide-[#F3F4F6]">
+                    {pagedPendingExpenses.map((expense) => {
+                      const groupName = groupsById.get(expense.groupId)?.name ?? "Unknown group";
+                      const currentUserShare = getCurrentUserShare(expense, currentUser?.id);
+                      const othersShare = getOthersShare(expense, currentUser?.id);
+                      const isOwedToYou = expense.paidByUserId === currentUser?.id;
+                      const counterpartyName = isOwedToYou
+                        ? expense.participants.filter(
                             (participant) => participant.userId !== currentUser?.id,
-                          ).length} members`
-                        : memberNameById.get(
-                            expense.participants.find(
+                          ).length > 1
+                          ? `${expense.participants.filter(
                               (participant) => participant.userId !== currentUser?.id,
-                            )?.userId ?? "",
-                          ) ?? "Group member"
-                      : memberNameById.get(expense.paidByUserId) ?? "Group member";
+                            ).length} members`
+                          : memberNameById.get(
+                              expense.participants.find(
+                                (participant) => participant.userId !== currentUser?.id,
+                              )?.userId ?? "",
+                            ) ?? "Group member"
+                        : memberNameById.get(expense.paidByUserId) ?? "Group member";
 
-                    return (
-                      <div
-                        key={expense.id}
-                        className="px-5 py-4 flex items-start justify-between gap-4"
-                      >
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <p className="text-[#111827]" style={{ fontWeight: 700 }}>
-                              {expense.title}
+                      return (
+                        <div
+                          key={expense.id}
+                          className="px-5 py-4 flex items-start justify-between gap-4"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <p className="text-[#111827]" style={{ fontWeight: 700 }}>
+                                {expense.title}
+                              </p>
+                              <span
+                                className={`rounded-full px-2.5 py-1 text-xs ${
+                                  isOwedToYou
+                                    ? "bg-[#D1FAE5] text-[#065f46]"
+                                    : "bg-[#FEF3C7] text-[#92400e]"
+                                }`}
+                                style={{ fontWeight: 600 }}
+                              >
+                                {isOwedToYou ? t.youAreOwedLabel : t.youOweLabel}
+                              </span>
+                            </div>
+                            <p className="text-sm text-[#6B7280]">
+                              {groupName} |{" "}
+                              {isOwedToYou
+                                ? `Awaiting payment from ${counterpartyName}`
+                                : `Payable to ${counterpartyName}`}
                             </p>
-                            <span
-                              className={`rounded-full px-2.5 py-1 text-xs ${
-                                isOwedToYou
-                                  ? "bg-[#D1FAE5] text-[#065f46]"
-                                  : "bg-[#FEF3C7] text-[#92400e]"
-                              }`}
-                              style={{ fontWeight: 600 }}
-                            >
-                              {isOwedToYou ? t.youAreOwedLabel : t.youOweLabel}
-                            </span>
+                            <p className="text-xs text-[#9CA3AF] mt-2">
+                              {formatDate(expense.expenseDate)} | {expense.participants.length}{" "}
+                              participants
+                            </p>
                           </div>
-                          <p className="text-sm text-[#6B7280]">
-                            {groupName} |{" "}
-                            {isOwedToYou
-                              ? `Awaiting payment from ${counterpartyName}`
-                              : `Payable to ${counterpartyName}`}
-                          </p>
-                          <p className="text-xs text-[#9CA3AF] mt-2">
-                            {formatDate(expense.expenseDate)} | {expense.participants.length}{" "}
-                            participants
-                          </p>
-                        </div>
 
-                        <div className="text-right flex-shrink-0">
-                          <p
-                            className={
-                              isOwedToYou ? "text-[#16A34A]" : "text-[#B45309]"
-                            }
-                            style={{ fontWeight: 800 }}
-                          >
-                            {formatCurrency(
-                              isOwedToYou ? othersShare : currentUserShare,
-                              expense.currency,
-                            )}
-                          </p>
-                          {isOwedToYou && (
-                            <button
-                              type="button"
-                              onClick={() => void handleSettleExpense(expense)}
-                              disabled={settlingExpenseId === expense.id}
-                              className="mt-3 rounded-xl bg-[#16A34A] px-3 py-2 text-xs text-white hover:bg-[#15803D] transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-                              style={{ fontWeight: 600 }}
+                          <div className="text-right flex-shrink-0">
+                            <p
+                              className={isOwedToYou ? "text-[#16A34A]" : "text-[#B45309]"}
+                              style={{ fontWeight: 800 }}
                             >
-                              {settlingExpenseId === expense.id
-                                ? t.updating
-                                : t.markAsPaid}
-                            </button>
-                          )}
+                              {formatCurrency(
+                                isOwedToYou ? othersShare : currentUserShare,
+                                expense.currency,
+                              )}
+                            </p>
+                            {isOwedToYou && (
+                              <button
+                                type="button"
+                                onClick={() => void handleSettleExpense(expense)}
+                                disabled={settlingExpenseId === expense.id}
+                                className="mt-3 rounded-xl bg-[#16A34A] px-3 py-2 text-xs text-white hover:bg-[#15803D] transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                                style={{ fontWeight: 600 }}
+                              >
+                                {settlingExpenseId === expense.id ? t.updating : t.markAsPaid}
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                  <AdminPagination
+                    page={pendingSettlementsPage}
+                    totalPages={pendingSettlementsTotalPages}
+                    onPageChange={setPendingSettlementsPage}
+                  />
+                </>
               ) : (
                 <div className="flex flex-col items-center justify-center py-24 text-center px-6">
                   <div className="w-16 h-16 bg-[#F0FAF5] rounded-2xl flex items-center justify-center mx-auto mb-4">
@@ -366,12 +374,10 @@ export function SettlementPage() {
               {isLoading ? (
                 <p className="text-[#9CA3AF] text-xs">Loading activity...</p>
               ) : settledExpenses.length > 0 ? (
+                <>
                 <div className="space-y-4">
-                  {settledExpenses.slice(0, 5).map((expense) => (
-                    <div
-                      key={expense.id}
-                      className="rounded-2xl bg-[#F9FAFB] px-4 py-3"
-                    >
+                  {pagedSettledExpenses.map((expense) => (
+                    <div key={expense.id} className="rounded-2xl bg-[#F9FAFB] px-4 py-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-[#111827]" style={{ fontWeight: 700 }}>
@@ -401,6 +407,12 @@ export function SettlementPage() {
                     </div>
                   ))}
                 </div>
+                <AdminPagination
+                  page={timelinePage}
+                  totalPages={timelineTotalPages}
+                  onPageChange={setTimelinePage}
+                />
+                </>
               ) : (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
                   <div className="w-10 h-10 bg-[#F0FAF5] rounded-2xl flex items-center justify-center mx-auto mb-2">

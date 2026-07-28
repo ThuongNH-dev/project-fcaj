@@ -16,6 +16,8 @@ import { AddExpenseDialog, type NewExpense } from "../components/AddExpenseDialo
 import { createExpense, deleteExpense, getExpenses, updateExpense, type Expense } from "..";
 import { formatCurrencyBreakdown } from "../../settlements/lib/settlement.utils";
 import { getCurrentUserBilling, type CurrentUserBillingSummary } from "../../users";
+import { AdminPagination } from "../../../app/admin/components/AdminPagination";
+import { useAdminPagination } from "../../../app/admin/lib/admin.utils";
 
 const catColors: Record<string, string> = {
   food: "bg-[#D1FAE5] text-[#065f46]",
@@ -139,6 +141,13 @@ export function ExpensesPage() {
 
     return matchesSearch && matchesFilter;
   });
+
+  const {
+    page: expensesPage,
+    pageItems: pagedExpenses,
+    setPage: setExpensesPage,
+    totalPages: expensesTotalPages,
+  } = useAdminPagination(filteredExpenses);
 
   const totalSpentByCurrency = filteredExpenses.reduce((totals, expense) => {
     const currentUserShare =
@@ -417,23 +426,24 @@ export function ExpensesPage() {
               )}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-[#F3F4F6]">
-                    {[t.expense, t.group, t.category, t.paidBy, "Total", t.yourShare, t.date, t.status].map((heading) => (
-                      <th
-                        key={heading}
-                        className="text-left px-5 py-3 text-xs text-[#9CA3AF] uppercase tracking-wider whitespace-nowrap"
-                        style={{ fontWeight: 600 }}
-                      >
-                        {heading}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredExpenses.map((expense) => (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-[#F3F4F6]">
+                      {[t.expense, t.group, t.category, t.paidBy, "Total", t.yourShare, t.date, t.status].map((heading) => (
+                        <th
+                          key={heading}
+                          className="text-left px-5 py-3 text-xs text-[#9CA3AF] uppercase tracking-wider whitespace-nowrap"
+                          style={{ fontWeight: 600 }}
+                        >
+                          {heading}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pagedExpenses.map((expense) => (
                     <tr
                       key={expense.id}
                       className="border-b border-[#F9FAFB] hover:bg-[#FAFAFA] transition-colors"
@@ -531,10 +541,16 @@ export function ExpensesPage() {
                         )}
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <AdminPagination
+                page={expensesPage}
+                totalPages={expensesTotalPages}
+                onPageChange={setExpensesPage}
+              />
+            </>
           )}
         </div>
       </div>
