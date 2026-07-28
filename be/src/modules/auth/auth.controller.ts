@@ -3,6 +3,7 @@ import { env } from "../../config/env.js";
 import { sendPasswordResetEmail } from "./auth.email.js";
 import { signAuthToken } from "./auth.token.js";
 import {
+  loginOrRegisterWithGoogle,
   loginUser,
   registerUser,
   requestPasswordReset,
@@ -114,6 +115,127 @@ export async function loginUserHandler(req: Request, res: Response) {
       error instanceof Error ? error.message : "Unable to login user.";
 
     const statusCode = message === "Invalid email or password." ? 401 : 503;
+
+    return res.status(statusCode).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+interface GoogleTokenInfo {
+  aud?: string;
+  azp?: string;
+  scope?: string;
+  expires_in?: string;
+  error?: string;
+  error_description?: string;
+}
+
+interface GoogleUserInfo {
+  sub: string;
+  email?: string;
+  email_verified?: boolean;
+  given_name?: string;
+  family_name?: string;
+  name?: string;
+  picture?: string;
+}
+
+async function fetchVerifiedGoogleProfile(accessToken: string): Promise<GoogleUserInfo> {
+  const tokenInfoResponse = await fetch(
+    `https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`,
+  );
+
+  if (!tokenInfoResponse.ok) {
+    throw new Error("Google session is invalid or has expired.");
+  }
+
+  const tokenInfo = (await tokenInfoResponse.json()) as GoogleTokenInfo;
+
+  if (env.googleClientId) {
+    const audience = tokenInfo.aud || tokenInfo.azp;
+
+    if (audience !== env.googleClientId) {
+      throw new Error("Google session was issued for a different application.");
+    }
+  }
+
+  const userInfoResponse = await fetch(
+    "https://www.googleapis.com/oauth2/v3/userinfo",
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  if (!userInfoResponse.ok) {
+    throw new Error("Unable to fetch Google account profile.");
+  }
+
+  return (await userInfoResponse.json()) as GoogleUserInfo;
+}
+
+export async function googleAuthHandler(req: Request, res: Response) {
+  const { accessToken } = req.body as {
+    accessToken?: string;
+  };
+
+  if (!accessToken?.trim()) {
+    return res.status(400).json({
+      ok: false,
+      message: "Google access token is required.",
+    });
+  }
+
+  if (!env.googleClientId) {
+    return res.status(503).json({
+      ok: false,
+      message: "Google sign-in is not configured on the server.",
+    });
+  }
+
+  try {
+    const googleProfile = await fetchVerifiedGoogleProfile(accessToken);
+
+    if (!googleProfile.email || googleProfile.email_verified === false) {
+      return res.status(401).json({
+        ok: false,
+        message: "Google account does not have a verified email address.",
+      });
+    }
+
+    const [firstName, ...lastNameParts] = (
+      googleProfile.name ||
+      `${googleProfile.given_name ?? ""} ${googleProfile.family_name ?? ""}`
+    )
+      .trim()
+      .split(" ");
+
+    const user = await loginOrRegisterWithGoogle({
+      email: googleProfile.email,
+      firstName: googleProfile.given_name || firstName || "Google",
+      lastName: googleProfile.family_name || lastNameParts.join(" ") || "User",
+      avatarUrl: googleProfile.picture,
+    });
+    const token = signAuthToken(user);
+
+    return res.status(200).json({
+      ok: true,
+      message: "Signed in with Google successfully.",
+      token,
+      user,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to sign in with Google.";
+
+    const statusCode =
+      message === "Google session is invalid or has expired." ||
+      message === "Google session was issued for a different application."
+        ? 401
+        : 503;
 
     return res.status(statusCode).json({
       ok: false,

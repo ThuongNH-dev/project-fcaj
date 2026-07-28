@@ -40,6 +40,7 @@ export interface UserDocument {
     updatedAt: Date;
   };
   role: "admin" | "user";
+  authProvider?: "local" | "google";
   passwordResetTokenHash?: string;
   passwordResetOtpHash?: string;
   passwordResetExpiresAt?: Date;
@@ -309,6 +310,73 @@ export async function loginUser(input: LoginUserInput): Promise<PublicUser> {
   }
 
   return toPublicUser(user);
+}
+
+export async function loginOrRegisterWithGoogle(profile: {
+  email: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl?: string;
+}): Promise<PublicUser> {
+  const users = await getUsersCollection();
+  const normalizedEmail = profile.email.trim().toLowerCase();
+
+  if (!normalizedEmail) {
+    throw new Error("Google account did not return an email address.");
+  }
+
+  const existingUser = await users.findOne({ email: normalizedEmail });
+
+  if (existingUser?._id) {
+    const updateFields: Partial<UserDocument> = {};
+
+    if (!existingUser.avatarUrl && profile.avatarUrl) {
+      updateFields.avatarUrl = profile.avatarUrl;
+    }
+
+    if (!existingUser.authProvider) {
+      updateFields.authProvider = "google";
+    }
+
+    if (Object.keys(updateFields).length > 0) {
+      updateFields.updatedAt = new Date();
+
+      await users.updateOne(
+        { _id: existingUser._id },
+        { $set: updateFields },
+      );
+    }
+
+    return toPublicUser({ ...existingUser, ...updateFields });
+  }
+
+  const normalizedFirstName = profile.firstName.trim() || "Google";
+  const normalizedLastName = profile.lastName.trim() || "User";
+  const createdAt = new Date();
+  const updatedAt = createdAt;
+  // Google-authenticated accounts don't use a local password; store an
+  // unguessable random hash so the password field stays non-empty and
+  // unusable for a normal email/password login.
+  const passwordHash = await bcrypt.hash(randomBytes(32).toString("hex"), 10);
+
+  const newUserDocument: UserDocument = {
+    firstName: normalizedFirstName,
+    lastName: normalizedLastName,
+    email: normalizedEmail,
+    passwordHash,
+    bio: "",
+    avatarUrl: profile.avatarUrl?.trim() ?? "",
+    defaultCurrency: "USD",
+    notificationPreferences: { ...DEFAULT_NOTIFICATION_PREFERENCES },
+    role: "user",
+    authProvider: "google",
+    createdAt,
+    updatedAt,
+  };
+
+  const result = await users.insertOne(newUserDocument);
+
+  return toPublicUser({ ...newUserDocument, _id: result.insertedId });
 }
 
 export async function requestPasswordReset(input: ForgotPasswordInput): Promise<{

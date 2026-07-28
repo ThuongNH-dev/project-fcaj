@@ -1,10 +1,15 @@
 export {
   forgotPassword,
   loginUser,
+  loginWithGoogle,
   registerUser,
   resetPassword,
   verifyResetOtp,
 } from "./api/auth.api";
+export {
+  isGoogleSignInConfigured,
+  requestGoogleAccessToken,
+} from "./lib/google-auth";
 export {
   clearStoredUser,
   getStoredAuthSession,
@@ -23,6 +28,7 @@ export type {
   AuthUser,
   ForgotPasswordPayload,
   ForgotPasswordResponse,
+  GoogleAuthPayload,
   LoginPayload,
   RegisterPayload,
   ResetPasswordPayload,
