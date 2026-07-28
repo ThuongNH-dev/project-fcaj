@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 import {
   TrendingUp,
   TrendingDown,
@@ -79,10 +79,6 @@ export function DashboardPage() {
   const { t, lang } = useLanguage();
   const user = useStoredUser();
   const navigate = useNavigate();
-
-  if (user?.role === "admin") {
-    return <Navigate to="/admin" replace />;
-  }
 
   const userName = user ? `${user.firstName} ${user.lastName}` : "Guest";
   const userInitials = user ? getUserInitials(user) : "GU";

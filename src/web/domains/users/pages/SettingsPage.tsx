@@ -141,24 +141,15 @@ export function SettingsPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const currentUser = useStoredUser();
-
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
     const tab = searchParams.get("tab");
 
-    if (
-      tab === "profile" ||
-      tab === "notifications" ||
-      tab === "security" ||
-      (tab === "billing" && currentUser?.role !== "admin") ||
-      tab === "appearance"
-    ) {
+    if (tab === "profile" || tab === "notifications" || tab === "security" || tab === "billing" || tab === "appearance") {
       setActiveTab(tab);
-    } else if (tab === "billing" && currentUser?.role === "admin") {
-      setActiveTab("profile");
     }
-  }, [location.search, currentUser?.role]);
+  }, [location.search]);
+  const currentUser = useStoredUser();
   const { setTheme, theme } = useTheme();
   const { accentColor, density, setAccentColor, setDensity } = useAppearance();
   const { confirm, showToast } = useFeedback();
@@ -571,13 +562,11 @@ export function SettingsPage() {
         lastName: lastName || "?",
       });
 
-  const isAdminUser = currentUser?.role === "admin";
-
   const tabs = [
     { id: "profile", label: t.profile, icon: User },
     { id: "notifications", label: t.notifications, icon: Bell },
     { id: "security", label: t.security, icon: Shield },
-    ...(!isAdminUser ? [{ id: "billing", label: t.billing, icon: CreditCard }] : []),
+    { id: "billing", label: t.billing, icon: CreditCard },
     { id: "appearance", label: t.appearance, icon: Palette },
   ];
 

@@ -45,6 +45,7 @@ export function Sidebar({ currentPath }: SidebarProps) {
 
 
   const adminNavItems = [
+    { icon: LayoutDashboard, label: t.dashboard, path: "/dashboard" },
     { icon: Shield, label: t.admin, path: "/admin" },
     { icon: Settings, label: t.settings, path: "/settings" },
   ];
