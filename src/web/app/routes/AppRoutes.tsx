@@ -13,7 +13,12 @@ export function AppRoutes() {
     ...adminRoutes,
     {
       path: "*",
-      element: <Navigate to={user ? "/dashboard" : "/login"} replace />,
+      element: (
+        <Navigate
+          to={user ? (user.role === "admin" ? "/admin" : "/dashboard") : "/login"}
+          replace
+        />
+      ),
     },
   ];
 
