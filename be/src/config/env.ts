@@ -35,6 +35,7 @@ export const env = {
   mongoUri: process.env.MONGODB_URI || "mongodb://127.0.0.1:27017",
   mongoDb: process.env.MONGODB_DB || "project_fcaj",
   jwtSecret: requireEnv("JWT_SECRET"),
+  googleClientId: process.env.GOOGLE_CLIENT_ID?.trim() || "",
   frontendUrl:
     process.env.FRONTEND_URL?.replace(/\/$/, "") || "http://localhost:5173",
   awsRegion: process.env.AWS_REGION?.trim() || "",
