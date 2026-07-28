@@ -15,6 +15,8 @@ import {
   getAdminUploadsHandler,
   getAdminUserByIdHandler,
   getAdminUsersHandler,
+  updateAdminGroupBanHandler,
+  updateAdminUserBanHandler,
   updateAdminUserRoleHandler,
   sendProductUpdateHandler,
 } from "./admin.controller.js";
@@ -26,9 +28,11 @@ adminRouter.get("/users/export", authMiddleware, requireAdmin, exportAdminUsersH
 adminRouter.get("/users", authMiddleware, requireAdmin, getAdminUsersHandler);
 adminRouter.get("/users/:userId", authMiddleware, requireAdmin, getAdminUserByIdHandler);
 adminRouter.patch("/users/:userId", authMiddleware, requireAdmin, updateAdminUserRoleHandler);
+adminRouter.patch("/users/:userId/ban", authMiddleware, requireAdmin, updateAdminUserBanHandler);
 adminRouter.delete("/users/:userId", authMiddleware, requireAdmin, deleteAdminUserHandler);
 adminRouter.get("/groups", authMiddleware, requireAdmin, getAdminGroupsHandler);
 adminRouter.get("/groups/:groupId", authMiddleware, requireAdmin, getAdminGroupByIdHandler);
+adminRouter.patch("/groups/:groupId/ban", authMiddleware, requireAdmin, updateAdminGroupBanHandler);
 adminRouter.delete("/groups/:groupId", authMiddleware, requireAdmin, deleteAdminGroupHandler);
 adminRouter.get("/uploads", authMiddleware, requireAdmin, getAdminUploadsHandler);
 adminRouter.get("/rejected", authMiddleware, requireAdmin, getAdminRejectedHandler);

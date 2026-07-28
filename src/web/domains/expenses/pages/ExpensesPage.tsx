@@ -141,6 +141,8 @@ export function ExpensesPage() {
 
     return matchesSearch && matchesFilter;
   });
+  const isExpenseInBannedGroup = (expense: Expense) =>
+    Boolean(groupsById.get(expense.groupId)?.isBanned);
 
   const {
     page: expensesPage,
@@ -281,6 +283,14 @@ export function ExpensesPage() {
   };
 
   const handleDelete = async (expense: Expense) => {
+    if (isExpenseInBannedGroup(expense)) {
+      showToast({
+        variant: "error",
+        message: "This group has been banned. Expense deletion is disabled.",
+      });
+      return;
+    }
+
     const confirmed = await confirm({
       title: "Delete expense",
       message: `Delete "${expense.title}"? This cannot be undone.`,
@@ -522,7 +532,12 @@ export function ExpensesPage() {
                             <button
                               type="button"
                               onClick={() => setExpenseToEdit(expense)}
-                              className="inline-flex items-center gap-1 rounded-lg border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-xs text-[#374151] hover:bg-[#F9FAFB]"
+                              disabled={isExpenseInBannedGroup(expense)}
+                              className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+                                isExpenseInBannedGroup(expense)
+                                  ? "cursor-not-allowed border-[#E5E7EB] bg-[#F9FAFB] text-[#9CA3AF]"
+                                  : "border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#F9FAFB]"
+                              }`}
                               style={{ fontWeight: 600 }}
                             >
                               <Pencil className="h-3.5 w-3.5" />
@@ -531,7 +546,12 @@ export function ExpensesPage() {
                             <button
                               type="button"
                               onClick={() => void handleDelete(expense)}
-                              className="inline-flex items-center gap-1 rounded-lg border border-[#FECACA] bg-[#FEF2F2] px-2.5 py-1.5 text-xs text-[#B91C1C] hover:bg-[#FEE2E2]"
+                              disabled={isExpenseInBannedGroup(expense)}
+                              className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
+                                isExpenseInBannedGroup(expense)
+                                  ? "cursor-not-allowed border-[#E5E7EB] bg-[#F9FAFB] text-[#9CA3AF]"
+                                  : "border-[#FECACA] bg-[#FEF2F2] text-[#B91C1C] hover:bg-[#FEE2E2]"
+                              }`}
                               style={{ fontWeight: 600 }}
                             >
                               <Trash2 className="h-3.5 w-3.5" />

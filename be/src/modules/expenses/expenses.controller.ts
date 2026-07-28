@@ -591,7 +591,10 @@ export async function deleteExpenseHandler(req: Request, res: Response) {
       error instanceof Error ? error.message : "Unable to delete expense.";
 
     const statusCode =
-      message === "You are not allowed to delete this expense." ? 403 : 503;
+      message === "You are not allowed to delete this expense." ||
+      message === "This group has been banned."
+        ? 403
+        : 503;
 
     return res.status(statusCode).json({
       ok: false,

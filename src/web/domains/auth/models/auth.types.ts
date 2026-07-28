@@ -9,6 +9,8 @@ export interface AuthUser {
   avatarUrl: string;
   defaultCurrency: string;
   role: UserRole;
+  isBanned?: boolean;
+  bannedReason?: string | null;
   createdAt: string;
   updatedAt: string;
 }

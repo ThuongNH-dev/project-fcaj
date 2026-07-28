@@ -8,7 +8,11 @@ import {
   areUsersInGroup,
 } from "../../policies/group.policy.js";
 import type { SupportedCurrency } from "../auth/auth.types.js";
-import { getGroupByIdForUser, getGroupIdsByUserId } from "../groups/groups.service.js";
+import {
+  assertGroupIsActive,
+  getGroupByIdForUser,
+  getGroupIdsByUserId,
+} from "../groups/groups.service.js";
 import { getReceiptUploadByIdForUser } from "../receipts/receipts.service.js";
 import { getUsersCollection } from "../auth/auth.service.js";
 import {
@@ -301,6 +305,14 @@ function getParticipantTotalAmount(participants: ExpenseParticipantShare[]) {
 export async function createExpense(
   input: CreateExpenseInput,
 ): Promise<PublicExpense> {
+  const group = await getGroupByIdForUser(input.groupId, input.createdBy);
+
+  if (!group) {
+    throw new Error("Group not found.");
+  }
+
+  assertGroupIsActive(group);
+
   const expenses = await getExpensesCollection();
   const normalizedTitle = normalizeExpenseTitle(input.title);
   const normalizedDescription = normalizeExpenseDescription(input.description);
@@ -445,6 +457,8 @@ export async function updateExpense(
     return null;
   }
 
+  assertGroupIsActive(group);
+
   if (!isUserInGroup(group.members, input.paidByUserId)) {
     throw new Error("Paid by user must be a member of the selected group.");
   }
@@ -559,6 +573,13 @@ export async function deleteExpense(
   if (expenseDocument.createdBy !== userId) {
     throw new Error("You are not allowed to delete this expense.");
   }
+
+  const group = await getGroupByIdForUser(expenseDocument.groupId, userId);
+  if (!group) {
+    return false;
+  }
+
+  assertGroupIsActive(group);
 
   const client = getMongoClient();
   const session = client.startSession();
@@ -681,6 +702,8 @@ export async function markExpenseAsSettled(
   if (!group) {
     return null;
   }
+
+  assertGroupIsActive(group);
 
   if (
     !canSettleExpense({

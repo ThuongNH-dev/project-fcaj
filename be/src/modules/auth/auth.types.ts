@@ -69,6 +69,8 @@ export interface PublicUser {
   avatarUrl: string;
   defaultCurrency: SupportedCurrency;
   role: UserRole;
+  isBanned: boolean;
+  bannedReason: string | null;
   createdAt: string;
   updatedAt: string;
 }

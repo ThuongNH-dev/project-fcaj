@@ -14,6 +14,9 @@ export interface Group {
   createdBy: string;
   members: GroupMember[];
   expenseCount: number;
+  isBanned?: boolean;
+  bannedAt?: string | null;
+  bannedReason?: string | null;
   createdAt: string;
   updatedAt: string;
 }

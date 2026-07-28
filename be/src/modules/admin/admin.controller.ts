@@ -5,11 +5,13 @@ import {
   deleteUserById,
   getUserById,
   updateUserRoleById,
+  updateUserBanStatusById,
 } from "../auth/auth.service.js";
 import {
   deleteGroupById,
   getAllGroups,
   getGroupById,
+  updateGroupBanStatusById,
 } from "../groups/groups.service.js";
 import {
   createProductUpdateNotifications,
@@ -175,6 +177,13 @@ export async function updateAdminUserRoleHandler(req: Request, res: Response) {
       return res.status(404).json({
         ok: false,
         message: "User not found.",
+      });
+    }
+
+    if (existingUser.isBanned) {
+      return res.status(400).json({
+        ok: false,
+        message: "Banned users cannot have their role updated.",
       });
     }
 
@@ -382,6 +391,108 @@ export async function deleteAdminGroupHandler(req: Request, res: Response) {
       ok: false,
       message,
     });
+  }
+}
+
+export async function updateAdminUserBanHandler(req: Request, res: Response) {
+  const userId = typeof req.params.userId === "string" ? req.params.userId : "";
+  const isBanned = typeof req.body?.isBanned === "boolean" ? req.body.isBanned : null;
+  const reason = typeof req.body?.reason === "string" ? req.body.reason : null;
+  const currentAdminUserId = req.auth?.userId ?? null;
+
+  if (currentAdminUserId && currentAdminUserId === userId && isBanned === true) {
+    return res.status(400).json({
+      ok: false,
+      message: "You cannot ban your own admin account.",
+    });
+  }
+
+  if (isBanned === null) {
+    return res.status(400).json({
+      ok: false,
+      message: "Ban status is required.",
+    });
+  }
+
+  try {
+    const existingUser = await getUserById(userId);
+
+    if (!existingUser) {
+      return res.status(404).json({
+        ok: false,
+        message: "User not found.",
+      });
+    }
+
+    if (existingUser.role === "admin" && isBanned) {
+      const totalAdmins = await countUsersByRole("admin");
+      if (totalAdmins <= 1) {
+        return res.status(400).json({
+          ok: false,
+          message: "At least one admin account must remain.",
+        });
+      }
+    }
+
+    const user = await updateUserBanStatusById(userId, { isBanned, reason });
+
+    if (!user) {
+      return res.status(404).json({
+        ok: false,
+        message: "User not found.",
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message: isBanned ? "User banned successfully." : "User unbanned successfully.",
+      user,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to update user ban status.";
+    return res.status(503).json({ ok: false, message });
+  }
+}
+
+export async function updateAdminGroupBanHandler(req: Request, res: Response) {
+  const groupId = typeof req.params.groupId === "string" ? req.params.groupId : "";
+  const isBanned = typeof req.body?.isBanned === "boolean" ? req.body.isBanned : null;
+  const reason = typeof req.body?.reason === "string" ? req.body.reason : null;
+
+  if (isBanned === null) {
+    return res.status(400).json({
+      ok: false,
+      message: "Ban status is required.",
+    });
+  }
+
+  try {
+    const group = await getGroupById(groupId);
+    if (!group) {
+      return res.status(404).json({
+        ok: false,
+        message: "Group not found.",
+      });
+    }
+
+    const updatedGroup = await updateGroupBanStatusById(groupId, { isBanned, reason });
+    if (!updatedGroup) {
+      return res.status(404).json({
+        ok: false,
+        message: "Group not found.",
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message: isBanned ? "Group banned successfully." : "Group unbanned successfully.",
+      group: updatedGroup,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to update group ban status.";
+    return res.status(503).json({ ok: false, message });
   }
 }
 

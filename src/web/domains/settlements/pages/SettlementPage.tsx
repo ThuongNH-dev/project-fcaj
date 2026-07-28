@@ -69,6 +69,8 @@ export function SettlementPage() {
     () => new Map(groups.map((group) => [group.id, group])),
     [groups],
   );
+  const isExpenseInBannedGroup = (expense: Expense) =>
+    Boolean(groupsById.get(expense.groupId)?.isBanned);
 
   const memberNameById = useMemo(() => {
     const memberMap = new Map<string, string>();
@@ -165,6 +167,14 @@ export function SettlementPage() {
   );
 
   async function handleSettleExpense(expense: Expense) {
+    if (isExpenseInBannedGroup(expense)) {
+      showToast({
+        variant: "error",
+        message: "This group has been banned. You can only view old data.",
+      });
+      return;
+    }
+
     const confirmed = await confirm({
       title: t.markAsPaid,
       message: `${t.markAsPaid} "${expense.title}"?`,
@@ -333,8 +343,12 @@ export function SettlementPage() {
                               <button
                                 type="button"
                                 onClick={() => void handleSettleExpense(expense)}
-                                disabled={settlingExpenseId === expense.id}
-                                className="mt-3 rounded-xl bg-[#16A34A] px-3 py-2 text-xs text-white hover:bg-[#15803D] transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                                disabled={settlingExpenseId === expense.id || isExpenseInBannedGroup(expense)}
+                                className={`mt-3 rounded-xl px-3 py-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                                  isExpenseInBannedGroup(expense)
+                                    ? "bg-[#D1D5DB] text-[#6B7280]"
+                                    : "bg-[#16A34A] text-white hover:bg-[#15803D]"
+                                }`}
                                 style={{ fontWeight: 600 }}
                               >
                                 {settlingExpenseId === expense.id ? t.updating : t.markAsPaid}

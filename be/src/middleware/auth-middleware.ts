@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import { getUserById } from "../modules/auth/auth.service.js";
 import { verifyAuthToken } from "../modules/auth/auth.token.js";
 import { isAdminUserRole } from "../policies/auth.policy.js";
 
@@ -12,7 +13,7 @@ declare module "express-serve-static-core" {
   }
 }
 
-export function authMiddleware(
+export async function authMiddleware(
   req: Request,
   res: Response,
   next: NextFunction,
@@ -37,6 +38,22 @@ export function authMiddleware(
 
   try {
     const payload = verifyAuthToken(token);
+    const currentUser = await getUserById(payload.userId);
+
+    if (!currentUser) {
+      return res.status(401).json({
+        ok: false,
+        message: "Authorization token is required.",
+      });
+    }
+
+    if (currentUser.isBanned) {
+      return res.status(403).json({
+        ok: false,
+        message: "Your account has been banned.",
+        bannedReason: currentUser.bannedReason ?? null,
+      });
+    }
 
     req.auth = payload;
     next();

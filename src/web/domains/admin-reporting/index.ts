@@ -13,6 +13,8 @@ export {
   getAdminUser,
   getAdminUsers,
   getAdminUploads,
+  updateAdminGroupBan,
+  updateAdminUserBan,
   updateAdminUserRole,
 } from "./api/admin-reporting.api";
 export type {
@@ -42,4 +44,6 @@ export type {
   AdminUploadsResponse,
   UpdateAdminUserRolePayload,
   UpdateAdminUserRoleResponse,
+  UpdateAdminBanStatusPayload,
+  UpdateAdminBanStatusResponse,
 } from "./models/admin-reporting.types";

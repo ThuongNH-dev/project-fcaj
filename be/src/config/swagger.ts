@@ -955,6 +955,47 @@ swaggerSpec.paths = {
       },
     },
   },
+  "/api/admin/groups/{groupId}/ban": {
+    patch: {
+      summary: "Ban or unban a group from the admin area",
+      tags: ["Admin"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "groupId",
+          required: true,
+          schema: { type: "string" },
+        },
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["isBanned"],
+              properties: {
+                isBanned: { type: "boolean", example: true },
+                reason: {
+                  type: "string",
+                  example: "Fraudulent activity detected.",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: "Group ban status updated successfully" },
+        400: { description: "Invalid request" },
+        401: { description: "Missing or invalid bearer token" },
+        403: { description: "Admin access required" },
+        404: { description: "Group not found" },
+        503: { description: "MongoDB or backend service failed" },
+      },
+    },
+  },
   "/api/groups/{groupId}/members": {
     post: {
       summary: "Add a member to a group owned by the current logged-in user",
@@ -1764,6 +1805,47 @@ swaggerSpec.paths = {
         503: {
           description: "MongoDB or backend service failed",
         },
+      },
+    },
+  },
+  "/api/admin/users/{userId}/ban": {
+    patch: {
+      summary: "Ban or unban a user from the admin area",
+      tags: ["Admin"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        {
+          in: "path",
+          name: "userId",
+          required: true,
+          schema: { type: "string" },
+        },
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["isBanned"],
+              properties: {
+                isBanned: { type: "boolean", example: true },
+                reason: {
+                  type: "string",
+                  example: "Repeated abusive behavior.",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: "User ban status updated successfully" },
+        400: { description: "Invalid request or protected admin action" },
+        401: { description: "Missing or invalid bearer token" },
+        403: { description: "Admin access required" },
+        404: { description: "User not found" },
+        503: { description: "MongoDB or backend service failed" },
       },
     },
   },

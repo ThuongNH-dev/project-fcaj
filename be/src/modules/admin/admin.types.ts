@@ -37,6 +37,11 @@ export interface UpdateAdminUserRoleInput {
   role: UserRole;
 }
 
+export interface UpdateAdminBanStatusInput {
+  isBanned: boolean;
+  reason?: string | null;
+}
+
 export interface AdminUploadRecord {
   id: string;
   originalFileName: string;

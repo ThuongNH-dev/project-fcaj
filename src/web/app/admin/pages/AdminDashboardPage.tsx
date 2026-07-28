@@ -1,4 +1,13 @@
-import { ChevronDown, Eye, ReceiptText, Shield, Trash2, Users, X } from "lucide-react";
+import {
+  ChevronDown,
+  Eye,
+  Loader2,
+  ReceiptText,
+  Shield,
+  Trash2,
+  Users,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useStoredUser } from "../../../domains/auth";
 import {
@@ -6,6 +15,7 @@ import {
   getAdminSettlements,
   getAdminUser,
   getAdminUsers,
+  updateAdminUserBan,
   updateAdminUserRole,
   type AdminSettlementRecord,
   type AdminUserDetail,
@@ -31,8 +41,11 @@ export function AdminDashboardPage() {
   const [isLoadingUserDetail, setIsLoadingUserDetail] = useState(false);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [isUpdatingRole, setIsUpdatingRole] = useState(false);
+  const [isUpdatingBan, setIsUpdatingBan] = useState(false);
+  const [isBanDialogOpen, setIsBanDialogOpen] = useState(false);
+  const [banReasonDraft, setBanReasonDraft] = useState("");
   const [roleDraft, setRoleDraft] = useState<"admin" | "user">("user");
-  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">("all");
+  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user" | "banned">("all");
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState<AdminUserDetail | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -154,7 +167,11 @@ export function AdminDashboardPage() {
     const keyword = search.trim().toLowerCase();
 
     return users.filter((user) => {
-      if (roleFilter !== "all" && user.role !== roleFilter) {
+      if (roleFilter === "banned") {
+        if (!user.isBanned) {
+          return false;
+        }
+      } else if (roleFilter !== "all" && user.role !== roleFilter) {
         return false;
       }
 
@@ -190,6 +207,86 @@ export function AdminDashboardPage() {
       });
     } finally {
       setIsUpdatingRole(false);
+    }
+  }
+
+  function handleOpenBanDialog() {
+    if (!selectedUser || isManagingSelf) {
+      return;
+    }
+    setBanReasonDraft(selectedUser.bannedReason ?? "");
+    setIsBanDialogOpen(true);
+  }
+
+  async function handleConfirmUserBan() {
+    if (!selectedUser || isManagingSelf) {
+      return;
+    }
+
+    const nextBannedState = !selectedUser.isBanned;
+    const nextBannedReason = banReasonDraft.trim() || null;
+
+    try {
+      setIsUpdatingBan(true);
+      setSelectedUser((currentUserDetail) =>
+        currentUserDetail
+          ? {
+              ...currentUserDetail,
+              isBanned: nextBannedState,
+              bannedReason: nextBannedReason,
+            }
+          : currentUserDetail,
+      );
+      setUsers((currentUsers) =>
+        currentUsers.map((user) =>
+          user.id === selectedUser.id
+            ? {
+                ...user,
+                isBanned: nextBannedState,
+                bannedReason: nextBannedReason,
+              }
+            : user,
+        ),
+      );
+      const response = await updateAdminUserBan(selectedUser.id, {
+        isBanned: nextBannedState,
+        reason: nextBannedReason,
+      });
+
+      showToast({
+        variant: "success",
+        message: response.message,
+      });
+
+      await Promise.all([refreshUsers(), refreshDashboard()]);
+      setIsBanDialogOpen(false);
+    } catch (error) {
+      setSelectedUser((currentUserDetail) =>
+        currentUserDetail
+          ? {
+              ...currentUserDetail,
+              isBanned: selectedUser.isBanned,
+              bannedReason: selectedUser.bannedReason ?? null,
+            }
+          : currentUserDetail,
+      );
+      setUsers((currentUsers) =>
+        currentUsers.map((user) =>
+          user.id === selectedUser.id
+            ? {
+                ...user,
+                isBanned: selectedUser.isBanned,
+                bannedReason: selectedUser.bannedReason ?? null,
+              }
+            : user,
+        ),
+      );
+      showToast({
+        variant: "error",
+        message: error instanceof Error ? error.message : "Unable to update ban status.",
+      });
+    } finally {
+      setIsUpdatingBan(false);
     }
   }
 
@@ -321,14 +418,17 @@ export function AdminDashboardPage() {
 
       <div className="mb-5 flex w-fit flex-wrap items-center gap-1 rounded-xl border border-[#E5E7EB] bg-white p-1">
         {[
-          { key: "all", label: t.allUsers },
+        { key: "all", label: t.allUsers },
           { key: "admin", label: t.adminsOnly },
           { key: "user", label: t.standardUsersOnly },
+          { key: "banned", label: "Banned" },
         ].map((filterOption) => (
           <button
             key={filterOption.key}
             type="button"
-            onClick={() => setRoleFilter(filterOption.key as "all" | "admin" | "user")}
+            onClick={() =>
+              setRoleFilter(filterOption.key as "all" | "admin" | "user" | "banned")
+            }
             className={`rounded-lg px-4 py-2 text-sm transition-all ${
               roleFilter === filterOption.key
                 ? "bg-[#16A34A] text-white shadow-sm"
@@ -385,13 +485,21 @@ export function AdminDashboardPage() {
                           key={user.id}
                           onClick={() => handleOpenUserDetail(user.id)}
                           className={`relative cursor-pointer border-b border-[#F9FAFB] transition-colors ${
-                            isSelected ? "bg-[#F0FAF5]" : "hover:bg-[#FAFAFA]"
+                            user.isBanned
+                              ? "bg-[#FEF2F2] hover:bg-[#FEE2E2]"
+                              : isSelected
+                                ? "bg-[#F0FAF5]"
+                                : "hover:bg-[#FAFAFA]"
                           }`}
                         >
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-3">
                               <div
-                                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[#EAFBF3] text-[#15803D] text-xs"
+                                className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-xs ${
+                                  user.isBanned
+                                    ? "bg-[#FEE2E2] text-[#B91C1C]"
+                                    : "bg-[#EAFBF3] text-[#15803D]"
+                                }`}
                                 style={{ fontWeight: 700 }}
                               >
                                 {user.fullName
@@ -417,13 +525,15 @@ export function AdminDashboardPage() {
                           <td className="whitespace-nowrap px-5 py-3.5">
                             <span
                               className={`rounded-full px-2.5 py-1 text-xs ${
-                                user.role === "admin"
+                                user.isBanned
+                                  ? "bg-[#FEE2E2] text-[#991B1B]"
+                                  : user.role === "admin"
                                   ? "bg-[#FEE2E2] text-[#991B1B]"
                                   : "bg-[#EFF6FF] text-[#1D4ED8]"
                               }`}
                               style={{ fontWeight: 600 }}
                             >
-                              {user.role}
+                              {user.isBanned ? "banned" : user.role}
                             </span>
                           </td>
                           <td className="whitespace-nowrap px-5 py-3.5 text-xs text-[#9CA3AF]">
@@ -441,7 +551,11 @@ export function AdminDashboardPage() {
                                   event.stopPropagation();
                                   handleOpenUserDetail(user.id);
                                 }}
-                                className="flex h-8 w-8 items-center justify-center rounded-lg text-[#6B7280] transition-colors hover:bg-[#F0FAF5] hover:text-[#16A34A]"
+                                className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                                  user.isBanned
+                                    ? "text-[#B91C1C] hover:bg-[#FEE2E2] hover:text-[#991B1B]"
+                                    : "text-[#6B7280] hover:bg-[#F0FAF5] hover:text-[#16A34A]"
+                                }`}
                                 title={t.userDetail}
                               >
                                 <Eye className="h-4 w-4" />
@@ -487,7 +601,7 @@ export function AdminDashboardPage() {
             className="absolute inset-0 bg-black/35 backdrop-blur-sm"
             onClick={handleCloseUserDetail}
           />
-          <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[1.75rem] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_64px_rgba(17,24,39,0.22)]">
+          <div className="relative max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[1.75rem] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_64px_rgba(17,24,39,0.22)]">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
               {t.userDetail}
@@ -555,6 +669,20 @@ export function AdminDashboardPage() {
                     {selectedUser.role}
                   </span>
                 </div>
+                {selectedUser.isBanned && (
+                  <div className="mt-3 rounded-2xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3">
+                    <p className="inline-flex rounded-full bg-[#FEE2E2] px-3 py-1 text-xs text-[#991B1B]">
+                      Banned
+                    </p>
+                    <p className="mt-3 text-sm text-[#7F1D1D]" style={{ fontWeight: 600 }}>
+                      Ban reason
+                    </p>
+                    <p className="mt-1 text-sm text-[#991B1B]">
+                      {selectedUser.bannedReason?.trim() ||
+                        "This account was banned without a specific reason."}
+                    </p>
+                  </div>
+                )}
                 <p className="mt-4 text-sm text-[#6B7280]">
                   {t.joinedOn} {formatDateTime(selectedUser.createdAt)}
                 </p>
@@ -591,16 +719,32 @@ export function AdminDashboardPage() {
                       ? t.ownAdminRoleProtected
                       : t.roleChangeHint}
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => void handleSaveRole()}
-                    disabled={!canSaveRole}
-                    className="inline-flex items-center gap-2 rounded-xl bg-[#16A34A] px-4 py-2 text-sm text-white transition-colors hover:bg-[#15803D] disabled:cursor-not-allowed disabled:opacity-60"
-                    style={{ fontWeight: 600 }}
-                  >
-                    <Shield className="h-4 w-4" />
-                    {isUpdatingRole ? t.savingRole : t.saveRole}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleOpenBanDialog}
+                      disabled={isManagingSelf || isUpdatingBan}
+                      className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                        selectedUser.isBanned
+                          ? "bg-[#EFF6FF] text-[#1D4ED8] hover:bg-[#DBEAFE]"
+                          : "bg-[#FEF2F2] text-[#B91C1C] hover:bg-[#FEE2E2]"
+                      }`}
+                      style={{ fontWeight: 600 }}
+                    >
+                      <Shield className="h-4 w-4" />
+                      {selectedUser.isBanned ? "Unban user" : "Ban user"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveRole()}
+                      disabled={!canSaveRole}
+                      className="inline-flex items-center gap-2 rounded-xl bg-[#16A34A] px-4 py-2 text-sm text-white transition-colors hover:bg-[#15803D] disabled:cursor-not-allowed disabled:opacity-60"
+                      style={{ fontWeight: 600 }}
+                    >
+                      <Shield className="h-4 w-4" />
+                      {isUpdatingRole ? t.savingRole : t.saveRole}
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -788,6 +932,61 @@ export function AdminDashboardPage() {
           ) : (
             <p className="text-sm text-[#6B7280]">{t.selectUserToManage}</p>
           )}
+          </div>
+        </div>
+      )}
+
+      {isBanDialogOpen && (
+        <div className="fixed inset-0 z-[220] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setIsBanDialogOpen(false)}
+          />
+          <div className="relative w-full max-w-xl rounded-[1.75rem] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_64px_rgba(17,24,39,0.22)]">
+            <h3 className="text-[#111827]" style={{ fontSize: "1.05rem", fontWeight: 800 }}>
+              {selectedUser?.isBanned ? "Unban user" : "Ban user"}
+            </h3>
+            <p className="mt-2 text-sm text-[#6B7280]">
+              {selectedUser?.isBanned
+                ? "Confirm to restore this account."
+                : "Enter a ban reason. If left empty, the default ban message will be used."}
+            </p>
+              <textarea
+                value={banReasonDraft}
+                onChange={(event) => setBanReasonDraft(event.target.value)}
+                rows={4}
+                disabled={isUpdatingBan}
+                className="mt-4 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm text-[#111827] outline-none focus:border-[#7EDDBA] focus:ring-2 focus:ring-[#7EDDBA]/30"
+                placeholder="Reason for ban..."
+              />
+            <div className="mt-5 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsBanDialogOpen(false)}
+                className="rounded-xl border border-[#E5E7EB] px-4 py-2.5 text-sm text-[#374151] transition-colors hover:bg-[#F9FAFB]"
+                style={{ fontWeight: 600 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmUserBan()}
+                disabled={isUpdatingBan}
+                className={`rounded-xl px-4 py-2.5 text-sm text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                  selectedUser?.isBanned
+                    ? "bg-[#2563EB] hover:bg-[#1D4ED8]"
+                    : "bg-[#DC2626] hover:bg-[#B91C1C]"
+                }`}
+                style={{ fontWeight: 600 }}
+              >
+                {isUpdatingBan
+                  ? "Processing..."
+                  : selectedUser?.isBanned
+                    ? "Unban"
+                    : "Confirm ban"}
+                {isUpdatingBan ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              </button>
+            </div>
           </div>
         </div>
       )}

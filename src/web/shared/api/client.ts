@@ -1,6 +1,7 @@
 import {
   clearStoredUser,
   getStoredToken,
+  setStoredBanNotice,
 } from "../../domains/auth/storage/auth.storage";
 
 const API_BASE_URL =
@@ -11,6 +12,7 @@ const AUTH_SESSION_ERROR_MESSAGES = new Set([
   "Invalid or expired authorization token.",
 ]);
 const AUTH_SESSION_MISSING_USER_MESSAGE = "User not found.";
+const BANNED_MESSAGE = "Your account has been banned.";
 
 function shouldClearAuthSession(status: number, message?: string) {
   const normalizedMessage = message ?? "";
@@ -46,6 +48,10 @@ async function requestJson<TResponse>(
   } & TResponse;
 
   if (!response.ok) {
+    if (response.status === 403 && data.message === BANNED_MESSAGE) {
+      setStoredBanNotice((data as { bannedReason?: string | null }).bannedReason ?? BANNED_MESSAGE);
+    }
+
     if (shouldClearAuthSession(response.status, data.message)) {
       clearStoredUser();
     }

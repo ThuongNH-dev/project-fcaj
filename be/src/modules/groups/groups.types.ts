@@ -58,6 +58,9 @@ export interface PublicGroup {
   createdBy: string;
   members: PublicGroupMember[];
   expenseCount: number;
+  isBanned: boolean;
+  bannedAt: string | null;
+  bannedReason: string | null;
   createdAt: string;
   updatedAt: string;
 }

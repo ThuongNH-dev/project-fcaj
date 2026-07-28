@@ -12,12 +12,15 @@ export {
 } from "./lib/google-auth";
 export {
   clearStoredUser,
+  clearStoredBanNotice,
   getStoredAuthSession,
+  getStoredBanNotice,
   getStoredToken,
   getStoredUser,
   hasStoredAuthSession,
   getUserInitials,
   setStoredAuthSession,
+  setStoredBanNotice,
   setStoredToken,
   setStoredUser,
   subscribeToStoredUser,
@@ -26,6 +29,7 @@ export { useStoredUser } from "./hooks/useStoredUser";
 export type {
   AuthResponse,
   AuthUser,
+  BanNotice,
   ForgotPasswordPayload,
   ForgotPasswordResponse,
   GoogleAuthPayload,

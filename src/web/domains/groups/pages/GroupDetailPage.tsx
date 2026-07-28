@@ -155,6 +155,7 @@ export function GroupDetailPage() {
 
   const memberCount = group?.members.length ?? 0;
   const canManageMembers = Boolean(group && canManageGroupMembers(currentUser, group));
+  const isGroupBanned = Boolean(group?.isBanned);
   const groupCurrency = group?.currency ?? currentUser?.defaultCurrency ?? "USD";
   const isFreePlan = billingSummary?.profile.plan !== "pro";
   const groupExpenseCount = group?.expenseCount ?? expenses.length;
@@ -198,6 +199,14 @@ export function GroupDetailPage() {
   async function handleAddExpense(expense: NewExpense) {
     if (!group || !groupId || !expense.paidByUserId || !expense.participantShares) {
       throw new Error("Expense details are incomplete.");
+    }
+
+    if (group.isBanned) {
+      showToast({
+        variant: "error",
+        message: "This group has been banned. You can only view old data.",
+      });
+      return;
     }
 
     let receiptId: string | undefined;
@@ -263,6 +272,14 @@ export function GroupDetailPage() {
       return;
     }
 
+    if (group.isBanned) {
+      showToast({
+        variant: "error",
+        message: "This group has been banned. You can only view old data.",
+      });
+      return;
+    }
+
     if (isFreeMonthlyExpenseLimitReached) {
       showToast({
         variant: "error",
@@ -285,6 +302,14 @@ export function GroupDetailPage() {
   };
 
   const handleRequestReceiptUpgrade = async () => {
+    if (group?.isBanned) {
+      showToast({
+        variant: "error",
+        message: "This group has been banned. You can only view old data.",
+      });
+      return;
+    }
+
     const confirmed = await confirm({
       title: "Receipt upload needs Pro",
       message:
@@ -302,6 +327,14 @@ export function GroupDetailPage() {
 
   const handleAddMember = async () => {
     if (!groupId) {
+      return;
+    }
+
+    if (group?.isBanned) {
+      showToast({
+        variant: "error",
+        message: "This group has been banned. You can only view old data.",
+      });
       return;
     }
 
@@ -337,6 +370,14 @@ export function GroupDetailPage() {
 
   const handleRemoveMember = async (memberId: string, memberName: string) => {
     if (!groupId) {
+      return;
+    }
+
+    if (group?.isBanned) {
+      showToast({
+        variant: "error",
+        message: "This group has been banned. You can only view old data.",
+      });
       return;
     }
 
@@ -403,16 +444,23 @@ export function GroupDetailPage() {
               )}
               <div className="flex items-center gap-3 mt-2">
                 <span
-                  className="text-xs bg-[#D1FAE5] text-[#065f46] px-2.5 py-1 rounded-full"
+                  className={`text-xs px-2.5 py-1 rounded-full ${
+                    isGroupBanned ? "bg-[#FEE2E2] text-[#991B1B]" : "bg-[#D1FAE5] text-[#065f46]"
+                  }`}
                   style={{ fontWeight: 600 }}
                 >
-                  {t.active}
+                  {isGroupBanned ? "Banned" : t.active}
                 </span>
               </div>
             </div>
             <button
               onClick={handleOpenAddExpense}
-              className="flex items-center gap-2 bg-[#16A34A] text-white px-5 py-2.5 rounded-xl hover:bg-[#15803d] transition-all shadow-sm"
+              disabled={isGroupBanned}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl transition-all shadow-sm ${
+                isGroupBanned
+                  ? "bg-[#D1D5DB] text-[#6B7280] cursor-not-allowed hover:bg-[#D1D5DB]"
+                  : "bg-[#16A34A] text-white hover:bg-[#15803d]"
+              }`}
               style={{ fontWeight: 600, fontSize: "0.875rem" }}
             >
               <Plus className="w-4 h-4" />
@@ -420,6 +468,13 @@ export function GroupDetailPage() {
             </button>
           </div>
         </div>
+
+        {isGroupBanned && (
+          <div className="mb-6 rounded-2xl border border-[#FECACA] bg-[#FEF2F2] px-5 py-4 text-sm text-[#991B1B]">
+            This group has been banned. You can view old data only. No new expenses,
+            members, receipts, or edits are allowed.
+          </div>
+        )}
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-7">
           {[
@@ -518,7 +573,12 @@ export function GroupDetailPage() {
                   <p className="text-[#9CA3AF] text-xs mb-4">{t.addExpensePrompt}</p>
                   <button
                     onClick={handleOpenAddExpense}
-                    className="flex items-center gap-2 bg-[#16A34A] text-white px-4 py-2 rounded-xl text-sm hover:bg-[#15803d] transition-colors"
+                    disabled={isGroupBanned}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-colors ${
+                      isGroupBanned
+                        ? "bg-[#D1D5DB] text-[#6B7280] cursor-not-allowed hover:bg-[#D1D5DB]"
+                        : "bg-[#16A34A] text-white hover:bg-[#15803d]"
+                    }`}
                     style={{ fontWeight: 600 }}
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -624,7 +684,7 @@ export function GroupDetailPage() {
                 )}
               </div>
               {canManageMembers && (
-                <div className="mb-4 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-3">
+                  <div className="mb-4 rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] p-3">
                   <label
                     className="mb-2 block text-xs text-[#6B7280]"
                     style={{ fontWeight: 600 }}
@@ -637,13 +697,18 @@ export function GroupDetailPage() {
                       placeholder="friend@email.com"
                       value={memberEmail}
                       onChange={(event) => setMemberEmail(event.target.value)}
-                      className="flex-1 rounded-xl border border-[#E5E7EB] bg-white px-3 py-2.5 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent"
+                      disabled={isGroupBanned}
+                      className="flex-1 rounded-xl border border-[#E5E7EB] bg-white px-3 py-2.5 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] focus:border-transparent disabled:cursor-not-allowed disabled:bg-[#F9FAFB] disabled:text-[#9CA3AF]"
                     />
                     <button
                       type="button"
                       onClick={() => void handleAddMember()}
-                      disabled={isSubmittingMember}
-                      className="inline-flex items-center gap-2 rounded-xl bg-[#16A34A] px-3 py-2.5 text-sm text-white hover:bg-[#15803d] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                      disabled={isSubmittingMember || isGroupBanned}
+                      className={`inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
+                        isGroupBanned
+                          ? "bg-[#D1D5DB] text-[#6B7280]"
+                          : "bg-[#16A34A] text-white hover:bg-[#15803d]"
+                      }`}
                       style={{ fontWeight: 600 }}
                     >
                       <UserPlus className="h-4 w-4" />
@@ -688,7 +753,7 @@ export function GroupDetailPage() {
                           <button
                             type="button"
                             onClick={() => void handleRemoveMember(member.id, member.name)}
-                            disabled={removingMemberId === member.id}
+                            disabled={removingMemberId === member.id || isGroupBanned}
                             className="inline-flex items-center justify-center rounded-lg bg-[#FEF2F2] p-2 text-[#B91C1C] hover:bg-[#FEE2E2] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                             title={t.removeMember}
                           >
@@ -718,7 +783,12 @@ export function GroupDetailPage() {
               </div>
               <button
                 onClick={() => navigate("/settlement")}
-                className="w-full mt-2 bg-[#16A34A] text-white py-2.5 rounded-xl text-sm hover:bg-[#15803d] transition-colors"
+                disabled={isGroupBanned}
+                className={`w-full mt-2 py-2.5 rounded-xl text-sm transition-colors ${
+                  isGroupBanned
+                    ? "bg-[#D1D5DB] text-[#6B7280] cursor-not-allowed hover:bg-[#D1D5DB]"
+                    : "bg-[#16A34A] text-white hover:bg-[#15803d]"
+                }`}
                 style={{ fontWeight: 600 }}
               >
                 {t.goToSettlements}

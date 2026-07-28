@@ -39,6 +39,18 @@ export interface AdminUserDetail extends AdminUserRecord {
   groups: AdminUserGroupMembership[];
 }
 
+export interface UpdateAdminBanStatusPayload {
+  isBanned: boolean;
+  reason?: string | null;
+}
+
+export interface UpdateAdminBanStatusResponse {
+  ok: boolean;
+  message: string;
+  user?: AuthUser;
+  group?: Group;
+}
+
 export interface AdminUsersResponse {
   ok: boolean;
   message: string;

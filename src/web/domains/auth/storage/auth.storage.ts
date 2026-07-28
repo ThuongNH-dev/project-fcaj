@@ -3,10 +3,16 @@ import type { AuthUser } from "../models/auth.types";
 const AUTH_STORAGE_KEY = "splitly_user";
 const AUTH_TOKEN_STORAGE_KEY = "splitly_token";
 const AUTH_STORAGE_EVENT = "splitly-auth-storage-change";
+const BAN_NOTICE_KEY = "splitly_ban_notice";
 
 export interface StoredAuthSession {
   token: string;
   user: AuthUser;
+}
+
+export interface BanNotice {
+  reason: string;
+  at: string;
 }
 
 function notifyAuthStorageChanged() {
@@ -20,6 +26,10 @@ function notifyAuthStorageChanged() {
 function clearStoredAuthSessionSilently() {
   localStorage.removeItem(AUTH_STORAGE_KEY);
   localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+}
+
+function clearBanNoticeSilently() {
+  localStorage.removeItem(BAN_NOTICE_KEY);
 }
 
 export function getStoredAuthSession(): StoredAuthSession | null {
@@ -77,6 +87,37 @@ export function setStoredToken(token: string) {
 export function clearStoredUser() {
   localStorage.removeItem(AUTH_STORAGE_KEY);
   localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+  clearBanNoticeSilently();
+  notifyAuthStorageChanged();
+}
+
+export function setStoredBanNotice(reason: string) {
+  const notice: BanNotice = {
+    reason: reason.trim() || "Your account has been banned.",
+    at: new Date().toISOString(),
+  };
+
+  localStorage.setItem(BAN_NOTICE_KEY, JSON.stringify(notice));
+  notifyAuthStorageChanged();
+}
+
+export function getStoredBanNotice(): BanNotice | null {
+  const rawNotice = localStorage.getItem(BAN_NOTICE_KEY);
+
+  if (!rawNotice) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawNotice) as BanNotice;
+  } catch {
+    clearBanNoticeSilently();
+    return null;
+  }
+}
+
+export function clearStoredBanNotice() {
+  clearBanNoticeSilently();
   notifyAuthStorageChanged();
 }
 

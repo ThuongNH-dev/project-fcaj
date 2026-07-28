@@ -40,6 +40,9 @@ export interface UserDocument {
     updatedAt: Date;
   };
   role: "admin" | "user";
+  isBanned?: boolean;
+  bannedAt?: Date | null;
+  bannedReason?: string | null;
   authProvider?: "local" | "google";
   passwordResetTokenHash?: string;
   passwordResetOtpHash?: string;
@@ -199,9 +202,40 @@ export function toPublicUser(user: UserDocument): PublicUser {
     avatarUrl: user.avatarUrl ?? "",
     defaultCurrency: user.defaultCurrency ?? "USD",
     role: user.role ?? "user",
+    isBanned: user.isBanned ?? false,
+    bannedReason: user.bannedReason ?? null,
     createdAt: createdAt.toISOString(),
     updatedAt: updatedAt.toISOString(),
   };
+}
+
+export async function updateUserBanStatusById(
+  userId: string,
+  input: { isBanned: boolean; reason?: string | null },
+) {
+  if (!MongoObjectId.isValid(userId)) {
+    return null;
+  }
+
+  const users = await getUsersCollection();
+  const userObjectId = new MongoObjectId(userId);
+  const updatedAt = new Date();
+  const bannedReason = input.reason?.trim() || null;
+
+  await users.updateOne(
+    { _id: userObjectId },
+    {
+      $set: {
+        isBanned: input.isBanned,
+        bannedAt: input.isBanned ? updatedAt : null,
+        bannedReason: input.isBanned ? bannedReason : null,
+        updatedAt,
+      },
+    },
+  );
+
+  const updatedUser = await users.findOne({ _id: userObjectId });
+  return updatedUser ? toPublicUser(updatedUser) : null;
 }
 
 function normalizeDefaultCurrency(defaultCurrency?: string): SupportedCurrency {
@@ -540,6 +574,18 @@ export async function updateUserRoleById(
   const normalizedRole = normalizeUserRole(role);
   const users = await getUsersCollection();
   const userObjectId = new MongoObjectId(userId);
+  const existingUser = await users.findOne(
+    { _id: userObjectId },
+    { projection: { isBanned: 1 } },
+  );
+
+  if (!existingUser) {
+    return null;
+  }
+
+  if (existingUser.isBanned) {
+    throw new Error("Banned users cannot have their role updated.");
+  }
 
   await users.updateOne(
     { _id: userObjectId },
