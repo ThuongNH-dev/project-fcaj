@@ -458,6 +458,10 @@ export async function addGroupMember(
     throw new Error("Member email does not exist.");
   }
 
+  if (userToAdd.role === "admin") {
+    throw new Error("Admin accounts cannot be added to groups.");
+  }
+
   const memberId = userToAdd._id.toString();
   const membershipEventId = randomUUID();
   const ownerPlan = await getOwnerBillingPlan(group.createdBy);

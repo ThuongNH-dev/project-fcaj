@@ -428,7 +428,11 @@ export async function addGroupMemberHandler(req: Request, res: Response) {
     const message =
       error instanceof Error ? error.message : "Unable to add member.";
 
-    const statusCode = message === FREE_PLAN_GROUP_MEMBER_LIMIT_ERROR ? 403 : 400;
+    const statusCode =
+      message === FREE_PLAN_GROUP_MEMBER_LIMIT_ERROR ||
+      message === "Admin accounts cannot be added to groups."
+        ? 403
+        : 400;
 
     return res.status(statusCode).json({
       ok: false,
