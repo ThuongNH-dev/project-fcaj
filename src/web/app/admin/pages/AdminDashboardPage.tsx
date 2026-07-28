@@ -1,11 +1,13 @@
-import { Eye, Shield, Trash2, Users, X } from "lucide-react";
+import { ChevronDown, Eye, ReceiptText, Shield, Trash2, Users, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useStoredUser } from "../../../domains/auth";
 import {
   deleteAdminUser,
+  getAdminSettlements,
   getAdminUser,
   getAdminUsers,
   updateAdminUserRole,
+  type AdminSettlementRecord,
   type AdminUserDetail,
   type AdminUserRecord,
 } from "../../../domains/admin-reporting";
@@ -20,7 +22,7 @@ import { AdminEmptyState } from "../components/AdminEmptyState";
 import { AdminPagination } from "../components/AdminPagination";
 import { AdminSearchInput } from "../components/AdminSearchInput";
 import { useAdminLayoutContext } from "../layout/AdminLayout";
-import { useAdminPagination } from "../lib/admin.utils";
+import { getSettlementStatusLabel, useAdminPagination } from "../lib/admin.utils";
 
 export function AdminDashboardPage() {
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
@@ -37,6 +39,10 @@ export function AdminDashboardPage() {
   const [users, setUsers] = useState<AdminUserRecord[]>([]);
   const currentUser = useStoredUser();
   const { confirm, showToast } = useFeedback();
+  const [expandedGroupId, setExpandedGroupId] = useState<string | null>(null);
+  const [groupSettlements, setGroupSettlements] = useState<AdminSettlementRecord[]>([]);
+  const [isLoadingGroupSettlements, setIsLoadingGroupSettlements] = useState(false);
+  const [groupSettlementsError, setGroupSettlementsError] = useState("");
   const { refreshDashboard } = useAdminLayoutContext();
   const { t } = useLanguage();
 
@@ -225,11 +231,43 @@ export function AdminDashboardPage() {
   function handleOpenUserDetail(userId: string) {
     setSelectedUserId(userId);
     setIsDetailOpen(true);
+    setExpandedGroupId(null);
+    setGroupSettlements([]);
+    setGroupSettlementsError("");
   }
 
   function handleCloseUserDetail() {
     setIsDetailOpen(false);
+    setExpandedGroupId(null);
+    setGroupSettlements([]);
+    setGroupSettlementsError("");
   }
+
+  async function handleToggleGroupTransactions(groupId: string) {
+    if (expandedGroupId === groupId) {
+      setExpandedGroupId(null);
+      return;
+    }
+
+    setExpandedGroupId(groupId);
+    setGroupSettlements([]);
+    setGroupSettlementsError("");
+
+    try {
+      setIsLoadingGroupSettlements(true);
+
+      const response = await getAdminSettlements({ groupId });
+
+      setGroupSettlements(response.settlements ?? []);
+    } catch (error) {
+      setGroupSettlementsError(
+        error instanceof Error ? error.message : "Unable to load group transactions.",
+      );
+    } finally {
+      setIsLoadingGroupSettlements(false);
+    }
+  }
+
 
   const isManagingSelf = selectedUser?.id === currentUser?.id;
   const canSaveRole =
@@ -587,31 +625,117 @@ export function AdminDashboardPage() {
                 </p>
                 {selectedUser.groups.length > 0 ? (
                   <div className="space-y-3">
-                    {selectedUser.groups.map((group) => (
-                      <div
-                        key={group.id}
-                        className="flex items-center justify-between gap-3 rounded-xl bg-[#F9FAFB] px-4 py-3"
-                      >
-                        <div className="min-w-0">
-                          <p className="text-[#111827]" style={{ fontWeight: 600 }}>
-                            {group.name}
-                          </p>
-                          <p className="truncate text-sm text-[#6B7280]">
-                            Updated {formatLocalDate(group.updatedAt)}
-                          </p>
+                    {selectedUser.groups.map((group) => {
+                      const isExpanded = expandedGroupId === group.id;
+
+                      return (
+                        <div key={group.id} className="rounded-xl bg-[#F9FAFB]">
+                          <div className="flex items-center justify-between gap-3 px-4 py-3">
+                            <div className="min-w-0">
+                              <p className="text-[#111827]" style={{ fontWeight: 600 }}>
+                                {group.name}
+                              </p>
+                              <p className="truncate text-sm text-[#6B7280]">
+                                Updated {formatLocalDate(group.updatedAt)}
+                              </p>
+                            </div>
+                            <div className="flex flex-shrink-0 items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => void handleToggleGroupTransactions(group.id)}
+                                className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs transition-colors ${
+                                  isExpanded
+                                    ? "bg-[#F0FAF5] text-[#16A34A]"
+                                    : "bg-white text-[#374151] hover:bg-[#F0FAF5] hover:text-[#16A34A]"
+                                }`}
+                                style={{ fontWeight: 600 }}
+                                title={t.viewTransactions}
+                              >
+                                <ReceiptText className="h-3.5 w-3.5" />
+                                {t.viewTransactions}
+                                <ChevronDown
+                                  className={`h-3.5 w-3.5 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                                />
+                              </button>
+                              <span
+                                className={`rounded-full px-3 py-1 text-xs ${
+                                  group.role === "owner"
+                                    ? "bg-[#FEF3C7] text-[#92400E]"
+                                    : "bg-[#EFF6FF] text-[#1D4ED8]"
+                                }`}
+                                style={{ fontWeight: 600 }}
+                              >
+                                {group.role}
+                              </span>
+                            </div>
+                          </div>
+
+                          {isExpanded && (
+                            <div className="border-t border-[#E5E7EB] px-4 py-3">
+                              {isLoadingGroupSettlements ? (
+                                <div className="space-y-2">
+                                  <div className="h-10 animate-pulse rounded-lg bg-[#F3F4F6]" />
+                                  <div className="h-10 animate-pulse rounded-lg bg-[#F3F4F6]" />
+                                </div>
+                              ) : groupSettlementsError ? (
+                                <p className="text-sm text-[#B91C1C]">
+                                  {groupSettlementsError}
+                                </p>
+                              ) : groupSettlements.length > 0 ? (
+                                <div className="space-y-2">
+                                  {groupSettlements.map((settlement) => (
+                                    <div
+                                      key={settlement.id}
+                                      className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2.5"
+                                    >
+                                      <div className="min-w-0">
+                                        <p
+                                          className="truncate text-sm text-[#111827]"
+                                          style={{ fontWeight: 600 }}
+                                        >
+                                          {settlement.title}
+                                        </p>
+                                        <p className="truncate text-xs text-[#6B7280]">
+                                          Paid by {settlement.paidByName} ·{" "}
+                                          {formatLocalDate(settlement.expenseDate)}
+                                        </p>
+                                      </div>
+                                      <div className="flex flex-shrink-0 items-center gap-2">
+                                        <span
+                                          className={`rounded-full px-2.5 py-1 text-xs ${
+                                            settlement.settlementStatus === "settled"
+                                              ? "bg-[#DBEAFE] text-[#1D4ED8]"
+                                              : "bg-[#FEF3C7] text-[#92400E]"
+                                          }`}
+                                          style={{ fontWeight: 600 }}
+                                        >
+                                          {getSettlementStatusLabel(
+                                            settlement.settlementStatus,
+                                          )}
+                                        </span>
+                                        <p
+                                          className="text-sm text-[#111827]"
+                                          style={{ fontWeight: 700 }}
+                                        >
+                                          {formatCurrency(
+                                            settlement.amount,
+                                            settlement.currency,
+                                          )}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-sm text-[#6B7280]">
+                                  {t.noTransactionsInGroup}
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </div>
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs ${
-                            group.role === "owner"
-                              ? "bg-[#FEF3C7] text-[#92400E]"
-                              : "bg-[#EFF6FF] text-[#1D4ED8]"
-                          }`}
-                          style={{ fontWeight: 600 }}
-                        >
-                          {group.role}
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-sm text-[#6B7280]">{t.noUserGroups}</p>
