@@ -114,14 +114,6 @@ export function LandingPage({ section }: LandingPageProps) {
       cta: t.startTrial,
       primary: true,
     },
-    {
-      name: t.team,
-      price: t.pricingTeamPrice,
-      period: t.pricingPeriod,
-      features: t.pricingTeamFeatures,
-      cta: t.contactSales,
-      primary: false,
-    },
   ];
 
   return (
@@ -488,12 +480,12 @@ export function LandingPage({ section }: LandingPageProps) {
           </h2>
           <p className="text-[#6B7280]">{t.startFree}</p>
         </div>
-        <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
+        <div className="grid gap-6 max-w-3xl mx-auto md:grid-cols-2 justify-center justify-items-center">
           {pricingPlans.map(
             ({ name, price, period, features, cta, primary }) => (
               <div
                 key={name}
-                className={`rounded-2xl p-6 border ${
+                className={`w-full max-w-sm rounded-2xl p-5 border ${
                   primary
                     ? "bg-[#16A34A] border-[#16A34A] shadow-xl"
                     : "bg-white border-[#E5E7EB]"
@@ -511,7 +503,7 @@ export function LandingPage({ section }: LandingPageProps) {
                   <span
                     className={primary ? "text-white" : "text-[#111827]"}
                     style={{
-                      fontSize: "2.5rem",
+                      fontSize: "2.25rem",
                       fontWeight: 800,
                       lineHeight: 1,
                     }}
@@ -544,7 +536,7 @@ export function LandingPage({ section }: LandingPageProps) {
                 </ul>
                 <button
                   onClick={() => navigate("/login")}
-                  className={`w-full py-3 rounded-xl text-sm transition-all ${
+                  className={`w-full h-12 rounded-xl text-sm transition-all flex items-center justify-center whitespace-nowrap ${
                     primary
                       ? "bg-white text-[#16A34A] hover:bg-[#F0FAF5]"
                       : "bg-[#F0FAF5] text-[#16A34A] hover:bg-[#D1FAE5]"
