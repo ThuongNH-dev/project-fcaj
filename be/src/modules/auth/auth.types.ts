@@ -39,6 +39,10 @@ export interface LoginUserInput {
   password: string;
 }
 
+export interface GoogleAuthInput {
+  accessToken: string;
+}
+
 export interface ForgotPasswordInput {
   email: string;
 }
