@@ -56,11 +56,11 @@ export const translations = {
     feat4Title: "Receipt Upload", feat4Desc: "Snap a photo of any receipt and we'll parse the amounts automatically. Keep records for everyone.",
     // Pricing
     free: "Free", pro: "Pro", team: "Team",
-    startTrial: "Buy now", contactSales: "Contact sales",
+    startTrial: "Start free trial", contactSales: "Contact sales",
     pricingPeriod: "/mo",
     pricingFreePrice: "$0", pricingProPrice: "$4", pricingTeamPrice: "$12",
     pricingFreeFeatures: ["Up to 3 groups", "10 expenses/month", "Basic split options", "Email support"],
-    pricingProFeatures: ["Unlimited groups", "Unlimited expenses", "Receipt uploads", "All split types", "Priority support"],
+    pricingProFeatures: ["Unlimited groups", "Unlimited expenses", "Receipt scanning", "All split types", "Priority support"],
     pricingTeamFeatures: ["Everything in Pro", "Admin dashboard", "Export reports", "SSO", "Dedicated support"],
     // Footer
     privacy: "Privacy", terms: "Terms", helpCenter: "Help Center", contact: "Contact",
@@ -93,6 +93,7 @@ export const translations = {
     noCategoryData: "No category data yet", byCategory: "By Category", thisMonth: "This month",
     noActivityYet: "No activity yet", activityDesc: "Expenses and payments will show up here.",
     quickDebts: "Quick Debts", noOutstandingDebts: "No outstanding debts",
+    unknownMember: "Unknown member", owesYou: "owes you", youOweLabel: "you owe",
     goToGroups: "Go to Groups to begin",
 
     // Groups
@@ -319,11 +320,11 @@ export const translations = {
     feat3Title: "Theo dõi thanh toán", feat3Desc: "Xem chính xác ai nợ ai với biểu đồ nợ rõ ràng. Một chạm để đánh dấu đã thanh toán.",
     feat4Title: "Tải hóa đơn", feat4Desc: "Chụp ảnh hóa đơn và chúng tôi sẽ tự động phân tích số tiền. Lưu hồ sơ cho tất cả mọi người.",
     free: "Miễn phí", pro: "Pro", team: "Nhóm",
-    startTrial: "Mua ngay", contactSales: "Liên hệ bán hàng",
+    startTrial: "Dùng thử miễn phí", contactSales: "Liên hệ bán hàng",
     pricingPeriod: "/tháng",
     pricingFreePrice: "0 ₫", pricingProPrice: "99.000 ₫", pricingTeamPrice: "299.000 ₫",
     pricingFreeFeatures: ["Tối đa 3 nhóm", "10 chi phí/tháng", "Tùy chọn chia cơ bản", "Hỗ trợ qua email"],
-    pricingProFeatures: ["Không giới hạn nhóm", "Không giới hạn chi phí", "Tải hóa đơn lên", "Tất cả kiểu chia", "Hỗ trợ ưu tiên"],
+    pricingProFeatures: ["Không giới hạn nhóm", "Không giới hạn chi phí", "Quét hóa đơn", "Tất cả kiểu chia", "Hỗ trợ ưu tiên"],
     pricingTeamFeatures: ["Tất cả tính năng Pro", "Bảng quản trị", "Xuất báo cáo", "SSO", "Hỗ trợ chuyên trách"],
     privacy: "Quyền riêng tư", terms: "Điều khoản", helpCenter: "Trung tâm hỗ trợ", contact: "Liên hệ",
 
@@ -355,6 +356,7 @@ export const translations = {
     noCategoryData: "Chưa có dữ liệu danh mục", byCategory: "Theo danh mục", thisMonth: "Tháng này",
     noActivityYet: "Chưa có hoạt động", activityDesc: "Chi phí và thanh toán sẽ hiển thị ở đây.",
     quickDebts: "Nợ nhanh", noOutstandingDebts: "Không có nợ tồn đọng",
+    unknownMember: "Thành viên không xác định", owesYou: "nợ bạn", youOweLabel: "bạn nợ",
     goToGroups: "Vào mục Nhóm để bắt đầu",
 
     // Groups
