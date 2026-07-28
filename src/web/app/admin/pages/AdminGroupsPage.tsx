@@ -1,22 +1,17 @@
-import { Eye, Search, Trash2, Users } from "lucide-react";
+import { Eye, Loader2, Search, Shield, Trash2, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   deleteAdminGroup,
   getAdminGroup,
   getAdminGroups,
   getAdminSettlements,
+  updateAdminGroupBan,
   type AdminSettlementRecord,
 } from "../../../domains/admin-reporting";
 import type { Group } from "../../../domains/groups";
 import { formatLocalDate } from "../../../shared/lib/formatters";
 import { useFeedback } from "../../../shared/providers/FeedbackProvider";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "../../../shared/ui/dialog";
 import { AdminEmptyState } from "../components/AdminEmptyState";
 import { AdminPagination } from "../components/AdminPagination";
 import { useAdminLayoutContext } from "../layout/AdminLayout";
@@ -35,6 +30,9 @@ export function AdminGroupsPage() {
   const [isLoadingGroupDetail, setIsLoadingGroupDetail] = useState(false);
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
   const [isLoadingGroupTransactions, setIsLoadingGroupTransactions] = useState(false);
+  const [isUpdatingBan, setIsUpdatingBan] = useState(false);
+  const [isBanDialogOpen, setIsBanDialogOpen] = useState(false);
+  const [banReasonDraft, setBanReasonDraft] = useState("");
   const [search, setSearch] = useState("");
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -273,6 +271,91 @@ export function AdminGroupsPage() {
     }
   }
 
+  function handleOpenBanDialog() {
+    if (!selectedGroup) {
+      return;
+    }
+    setBanReasonDraft(selectedGroup.bannedReason ?? "");
+    setIsBanDialogOpen(true);
+  }
+
+  async function handleConfirmGroupBan() {
+    if (!selectedGroup) {
+      return;
+    }
+
+    const nextBannedState = !selectedGroup.isBanned;
+    const nextBannedReason = banReasonDraft.trim() || null;
+
+    try {
+      setIsUpdatingBan(true);
+      setSelectedGroup((currentGroup) =>
+        currentGroup
+          ? {
+              ...currentGroup,
+              isBanned: nextBannedState,
+              bannedReason: nextBannedReason,
+            }
+          : currentGroup,
+      );
+      setGroups((currentGroups) =>
+        currentGroups.map((group) =>
+          group.id === selectedGroup.id
+            ? {
+                ...group,
+                isBanned: nextBannedState,
+                bannedReason: nextBannedReason,
+              }
+            : group,
+        ),
+      );
+      const response = await updateAdminGroupBan(selectedGroup.id, {
+        isBanned: nextBannedState,
+        reason: nextBannedReason,
+      });
+
+      showToast({
+        message: response.message,
+        variant: "success",
+      });
+
+      const groupsResponse = await getAdminGroups();
+      setGroups(groupsResponse.groups ?? []);
+      const refreshedGroup = await getAdminGroup(selectedGroup.id);
+      setSelectedGroup(refreshedGroup.group ?? null);
+      await refreshDashboard();
+      setIsBanDialogOpen(false);
+    } catch (error) {
+      setSelectedGroup((currentGroup) =>
+        currentGroup
+          ? {
+              ...currentGroup,
+              isBanned: selectedGroup.isBanned,
+              bannedReason: selectedGroup.bannedReason ?? null,
+            }
+          : currentGroup,
+      );
+      setGroups((currentGroups) =>
+        currentGroups.map((group) =>
+          group.id === selectedGroup.id
+            ? {
+                ...group,
+                isBanned: selectedGroup.isBanned,
+                bannedReason: selectedGroup.bannedReason ?? null,
+              }
+            : group,
+        ),
+      );
+      showToast({
+        message:
+          error instanceof Error ? error.message : "Unable to update group ban status.",
+        variant: "error",
+      });
+    } finally {
+      setIsUpdatingBan(false);
+    }
+  }
+
   return (
     <>
       {errorMessage && (
@@ -415,25 +498,46 @@ export function AdminGroupsPage() {
         )}
       </div>
 
-      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
-          <DialogHeader>
-            <div className="flex items-center justify-between gap-3 pr-6">
-              <DialogTitle>Group Detail</DialogTitle>
+      {isDetailOpen && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/35 backdrop-blur-sm"
+            onClick={handleCloseGroupDetail}
+          />
+          <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[1.75rem] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_64px_rgba(17,24,39,0.22)]">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
+                Group Detail
+              </h3>
               {selectedGroup && (
-                <button
-                  type="button"
-                  onClick={() => void handleDeleteGroup(selectedGroup)}
-                  disabled={deletingGroupId === selectedGroup.id}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#FEF2F2] px-3 py-1.5 text-xs text-[#B91C1C] transition-colors hover:bg-[#FEE2E2] disabled:cursor-not-allowed disabled:opacity-60"
-                  style={{ fontWeight: 600 }}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  {deletingGroupId === selectedGroup.id ? t.deleting : t.deleteGroup}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleOpenBanDialog}
+                    disabled={isUpdatingBan}
+                    className={`inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                      selectedGroup.isBanned
+                        ? "bg-[#EFF6FF] text-[#1D4ED8] hover:bg-[#DBEAFE]"
+                        : "bg-[#FEF2F2] text-[#B91C1C] hover:bg-[#FEE2E2]"
+                    }`}
+                    style={{ fontWeight: 600 }}
+                  >
+                    <Shield className="h-3.5 w-3.5" />
+                    {selectedGroup.isBanned ? "Unban group" : "Ban group"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteGroup(selectedGroup)}
+                    disabled={deletingGroupId === selectedGroup.id}
+                    className="inline-flex items-center gap-2 rounded-xl bg-[#FEF2F2] px-3 py-1.5 text-xs text-[#B91C1C] transition-colors hover:bg-[#FEE2E2] disabled:cursor-not-allowed disabled:opacity-60"
+                    style={{ fontWeight: 600 }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {deletingGroupId === selectedGroup.id ? t.deleting : t.deleteGroup}
+                  </button>
+                </div>
               )}
             </div>
-          </DialogHeader>
 
           {isLoadingGroupDetail ? (
             <div className="space-y-3">
@@ -457,6 +561,11 @@ export function AdminGroupsPage() {
                   <p className="text-sm text-[#6B7280]">
                     {selectedGroup.members.length} {t.members}
                   </p>
+                  {selectedGroup.isBanned && (
+                    <p className="mt-2 inline-flex rounded-full bg-[#FEE2E2] px-3 py-1 text-xs text-[#991B1B]">
+                      Banned
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -609,8 +718,64 @@ export function AdminGroupsPage() {
           ) : (
             <p className="text-sm text-[#6B7280]">Select a group to see details.</p>
           )}
-        </DialogContent>
-      </Dialog>
+          </div>
+        </div>
+      )}
+
+      {isBanDialogOpen && (
+        <div className="fixed inset-0 z-[220] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setIsBanDialogOpen(false)}
+          />
+          <div className="relative w-full max-w-md rounded-[1.75rem] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_64px_rgba(17,24,39,0.22)]">
+            <h3 className="text-[#111827]" style={{ fontSize: "1.05rem", fontWeight: 800 }}>
+              {selectedGroup?.isBanned ? "Unban group" : "Ban group"}
+            </h3>
+            <p className="mt-2 text-sm text-[#6B7280]">
+              {selectedGroup?.isBanned
+                ? "Confirm to restore this group."
+                : "Enter a ban reason. If left empty, the default ban message will be used."}
+            </p>
+            <textarea
+              value={banReasonDraft}
+              onChange={(event) => setBanReasonDraft(event.target.value)}
+              rows={4}
+              disabled={isUpdatingBan}
+              className="mt-4 w-full rounded-xl border border-[#E5E7EB] bg-white px-4 py-3 text-sm text-[#111827] outline-none focus:border-[#7EDDBA] focus:ring-2 focus:ring-[#7EDDBA]/30"
+              placeholder="Reason for ban..."
+            />
+            <div className="mt-5 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsBanDialogOpen(false)}
+                className="rounded-xl border border-[#E5E7EB] px-4 py-2.5 text-sm text-[#374151] transition-colors hover:bg-[#F9FAFB]"
+                style={{ fontWeight: 600 }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmGroupBan()}
+                disabled={isUpdatingBan}
+                className={`rounded-xl px-4 py-2.5 text-sm text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                  selectedGroup?.isBanned
+                    ? "bg-[#2563EB] hover:bg-[#1D4ED8]"
+                    : "bg-[#DC2626] hover:bg-[#B91C1C]"
+                }`}
+                style={{ fontWeight: 600 }}
+              >
+                {isUpdatingBan
+                  ? "Processing..."
+                  : selectedGroup?.isBanned
+                    ? "Unban"
+                    : "Confirm ban"}
+                {isUpdatingBan ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

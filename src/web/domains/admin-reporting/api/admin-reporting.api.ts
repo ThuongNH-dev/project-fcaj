@@ -19,6 +19,8 @@ import type {
   AdminSettlementsResponse,
   AdminSettlementResponse,
   AdminUploadsResponse,
+  UpdateAdminBanStatusPayload,
+  UpdateAdminBanStatusResponse,
   UpdateAdminUserRolePayload,
   UpdateAdminUserRoleResponse,
 } from "../models/admin-reporting.types";
@@ -63,6 +65,26 @@ export function getAdminGroup(groupId: string) {
 
 export function deleteAdminGroup(groupId: string) {
   return deleteJson<AdminDeleteGroupResponse>(`/api/admin/groups/${groupId}`);
+}
+
+export function updateAdminUserBan(
+  userId: string,
+  payload: UpdateAdminBanStatusPayload,
+) {
+  return patchJson<UpdateAdminBanStatusPayload, UpdateAdminBanStatusResponse>(
+    `/api/admin/users/${userId}/ban`,
+    payload,
+  );
+}
+
+export function updateAdminGroupBan(
+  groupId: string,
+  payload: UpdateAdminBanStatusPayload,
+) {
+  return patchJson<UpdateAdminBanStatusPayload, UpdateAdminBanStatusResponse>(
+    `/api/admin/groups/${groupId}/ban`,
+    payload,
+  );
 }
 
 export function getAdminUploads() {

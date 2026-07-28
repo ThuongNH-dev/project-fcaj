@@ -50,6 +50,9 @@ interface GroupDocument {
   currency?: SupportedCurrency;
   createdBy: string;
   members: GroupMember[];
+  isBanned?: boolean;
+  bannedAt?: Date | null;
+  bannedReason?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -171,9 +174,41 @@ async function toPublicGroupWithMembers(group: GroupDocument): Promise<PublicGro
     createdBy: group.createdBy,
     members: publicMembers,
     expenseCount,
+    isBanned: group.isBanned ?? false,
+    bannedAt: group.bannedAt?.toISOString() ?? null,
+    bannedReason: group.bannedReason ?? null,
     createdAt: group.createdAt.toISOString(),
     updatedAt: group.updatedAt.toISOString(),
   };
+}
+
+export async function updateGroupBanStatusById(
+  groupId: string,
+  input: { isBanned: boolean; reason?: string | null },
+) {
+  if (!MongoObjectId.isValid(groupId)) {
+    return null;
+  }
+
+  const groups = await getGroupsCollection();
+  const groupObjectId = new MongoObjectId(groupId);
+  const updatedAt = new Date();
+  const bannedReason = input.reason?.trim() || null;
+
+  await groups.updateOne(
+    { _id: groupObjectId },
+    {
+      $set: {
+        isBanned: input.isBanned,
+        bannedAt: input.isBanned ? updatedAt : null,
+        bannedReason: input.isBanned ? bannedReason : null,
+        updatedAt,
+      },
+    },
+  );
+
+  const updatedGroup = await groups.findOne({ _id: groupObjectId });
+  return updatedGroup ? toPublicGroupWithMembers(updatedGroup) : null;
 }
 
 export type CreateGroupResult = {
@@ -282,6 +317,7 @@ export async function getGroupsByUserId(userId: string): Promise<PublicGroup[]> 
   const groupDocuments = await groups
     .find({
       "members.userId": userId,
+      isBanned: { $ne: true },
     })
     .sort({ updatedAt: -1 })
     .toArray();
@@ -295,6 +331,7 @@ export async function getGroupIdsByUserId(userId: string): Promise<string[]> {
     .find(
       {
         "members.userId": userId,
+        isBanned: { $ne: true },
       },
       {
         projection: {
@@ -333,6 +370,10 @@ export async function getGroupByIdForUser(
     return null;
   }
 
+  if (groupDocument.isBanned) {
+    throw new Error("This group has been banned.");
+  }
+
   return toPublicGroupWithMembers(groupDocument);
 }
 
@@ -354,6 +395,10 @@ export async function updateGroup(input: UpdateGroupInput): Promise<PublicGroup 
 
   if (!groupDocument) {
     return null;
+  }
+
+  if (groupDocument.isBanned) {
+    throw new Error("This group has been banned.");
   }
 
   const groupPermission = getGroupPermission(groupDocument.members, input.userId);
@@ -403,6 +448,10 @@ export async function deleteGroup(groupId: string, userId: string): Promise<bool
     return false;
   }
 
+  if (groupDocument.isBanned) {
+    throw new Error("This group has been banned.");
+  }
+
   const groupPermission = getGroupPermission(groupDocument.members, userId);
 
   if (!canManageGroup(groupPermission)) {
@@ -437,6 +486,10 @@ export async function addGroupMember(
 
   if (!group) {
     return null;
+  }
+
+  if (group.isBanned) {
+    throw new Error("This group has been banned.");
   }
 
   const users = await getUsersCollection();
@@ -539,6 +592,10 @@ export async function removeGroupMember(input: RemoveGroupMemberInput): Promise<
 
   if (!group) {
     return null;
+  }
+
+  if (group.isBanned) {
+    throw new Error("This group has been banned.");
   }
 
   const groups = await getGroupsCollection();

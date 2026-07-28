@@ -1,12 +1,13 @@
-import { Download, Loader2, Shield } from "lucide-react";
+import { Download, Loader2, LogOut, Shield } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, Outlet, useLocation, useOutletContext } from "react-router";
+import { Link, Outlet, useLocation, useNavigate, useOutletContext } from "react-router";
 import { AdminRoute } from "../guards/AdminRoute";
 import type { AdminDashboardStats } from "../../../domains/admin-reporting";
 import {
   downloadAdminUsersExport,
   getAdminDashboard,
 } from "../../../domains/admin-reporting";
+import { clearStoredUser, getStoredBanNotice, useStoredUser } from "../../../domains/auth";
 import { useFeedback } from "../../../shared/providers/FeedbackProvider";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
 import { Sidebar } from "../../private/layout/Sidebar";
@@ -28,8 +29,13 @@ export function AdminLayout() {
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const location = useLocation();
+  const navigate = useNavigate();
   const { showToast } = useFeedback();
   const { t } = useLanguage();
+  const user = useStoredUser();
+  const banNotice = getStoredBanNotice();
+
+  const isBanned = Boolean(user?.isBanned || banNotice);
 
   async function loadDashboard() {
     try {
@@ -88,10 +94,41 @@ export function AdminLayout() {
     }
   }
 
+  function handleLogout() {
+    clearStoredUser();
+    navigate("/login");
+  }
+
   return (
     <AdminRoute>
       <div className="min-h-screen bg-[#F6FBF8] lg:pl-60">
         <Sidebar currentPath={location.pathname} />
+        {isBanned ? (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-lg rounded-3xl border border-[#FECACA] bg-white p-6 shadow-2xl">
+              <div className="rounded-2xl bg-[#FEF2F2] px-4 py-3 text-center">
+                <p className="text-lg text-[#991B1B]" style={{ fontWeight: 800 }}>
+                  Your account has been banned
+                </p>
+                <p className="mt-2 text-sm text-[#7F1D1D]">
+                  {banNotice?.reason || user?.bannedReason || "You can no longer use this account."}
+                </p>
+              </div>
+              <p className="mt-4 text-sm text-[#6B7280]">
+                Please log out and create a new account if you need to continue using the app.
+              </p>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#111827] px-4 py-3 text-sm text-white transition-colors hover:bg-[#1F2937]"
+                style={{ fontWeight: 700 }}
+              >
+                <LogOut className="h-4 w-4" />
+                Logout
+              </button>
+            </div>
+          </div>
+        ) : null}
         <div className="mx-auto max-w-7xl px-6 pb-8 pt-16 lg:pt-8">
           <div className="relative overflow-hidden rounded-3xl border border-[#E5E7EB] bg-gradient-to-br from-white via-white to-[#FEF2F2] px-6 py-6 sm:px-8 sm:py-7 mb-8">
             <div
