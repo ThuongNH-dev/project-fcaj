@@ -574,6 +574,18 @@ export async function updateUserRoleById(
   const normalizedRole = normalizeUserRole(role);
   const users = await getUsersCollection();
   const userObjectId = new MongoObjectId(userId);
+  const existingUser = await users.findOne(
+    { _id: userObjectId },
+    { projection: { isBanned: 1 } },
+  );
+
+  if (!existingUser) {
+    return null;
+  }
+
+  if (existingUser.isBanned) {
+    throw new Error("Banned users cannot have their role updated.");
+  }
 
   await users.updateOne(
     { _id: userObjectId },

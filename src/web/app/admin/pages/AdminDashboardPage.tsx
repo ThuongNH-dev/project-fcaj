@@ -45,7 +45,7 @@ export function AdminDashboardPage() {
   const [isBanDialogOpen, setIsBanDialogOpen] = useState(false);
   const [banReasonDraft, setBanReasonDraft] = useState("");
   const [roleDraft, setRoleDraft] = useState<"admin" | "user">("user");
-  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">("all");
+  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user" | "banned">("all");
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState<AdminUserDetail | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -167,7 +167,11 @@ export function AdminDashboardPage() {
     const keyword = search.trim().toLowerCase();
 
     return users.filter((user) => {
-      if (roleFilter !== "all" && user.role !== roleFilter) {
+      if (roleFilter === "banned") {
+        if (!user.isBanned) {
+          return false;
+        }
+      } else if (roleFilter !== "all" && user.role !== roleFilter) {
         return false;
       }
 
@@ -414,14 +418,17 @@ export function AdminDashboardPage() {
 
       <div className="mb-5 flex w-fit flex-wrap items-center gap-1 rounded-xl border border-[#E5E7EB] bg-white p-1">
         {[
-          { key: "all", label: t.allUsers },
+        { key: "all", label: t.allUsers },
           { key: "admin", label: t.adminsOnly },
           { key: "user", label: t.standardUsersOnly },
+          { key: "banned", label: "Banned" },
         ].map((filterOption) => (
           <button
             key={filterOption.key}
             type="button"
-            onClick={() => setRoleFilter(filterOption.key as "all" | "admin" | "user")}
+            onClick={() =>
+              setRoleFilter(filterOption.key as "all" | "admin" | "user" | "banned")
+            }
             className={`rounded-lg px-4 py-2 text-sm transition-all ${
               roleFilter === filterOption.key
                 ? "bg-[#16A34A] text-white shadow-sm"
@@ -478,13 +485,21 @@ export function AdminDashboardPage() {
                           key={user.id}
                           onClick={() => handleOpenUserDetail(user.id)}
                           className={`relative cursor-pointer border-b border-[#F9FAFB] transition-colors ${
-                            isSelected ? "bg-[#F0FAF5]" : "hover:bg-[#FAFAFA]"
+                            user.isBanned
+                              ? "bg-[#FEF2F2] hover:bg-[#FEE2E2]"
+                              : isSelected
+                                ? "bg-[#F0FAF5]"
+                                : "hover:bg-[#FAFAFA]"
                           }`}
                         >
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-3">
                               <div
-                                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[#EAFBF3] text-[#15803D] text-xs"
+                                className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-xs ${
+                                  user.isBanned
+                                    ? "bg-[#FEE2E2] text-[#B91C1C]"
+                                    : "bg-[#EAFBF3] text-[#15803D]"
+                                }`}
                                 style={{ fontWeight: 700 }}
                               >
                                 {user.fullName
@@ -510,13 +525,15 @@ export function AdminDashboardPage() {
                           <td className="whitespace-nowrap px-5 py-3.5">
                             <span
                               className={`rounded-full px-2.5 py-1 text-xs ${
-                                user.role === "admin"
+                                user.isBanned
+                                  ? "bg-[#FEE2E2] text-[#991B1B]"
+                                  : user.role === "admin"
                                   ? "bg-[#FEE2E2] text-[#991B1B]"
                                   : "bg-[#EFF6FF] text-[#1D4ED8]"
                               }`}
                               style={{ fontWeight: 600 }}
                             >
-                              {user.role}
+                              {user.isBanned ? "banned" : user.role}
                             </span>
                           </td>
                           <td className="whitespace-nowrap px-5 py-3.5 text-xs text-[#9CA3AF]">
@@ -534,7 +551,11 @@ export function AdminDashboardPage() {
                                   event.stopPropagation();
                                   handleOpenUserDetail(user.id);
                                 }}
-                                className="flex h-8 w-8 items-center justify-center rounded-lg text-[#6B7280] transition-colors hover:bg-[#F0FAF5] hover:text-[#16A34A]"
+                                className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                                  user.isBanned
+                                    ? "text-[#B91C1C] hover:bg-[#FEE2E2] hover:text-[#991B1B]"
+                                    : "text-[#6B7280] hover:bg-[#F0FAF5] hover:text-[#16A34A]"
+                                }`}
                                 title={t.userDetail}
                               >
                                 <Eye className="h-4 w-4" />
@@ -649,9 +670,18 @@ export function AdminDashboardPage() {
                   </span>
                 </div>
                 {selectedUser.isBanned && (
-                  <p className="mt-3 inline-flex rounded-full bg-[#FEE2E2] px-3 py-1 text-xs text-[#991B1B]">
-                    Banned
-                  </p>
+                  <div className="mt-3 rounded-2xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3">
+                    <p className="inline-flex rounded-full bg-[#FEE2E2] px-3 py-1 text-xs text-[#991B1B]">
+                      Banned
+                    </p>
+                    <p className="mt-3 text-sm text-[#7F1D1D]" style={{ fontWeight: 600 }}>
+                      Ban reason
+                    </p>
+                    <p className="mt-1 text-sm text-[#991B1B]">
+                      {selectedUser.bannedReason?.trim() ||
+                        "This account was banned without a specific reason."}
+                    </p>
+                  </div>
                 )}
                 <p className="mt-4 text-sm text-[#6B7280]">
                   {t.joinedOn} {formatDateTime(selectedUser.createdAt)}

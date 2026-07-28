@@ -180,6 +180,13 @@ export async function updateAdminUserRoleHandler(req: Request, res: Response) {
       });
     }
 
+    if (existingUser.isBanned) {
+      return res.status(400).json({
+        ok: false,
+        message: "Banned users cannot have their role updated.",
+      });
+    }
+
     if (currentAdminUserId && currentAdminUserId === userId && role.trim().toLowerCase() !== "admin") {
       return res.status(400).json({
         ok: false,
