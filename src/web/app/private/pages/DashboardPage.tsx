@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
 import {
+  formatCurrency,
   formatLocalDate,
   toTitleCase,
 } from "../../../shared/lib/formatters";
@@ -160,6 +161,64 @@ export function DashboardPage() {
       addCurrencyAmount(totals, expense.currency, owedByOthers);
       return totals;
     }, new Map<string, number>());
+  const memberNameByUserId = new Map<string, string>();
+
+  groups.forEach((group) => {
+    group.members.forEach((member) => {
+      memberNameByUserId.set(member.id, member.name);
+    });
+  });
+
+  const debtNetByKey = new Map<
+    string,
+    { userId: string; currency: string; net: number }
+  >();
+
+  expenses
+    .filter((expense) => expense.settlementStatus === "pending")
+    .forEach((expense) => {
+      if (expense.paidByUserId === user?.id) {
+        expense.participants
+          .filter((participant) => participant.userId !== user?.id)
+          .forEach((participant) => {
+            const key = `${participant.userId}-${expense.currency}`;
+            const entry = debtNetByKey.get(key) ?? {
+              userId: participant.userId,
+              currency: expense.currency,
+              net: 0,
+            };
+
+            entry.net += participant.shareAmount;
+            debtNetByKey.set(key, entry);
+          });
+
+        return;
+      }
+
+      const myShare =
+        expense.participants.find((participant) => participant.userId === user?.id)
+          ?.shareAmount ?? 0;
+
+      if (myShare > 0) {
+        const key = `${expense.paidByUserId}-${expense.currency}`;
+        const entry = debtNetByKey.get(key) ?? {
+          userId: expense.paidByUserId,
+          currency: expense.currency,
+          net: 0,
+        };
+
+        entry.net -= myShare;
+        debtNetByKey.set(key, entry);
+      }
+    });
+
+  const quickDebts = Array.from(debtNetByKey.values())
+    .filter((entry) => Math.abs(entry.net) > 0.004)
+    .map((entry) => ({
+      ...entry,
+      name: memberNameByUserId.get(entry.userId) ?? t.unknownMember,
+    }))
+    .sort((left, right) => Math.abs(right.net) - Math.abs(left.net));
   const currentMonthExpenses = expenses.filter((expense) => {
     const expenseDate = new Date(expense.expenseDate);
     const today = new Date();
@@ -618,12 +677,66 @@ export function DashboardPage() {
               <h3 className="text-[#111827] mb-4" style={{ fontWeight: 700 }}>
                 {t.quickDebts}
               </h3>
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <div className="w-10 h-10 bg-[#F0FAF5] rounded-2xl flex items-center justify-center mx-auto mb-3">
-                  <Users className="w-5 h-5 text-[#7EDDBA]" />
+              {isLoadingExpenses ? (
+                <div className="space-y-3">
+                  <SkeletonRow className="h-12" />
+                  <SkeletonRow className="h-12" />
                 </div>
-                <p className="text-[#9CA3AF] text-xs">{t.noOutstandingDebts}</p>
-              </div>
+              ) : quickDebts.length > 0 ? (
+                <div className="space-y-3">
+                  {quickDebts.slice(0, 5).map((debt) => {
+                    const isOwedToYou = debt.net > 0;
+
+                    return (
+                      <div
+                        key={`${debt.userId}-${debt.currency}`}
+                        className="flex items-center justify-between gap-3"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[#EAFBF3] text-xs text-[#15803D]"
+                            style={{ fontWeight: 700 }}
+                          >
+                            {debt.name
+                              .split(" ")
+                              .filter(Boolean)
+                              .slice(0, 2)
+                              .map((part) => part[0]?.toUpperCase())
+                              .join("")}
+                          </div>
+                          <div className="min-w-0">
+                            <p
+                              className="text-sm text-[#111827] truncate"
+                              style={{ fontWeight: 600 }}
+                            >
+                              {debt.name}
+                            </p>
+                            <p className="text-xs text-[#9CA3AF]">
+                              {isOwedToYou ? t.owesYou : t.youOweLabel}
+                            </p>
+                          </div>
+                        </div>
+                        <span
+                          className="text-sm flex-shrink-0"
+                          style={{
+                            fontWeight: 700,
+                            color: isOwedToYou ? "#16A34A" : "#DC2626",
+                          }}
+                        >
+                          {formatCurrency(Math.abs(debt.net), debt.currency)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <div className="w-10 h-10 bg-[#F0FAF5] rounded-2xl flex items-center justify-center mx-auto mb-3">
+                    <Users className="w-5 h-5 text-[#7EDDBA]" />
+                  </div>
+                  <p className="text-[#9CA3AF] text-xs">{t.noOutstandingDebts}</p>
+                </div>
+              )}
             </div>
 
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#16A34A] to-[#0d5c2a] p-5 text-white">
