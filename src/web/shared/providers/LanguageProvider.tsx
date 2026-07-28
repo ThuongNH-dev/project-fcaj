@@ -100,7 +100,6 @@ export const translations = {
     noCategoryData: "No category data yet", byCategory: "By Category", thisMonth: "This month",
     noActivityYet: "No activity yet", activityDesc: "Expenses and payments will show up here.",
     quickDebts: "Quick Debts", noOutstandingDebts: "No outstanding debts",
-    unknownMember: "Unknown member", owesYou: "owes you", youOweLabel: "you owe",
     goToGroups: "Go to Groups to begin",
 
     // Groups
@@ -170,7 +169,7 @@ export const translations = {
 
     // Settlements
     settlementsTitle: "Settlements", settlementsDesc: "Track and manage payments between group members.",
-    youAreOwedLabel: "You Are Owed", youOweLabel: "You Owe", settledThisMonth: "Settled This Month",
+    youAreOwedLabel: "You Are Owed", settledThisMonth: "Settled This Month",
     pendingSettlements: "Pending Settlements", allClear: "All clear!",
     noSettlementsDesc: "No settlements yet. Add expenses to groups and debts will appear here.",
     settlementTimeline: "Settlement Timeline", noActivityLogged: "No activity yet",
@@ -369,7 +368,6 @@ export const translations = {
     noCategoryData: "Chưa có dữ liệu danh mục", byCategory: "Theo danh mục", thisMonth: "Tháng này",
     noActivityYet: "Chưa có hoạt động", activityDesc: "Chi phí và thanh toán sẽ hiển thị ở đây.",
     quickDebts: "Nợ nhanh", noOutstandingDebts: "Không có nợ tồn đọng",
-    unknownMember: "Thành viên không xác định", owesYou: "nợ bạn", youOweLabel: "bạn nợ",
     goToGroups: "Vào mục Nhóm để bắt đầu",
 
     // Groups
@@ -440,7 +438,7 @@ export const translations = {
 
     // Settlements
     settlementsTitle: "Thanh toán", settlementsDesc: "Theo dõi và quản lý các khoản thanh toán giữa các thành viên.",
-    youAreOwedLabel: "Bạn được nợ", youOweLabel: "Bạn nợ", settledThisMonth: "Đã thanh toán tháng này",
+    youAreOwedLabel: "Bạn được nợ", settledThisMonth: "Đã thanh toán tháng này",
     pendingSettlements: "Chờ thanh toán", allClear: "Tất cả đã ổn!",
     noSettlementsDesc: "Chưa có thanh toán. Thêm chi phí vào nhóm và các khoản nợ sẽ hiện ở đây.",
     settlementTimeline: "Lịch sử thanh toán", noActivityLogged: "Chưa có hoạt động",

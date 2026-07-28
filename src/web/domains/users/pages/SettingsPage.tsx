@@ -458,10 +458,10 @@ export function SettingsPage() {
     setBillingErrorMessage("");
 
     const confirmed = await confirm({
-      title: t.cancelPlan,
-      message: t.cancelPlanDesc,
+      title: t.cancelSubscription,
+      message: t.cancelSubscriptionConfirm,
       cancelLabel: t.cancel,
-      confirmLabel: t.cancelPlan,
+      confirmLabel: t.cancelSubscription,
       variant: "danger",
     });
 
@@ -1235,9 +1235,12 @@ export function SettingsPage() {
                       <div className="flex items-center justify-between gap-4">
                         <div>
                           <p className="text-sm text-[#111827]" style={{ fontWeight: 700 }}>
-                            {t.autoRenew}
+                            {t.autoRenew ?? "Auto-renew Pro plan"}
                           </p>
-                          <p className="text-xs text-[#6B7280] mt-1">{t.autoRenewDesc}</p>
+                          <p className="text-xs text-[#6B7280] mt-1">
+                            {t.autoRenewDesc ??
+                              "When enabled, your Pro plan renewal will be prepared automatically for the next cycle."}
+                          </p>
                         </div>
                         <button
                           type="button"
@@ -1252,7 +1255,9 @@ export function SettingsPage() {
                         </button>
                       </div>
                       <p className="text-xs text-[#6B7280] mt-3">
-                        {autoRenewEnabled ? t.autoRenewEnabled : t.autoRenewDisabled}
+                        {autoRenewEnabled
+                          ? t.autoRenewEnabled ?? "Auto-renew is on"
+                          : t.autoRenewDisabled ?? "Auto-renew is off"}
                       </p>
                       {!isProPlan && (
                         <p className="text-xs text-[#B45309] mt-2">
@@ -1275,7 +1280,7 @@ export function SettingsPage() {
                         className="ml-3 border border-[#FCA5A5] text-[#B91C1C] px-6 py-2.5 rounded-xl text-sm hover:bg-[#FEF2F2] transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                         style={{ fontWeight: 600 }}
                       >
-                        {isUpdatingBilling ? t.updatingPlan : t.cancelPlan}
+                        {isUpdatingBilling ? t.updatingPlan : t.cancelSubscription}
                       </button>
                     )}
                   </div>
