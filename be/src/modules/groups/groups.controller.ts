@@ -157,7 +157,10 @@ export async function createGroupHandler(req: Request, res: Response) {
       message === "Group currency must be either USD or VND."
     ) {
       statusCode = 400;
-    } else if (message === FREE_PLAN_GROUP_MEMBER_LIMIT_ERROR) {
+    } else if (
+      message === FREE_PLAN_GROUP_MEMBER_LIMIT_ERROR ||
+      message === "Free plan users can create up to 3 groups."
+    ) {
       statusCode = 403;
     }
 

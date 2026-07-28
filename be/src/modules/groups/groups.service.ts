@@ -21,9 +21,12 @@ import type {
 } from "./groups.types.js";
 
 export const FREE_PLAN_GROUP_MEMBER_LIMIT = 5;
+export const FREE_PLAN_GROUP_LIMIT = 3;
 
 export const FREE_PLAN_GROUP_MEMBER_LIMIT_ERROR =
   "Free plan groups can have up to 5 members, including the owner.";
+export const FREE_PLAN_GROUP_LIMIT_ERROR =
+  "Free plan users can create up to 3 groups.";
 
 async function getOwnerBillingPlan(ownerId: string): Promise<string> {
   const users = await getUsersCollection();
@@ -32,6 +35,11 @@ async function getOwnerBillingPlan(ownerId: string): Promise<string> {
     { projection: { billingProfile: 1 } },
   );
   return owner?.billingProfile?.plan === "pro" ? "pro" : "free";
+}
+
+async function getOwnerGroupCount(ownerId: string): Promise<number> {
+  const groups = await getGroupsCollection();
+  return groups.countDocuments({ createdBy: ownerId });
 }
 
 interface GroupDocument {
@@ -223,6 +231,14 @@ export async function createGroup(input: CreateGroupInput): Promise<CreateGroupR
   ];
 
   const ownerPlan = await getOwnerBillingPlan(input.createdBy);
+
+  if (ownerPlan === "free") {
+    const ownerGroupCount = await getOwnerGroupCount(input.createdBy);
+
+    if (ownerGroupCount >= FREE_PLAN_GROUP_LIMIT) {
+      throw new Error(FREE_PLAN_GROUP_LIMIT_ERROR);
+    }
+  }
 
   if (ownerPlan === "free" && members.length > FREE_PLAN_GROUP_MEMBER_LIMIT) {
     throw new Error(FREE_PLAN_GROUP_MEMBER_LIMIT_ERROR);

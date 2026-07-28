@@ -124,7 +124,7 @@ function createBillingSummary() {
       groupCount: 0,
       groupLimit: 3,
       expenseCount: 0,
-      expenseLimit: 10,
+      expenseLimit: 5,
       receiptScanIncluded: false,
     },
   };

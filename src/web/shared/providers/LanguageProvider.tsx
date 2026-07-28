@@ -59,11 +59,18 @@ export const translations = {
     startTrial: "Buy now", contactSales: "Contact sales",
     pricingPeriod: "/mo",
     pricingFreePrice: "$0", pricingProPrice: "$4", pricingTeamPrice: "$12",
-    pricingFreeFeatures: ["Up to 3 groups", "10 expenses/month", "Basic split options", "Email support"],
+    pricingFreeFeatures: [
+      "Up to 3 groups",
+      "5 expenses/month",
+      "Up to 20 expenses per group",
+      "Basic split options",
+      "Email support",
+    ],
     pricingProFeatures: ["Unlimited groups", "Unlimited expenses", "Receipt uploads", "All split types", "Priority support"],
     pricingTeamFeatures: ["Everything in Pro", "Admin dashboard", "Export reports", "SSO", "Dedicated support"],
     // Footer
     privacy: "Privacy", terms: "Terms", helpCenter: "Help Center", contact: "Contact",
+
 
     // Auth
     welcomeBack: "Welcome back", createAccount: "Create your account",
@@ -312,7 +319,13 @@ export const translations = {
     startTrial: "Mua ngay", contactSales: "Liên hệ bán hàng",
     pricingPeriod: "/tháng",
     pricingFreePrice: "0 ₫", pricingProPrice: "99.000 ₫", pricingTeamPrice: "299.000 ₫",
-    pricingFreeFeatures: ["Tối đa 3 nhóm", "10 chi phí/tháng", "Tùy chọn chia cơ bản", "Hỗ trợ qua email"],
+    pricingFreeFeatures: [
+      "Tối đa 3 nhóm",
+      "5 chi phí/tháng",
+      "Tối đa 20 chi phí trong mỗi nhóm",
+      "Tùy chọn chia cơ bản",
+      "Hỗ trợ qua email",
+    ],
     pricingProFeatures: ["Không giới hạn nhóm", "Không giới hạn chi phí", "Tải hóa đơn lên", "Tất cả kiểu chia", "Hỗ trợ ưu tiên"],
     pricingTeamFeatures: ["Tất cả tính năng Pro", "Bảng quản trị", "Xuất báo cáo", "SSO", "Hỗ trợ chuyên trách"],
     privacy: "Quyền riêng tư", terms: "Điều khoản", helpCenter: "Trung tâm hỗ trợ", contact: "Liên hệ",

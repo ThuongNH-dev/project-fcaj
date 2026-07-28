@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Pencil, Plus, Search, Receipt, Trash2 } from "lucide-react";
+import { useNavigate } from "react-router";
 import {
   formatCurrency,
   formatShortDate,
@@ -14,6 +15,7 @@ import { useFeedback } from "../../../shared/providers/FeedbackProvider";
 import { AddExpenseDialog, type NewExpense } from "../components/AddExpenseDialog";
 import { createExpense, deleteExpense, getExpenses, updateExpense, type Expense } from "..";
 import { formatCurrencyBreakdown } from "../../settlements/lib/settlement.utils";
+import { getCurrentUserBilling, type CurrentUserBillingSummary } from "../../users";
 
 const catColors: Record<string, string> = {
   food: "bg-[#D1FAE5] text-[#065f46]",
@@ -48,14 +50,33 @@ export function ExpensesPage() {
   const [showModal, setShowModal] = useState(false);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
+  const [billingSummary, setBillingSummary] = useState<CurrentUserBillingSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [expenseToEdit, setExpenseToEdit] = useState<Expense | null>(null);
   const { t } = useLanguage();
   const { confirm, showToast } = useFeedback();
   const currentUser = useStoredUser();
+  const navigate = useNavigate();
   const preferredCurrency =
     currentUser?.defaultCurrency ?? expenses[0]?.currency ?? "VND";
+  const currentMonthExpenseCount = useMemo(() => {
+    const now = new Date();
+
+    return expenses.filter((expense) => {
+      const createdAt = new Date(expense.createdAt);
+
+      return (
+        expense.createdBy === currentUser?.id &&
+        createdAt.getFullYear() === now.getFullYear() &&
+        createdAt.getMonth() === now.getMonth()
+      );
+    }).length;
+  }, [currentUser?.id, expenses]);
+  const isFreePlan = billingSummary?.profile.plan !== "pro";
+  const monthlyExpenseLimit = billingSummary?.usage.expenseLimit ?? 5;
+  const isMonthlyExpenseLimitReached =
+    isFreePlan && currentMonthExpenseCount >= monthlyExpenseLimit;
   const filters = [
     { key: "All", label: t.all },
     { key: "Pending", label: t.pending },
@@ -67,13 +88,15 @@ export function ExpensesPage() {
       setIsLoading(true);
       setErrorMessage("");
 
-      const [expensesResponse, groupsResponse] = await Promise.all([
+      const [expensesResponse, groupsResponse, billingResponse] = await Promise.all([
         getExpenses(),
         getGroups(),
+        getCurrentUserBilling(),
       ]);
 
       setExpenses(expensesResponse.expenses ?? []);
       setGroups(groupsResponse.groups ?? []);
+      setBillingSummary(billingResponse.billing ?? null);
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Unable to load expenses.",
@@ -138,6 +161,15 @@ export function ExpensesPage() {
     }, new Map<string, number>());
 
   const handleOpenAddExpense = () => {
+    if (isMonthlyExpenseLimitReached) {
+      showToast({
+        variant: "error",
+        message: "Free plan can create up to 5 expenses per month. Upgrade to Pro to continue.",
+      });
+      navigate("/settings?tab=billing");
+      return;
+    }
+
     if (groups.length === 0) {
       showToast({
         variant: "error",
@@ -274,7 +306,7 @@ export function ExpensesPage() {
             style={{ fontWeight: 600, fontSize: "0.875rem" }}
           >
             <Plus className="w-4 h-4" />
-            {t.addExpenseBtn}
+            {isMonthlyExpenseLimitReached ? "Upgrade to Pro" : t.addExpenseBtn}
           </button>
         </div>
 
@@ -292,7 +324,7 @@ export function ExpensesPage() {
                 emptyCurrency: preferredCurrency,
               }),
             },
-            { label: t.expensesThisMonth, value: `${expenses.length}` },
+            { label: t.expensesThisMonth, value: `${currentMonthExpenseCount}` },
           ].map(({ label, value }) => (
             <div key={label} className="bg-[#F0FAF5] rounded-2xl p-5 border border-white">
               <p
@@ -364,7 +396,7 @@ export function ExpensesPage() {
                   style={{ fontWeight: 600, fontSize: "0.875rem" }}
                 >
                   <Plus className="w-4 h-4" />
-                  {t.addExpenseBtn}
+                  {isMonthlyExpenseLimitReached ? "Upgrade to Pro" : t.addExpenseBtn}
                 </button>
               )}
             </div>

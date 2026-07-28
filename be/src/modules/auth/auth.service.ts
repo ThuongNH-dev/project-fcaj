@@ -169,7 +169,7 @@ function getBillingUsageSummary(plan: BillingPlan, input: {
     groupCount: input.groupCount,
     groupLimit: 3,
     expenseCount: input.expenseCount,
-    expenseLimit: 10,
+    expenseLimit: 5,
     receiptScanIncluded: false,
   };
 }

@@ -14,6 +14,7 @@ import {
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
 import { useStoredUser } from "../../auth";
 import { useFeedback } from "../../../shared/providers/FeedbackProvider";
+import { getCurrentUserBilling, type CurrentUserBillingSummary } from "../../users";
 import {
   AddExpenseDialog,
   createExpense,
@@ -61,6 +62,7 @@ export function GroupDetailPage() {
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [group, setGroup] = useState<Group | null>(null);
+  const [billingSummary, setBillingSummary] = useState<CurrentUserBillingSummary | null>(null);
   const [isLoadingGroup, setIsLoadingGroup] = useState(true);
   const [isLoadingExpenses, setIsLoadingExpenses] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -74,6 +76,15 @@ export function GroupDetailPage() {
   const { groupId = null } = useParams();
 
   useEffect(() => {
+    async function loadBilling() {
+      try {
+        const response = await getCurrentUserBilling();
+        setBillingSummary(response.billing ?? null);
+      } catch {
+        setBillingSummary(null);
+      }
+    }
+
     async function loadGroup() {
       if (!groupId) {
         setErrorMessage("No group selected.");
@@ -97,6 +108,7 @@ export function GroupDetailPage() {
     }
 
     void loadGroup();
+    void loadBilling();
   }, [groupId]);
 
   useEffect(() => {
@@ -144,6 +156,9 @@ export function GroupDetailPage() {
   const memberCount = group?.members.length ?? 0;
   const canManageMembers = Boolean(group && canManageGroupMembers(currentUser, group));
   const groupCurrency = group?.currency ?? currentUser?.defaultCurrency ?? "USD";
+  const isFreePlan = billingSummary?.profile.plan !== "pro";
+  const groupExpenseCount = group?.expenseCount ?? expenses.length;
+  const isFreeGroupExpenseLimitReached = isFreePlan && groupExpenseCount >= 20;
   const totalExpensesByCurrency = expenses.reduce((totals, expense) => {
     addCurrencyAmount(totals, expense.currency, expense.amount);
     return totals;
@@ -211,6 +226,23 @@ export function GroupDetailPage() {
       message: response.message,
     });
   }
+
+  const handleOpenAddExpense = () => {
+    if (!group) {
+      return;
+    }
+
+    if (isFreeGroupExpenseLimitReached) {
+      showToast({
+        variant: "error",
+        message: "Free plan groups can have up to 20 expenses. Upgrade to Pro to continue.",
+      });
+      navigate("/settings?tab=billing");
+      return;
+    }
+
+    setShowExpenseModal(true);
+  };
 
   const handleAddMember = async () => {
     if (!groupId) {
@@ -323,7 +355,7 @@ export function GroupDetailPage() {
               </div>
             </div>
             <button
-              onClick={() => setShowExpenseModal(true)}
+              onClick={handleOpenAddExpense}
               className="flex items-center gap-2 bg-[#16A34A] text-white px-5 py-2.5 rounded-xl hover:bg-[#15803d] transition-all shadow-sm"
               style={{ fontWeight: 600, fontSize: "0.875rem" }}
             >
@@ -429,13 +461,12 @@ export function GroupDetailPage() {
                   </p>
                   <p className="text-[#9CA3AF] text-xs mb-4">{t.addExpensePrompt}</p>
                   <button
-                    onClick={() => setShowExpenseModal(true)}
-                    disabled={isLoadingGroup || !group}
+                    onClick={handleOpenAddExpense}
                     className="flex items-center gap-2 bg-[#16A34A] text-white px-4 py-2 rounded-xl text-sm hover:bg-[#15803d] transition-colors"
                     style={{ fontWeight: 600 }}
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    {t.addExpense}
+                    {isFreeGroupExpenseLimitReached ? "Upgrade to Pro" : t.addExpense}
                   </button>
                 </div>
               ) : (

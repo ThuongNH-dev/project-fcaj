@@ -10,6 +10,7 @@ import {
 import type { SupportedCurrency } from "../auth/auth.types.js";
 import { getGroupByIdForUser, getGroupIdsByUserId } from "../groups/groups.service.js";
 import { getReceiptUploadByIdForUser } from "../receipts/receipts.service.js";
+import { getUsersCollection } from "../auth/auth.service.js";
 import {
   createSettlementsForExpense,
   reconcileSettlements,
@@ -76,6 +77,13 @@ const SUPPORTED_REVIEW_STATUSES = new Set<ExpenseReviewStatus>([
   "rejected",
 ]);
 
+export const FREE_PLAN_EXPENSE_LIMIT = 5;
+export const FREE_PLAN_GROUP_EXPENSE_LIMIT = 20;
+export const FREE_PLAN_EXPENSE_LIMIT_ERROR =
+  "Free plan users can create up to 5 expenses per month.";
+export const FREE_PLAN_GROUP_EXPENSE_LIMIT_ERROR =
+  "Free plan groups can have up to 20 expenses.";
+
 let indexesEnsured = false;
 
 async function ensureExpenseIndexes(collection: Collection<ExpenseDocument>) {
@@ -98,6 +106,35 @@ async function ensureExpenseIndexes(collection: Collection<ExpenseDocument>) {
 
   await collection.createIndexes(indexes);
   indexesEnsured = true;
+}
+
+async function getOwnerBillingPlan(ownerId: string): Promise<"free" | "pro"> {
+  const users = await getUsersCollection();
+  const owner = await users.findOne(
+    { _id: new MongoObjectId(ownerId) },
+    { projection: { billingProfile: 1 } },
+  );
+
+  return owner?.billingProfile?.plan === "pro" ? "pro" : "free";
+}
+
+async function getUserMonthlyExpenseCount(userId: string, referenceDate: Date) {
+  const expenses = await getExpensesCollection();
+  const startOfMonth = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1);
+  const startOfNextMonth = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 1);
+
+  return expenses.countDocuments({
+    createdBy: userId,
+    createdAt: {
+      $gte: startOfMonth,
+      $lt: startOfNextMonth,
+    },
+  });
+}
+
+async function getGroupExpenseCount(groupId: string): Promise<number> {
+  const expenses = await getExpensesCollection();
+  return expenses.countDocuments({ groupId });
 }
 
 export async function getExpensesCollection(): Promise<Collection<ExpenseDocument>> {
@@ -275,13 +312,28 @@ export async function createExpense(
   const normalizedParticipants = normalizeExpenseParticipants(input.participants);
   const normalizedReceiptId = normalizeExpenseOptionalReferenceId(input.receiptId);
   const participantTotalAmount = getParticipantTotalAmount(normalizedParticipants);
+  const ownerPlan = await getOwnerBillingPlan(input.createdBy);
+  const createdAt = new Date();
+  const updatedAt = createdAt;
 
   if (participantTotalAmount !== normalizedAmount) {
     throw new Error("Expense participant share amounts must equal the total amount.");
   }
 
-  const createdAt = new Date();
-  const updatedAt = createdAt;
+  if (ownerPlan === "free") {
+    const [monthlyCount, groupCount] = await Promise.all([
+      getUserMonthlyExpenseCount(input.createdBy, createdAt),
+      getGroupExpenseCount(input.groupId),
+    ]);
+
+    if (monthlyCount >= FREE_PLAN_EXPENSE_LIMIT) {
+      throw new Error(FREE_PLAN_EXPENSE_LIMIT_ERROR);
+    }
+
+    if (groupCount >= FREE_PLAN_GROUP_EXPENSE_LIMIT) {
+      throw new Error(FREE_PLAN_GROUP_EXPENSE_LIMIT_ERROR);
+    }
+  }
 
   const client = getMongoClient();
   const session = client.startSession();

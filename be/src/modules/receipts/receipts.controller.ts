@@ -1,7 +1,9 @@
 import type { Request, Response } from "express";
+import { ObjectId as MongoObjectId } from "mongodb";
 import { getUserById } from "../auth/auth.service.js";
 import { getExpenseByIdForUser } from "../expenses/expenses.service.js";
 import { getGroupByIdForUser } from "../groups/groups.service.js";
+import { getUsersCollection } from "../auth/auth.service.js";
 import {
   createReceiptUpload,
   getReceiptUploadByIdForUser,
@@ -14,6 +16,16 @@ import {
   createReceiptFileAccessPresign,
   createReceiptUploadPresign,
 } from "./receipts.storage.js";
+
+async function getOwnerBillingPlan(ownerId: string): Promise<"free" | "pro"> {
+  const users = await getUsersCollection();
+  const owner = await users.findOne(
+    { _id: new MongoObjectId(ownerId) },
+    { projection: { billingProfile: 1 } },
+  );
+
+  return owner?.billingProfile?.plan === "pro" ? "pro" : "free";
+}
 
 export async function getReceiptsHandler(req: Request, res: Response) {
   const userId = req.auth?.userId;
@@ -209,6 +221,15 @@ export async function createReceiptPresignHandler(req: Request, res: Response) {
       });
     }
 
+    const billingPlan = await getOwnerBillingPlan(currentUser.id);
+
+    if (billingPlan === "free") {
+      return res.status(403).json({
+        ok: false,
+        message: "Receipt upload is available on Pro only.",
+      });
+    }
+
     const resolvedGroupId = groupId?.trim() || null;
 
     if (resolvedGroupId) {
@@ -337,6 +358,15 @@ export async function uploadReceiptHandler(req: Request, res: Response) {
       return res.status(404).json({
         ok: false,
         message: "User not found.",
+      });
+    }
+
+    const billingPlan = await getOwnerBillingPlan(currentUser.id);
+
+    if (billingPlan === "free") {
+      return res.status(403).json({
+        ok: false,
+        message: "Receipt upload is available on Pro only.",
       });
     }
 

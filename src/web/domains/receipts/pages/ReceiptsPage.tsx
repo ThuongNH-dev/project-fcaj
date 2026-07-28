@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Upload, Search, FileText, Plus } from "lucide-react";
+import { useNavigate } from "react-router";
 import {
   formatFileSize,
   formatShortDate,
@@ -8,6 +9,7 @@ import { useLanguage } from "../../../shared/providers/LanguageProvider";
 import { getGroups, type Group } from "../../groups";
 import { useFeedback } from "../../../shared/providers/FeedbackProvider";
 import { getReceipts, uploadReceiptFile, type ReceiptUpload } from "..";
+import { getCurrentUserBilling, type CurrentUserBillingSummary } from "../../users";
 
 const statusStyles: Record<string, string> = {
   processed: "bg-[#D1FAE5] text-[#065f46]",
@@ -21,11 +23,14 @@ export function ReceiptsPage() {
   const [dragOver, setDragOver] = useState(false);
   const [receipts, setReceipts] = useState<ReceiptUpload[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
+  const [billingSummary, setBillingSummary] = useState<CurrentUserBillingSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const { t } = useLanguage();
   const { showToast } = useFeedback();
+  const navigate = useNavigate();
+  const isFreePlan = billingSummary?.profile.plan !== "pro";
 
   const filters = [
     { key: "all", label: t.all },
@@ -39,13 +44,15 @@ export function ReceiptsPage() {
       setIsLoading(true);
       setErrorMessage("");
 
-      const [receiptsResponse, groupsResponse] = await Promise.all([
+      const [receiptsResponse, groupsResponse, billingResponse] = await Promise.all([
         getReceipts(),
         getGroups(),
+        getCurrentUserBilling(),
       ]);
 
       setReceipts(receiptsResponse.receipts ?? []);
       setGroups(groupsResponse.groups ?? []);
+      setBillingSummary(billingResponse.billing ?? null);
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Unable to load receipts.",
@@ -85,6 +92,15 @@ export function ReceiptsPage() {
   };
 
   const handleUploadFile = async (file: File) => {
+    if (isFreePlan) {
+      showToast({
+        variant: "error",
+        message: "Receipt upload is available on Pro only. Upgrade to continue.",
+      });
+      navigate("/settings?tab=billing");
+      return;
+    }
+
     try {
       setIsUploading(true);
       setErrorMessage("");
@@ -140,11 +156,21 @@ export function ReceiptsPage() {
             </p>
           </div>
           <label
+            onClick={(event) => {
+              if (isFreePlan) {
+                event.preventDefault();
+                showToast({
+                  variant: "error",
+                  message: "Receipt upload is available on Pro only. Upgrade to continue.",
+                });
+                navigate("/settings?tab=billing");
+              }
+            }}
             className="flex items-center gap-2 bg-[#16A34A] text-white px-5 py-2.5 rounded-xl hover:bg-[#15803d] transition-all shadow-sm cursor-pointer"
             style={{ fontWeight: 600, fontSize: "0.875rem" }}
           >
             <Plus className="w-4 h-4" />
-            {isUploading ? "Uploading..." : t.uploadReceipt}
+            {isFreePlan ? "Upgrade to Pro" : isUploading ? "Uploading..." : t.uploadReceipt}
             <input
               type="file"
               className="hidden"
@@ -156,6 +182,16 @@ export function ReceiptsPage() {
         </div>
 
         <label
+          onClick={(event) => {
+            if (isFreePlan) {
+              event.preventDefault();
+              showToast({
+                variant: "error",
+                message: "Receipt upload is available on Pro only. Upgrade to continue.",
+              });
+              navigate("/settings?tab=billing");
+            }
+          }}
           className={`border-2 border-dashed rounded-2xl p-10 mb-7 text-center transition-all cursor-pointer ${
             dragOver
               ? "border-[#7EDDBA] bg-[#F0FAF5]"

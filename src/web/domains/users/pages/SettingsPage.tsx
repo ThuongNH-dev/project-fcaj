@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useTheme } from "next-themes";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import {
   User,
   Bell,
@@ -60,7 +60,7 @@ const DEFAULT_BILLING_SUMMARY: CurrentUserBillingSummary = {
     groupCount: 0,
     groupLimit: 3,
     expenseCount: 0,
-    expenseLimit: 10,
+    expenseLimit: 5,
     receiptScanIncluded: false,
   },
 };
@@ -139,6 +139,16 @@ export function SettingsPage() {
   });
   const { lang, setLang, t } = useLanguage();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const tab = searchParams.get("tab");
+
+    if (tab === "profile" || tab === "notifications" || tab === "security" || tab === "billing" || tab === "appearance") {
+      setActiveTab(tab);
+    }
+  }, [location.search]);
   const currentUser = useStoredUser();
   const { setTheme, theme } = useTheme();
   const { accentColor, density, setAccentColor, setDensity } = useAppearance();

@@ -5,6 +5,7 @@ import { ChevronRight, Pencil, Plus, Search, Trash2, Users } from "lucide-react"
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
 import { useStoredUser } from "../../auth";
 import { useFeedback } from "../../../shared/providers/FeedbackProvider";
+import { getCurrentUserBilling, type CurrentUserBillingSummary } from "../../users";
 import {
   formatCurrency,
   formatLocalDate,
@@ -34,6 +35,7 @@ export function MyGroupsPage() {
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
   const [groups, setGroups] = useState<Group[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [billingSummary, setBillingSummary] = useState<CurrentUserBillingSummary | null>(null);
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const { t } = useLanguage();
@@ -53,13 +55,15 @@ export function MyGroupsPage() {
       setErrorMessage("");
       setIsLoadingGroups(true);
 
-      const [groupsResponse, expensesResponse] = await Promise.all([
+      const [groupsResponse, expensesResponse, billingResponse] = await Promise.all([
         getGroups(),
         getExpenses(),
+        getCurrentUserBilling(),
       ]);
 
       setGroups(groupsResponse.groups ?? []);
       setExpenses(expensesResponse.expenses ?? []);
+      setBillingSummary(billingResponse.billing);
     } catch (error) {
       setErrorMessage(
         error instanceof Error ? error.message : "Unable to load groups.",
@@ -72,6 +76,22 @@ export function MyGroupsPage() {
   useEffect(() => {
     void loadGroups();
   }, []);
+
+  const isFreePlan = billingSummary?.profile.plan !== "pro";
+  const groupLimit = billingSummary?.usage.groupLimit ?? 3;
+  const isGroupLimitReached = isFreePlan && groups.length >= groupLimit;
+  const handleCreateGroupClick = () => {
+    if (isGroupLimitReached) {
+      showToast({
+        variant: "error",
+        message: "Free plan can create up to 3 groups. Upgrade to Pro to continue.",
+      });
+      navigate("/settings?tab=billing");
+      return;
+    }
+
+    setShowCreateModal(true);
+  };
 
   const groupExpenseSummaries = useMemo(() => {
     const summaries = new Map<string, GroupExpenseSummary>();
@@ -211,12 +231,12 @@ export function MyGroupsPage() {
             <p className="text-[#6B7280] text-sm mt-0.5">{groups.length} {t.groupsTotal}</p>
           </div>
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={handleCreateGroupClick}
             className="flex items-center gap-2 bg-[#16A34A] text-white px-5 py-2.5 rounded-xl hover:bg-[#15803d] transition-all shadow-sm"
             style={{ fontWeight: 600, fontSize: "0.875rem" }}
           >
             <Plus className="w-4 h-4" />
-            {t.newGroup}
+            {isGroupLimitReached ? "Upgrade to Pro" : t.newGroup}
           </button>
         </div>
 
