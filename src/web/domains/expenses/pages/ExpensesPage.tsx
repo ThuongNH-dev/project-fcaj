@@ -181,6 +181,22 @@ export function ExpensesPage() {
     setShowModal(true);
   };
 
+  const handleRequestReceiptUpgrade = async () => {
+    const confirmed = await confirm({
+      title: "Receipt upload needs Pro",
+      message:
+        "Free plan does not include receipt upload. Upgrade to Pro to continue.",
+      confirmLabel: "Go to billing",
+      cancelLabel: "Not now",
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    navigate("/settings?tab=billing");
+  };
+
   const handleAdd = async (expense: NewExpense) => {
     if (!expense.groupId || !expense.paidByUserId || !expense.participantShares) {
       throw new Error("Expense details are incomplete.");
@@ -531,6 +547,8 @@ export function ExpensesPage() {
           showGroupSelect={true}
           availableGroups={groups}
           currentUserId={currentUser?.id ?? null}
+          canUploadReceipt={!isFreePlan}
+          onRequestReceiptUpgrade={handleRequestReceiptUpgrade}
         />,
         document.body,
       )}
@@ -559,6 +577,8 @@ export function ExpensesPage() {
             receiptFile: null,
           } : null}
           submitLabel="Save changes"
+          canUploadReceipt={!isFreePlan}
+          onRequestReceiptUpgrade={handleRequestReceiptUpgrade}
         />,
         document.body,
       )}

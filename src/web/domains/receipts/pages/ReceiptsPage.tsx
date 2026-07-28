@@ -28,7 +28,7 @@ export function ReceiptsPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const { t } = useLanguage();
-  const { showToast } = useFeedback();
+  const { confirm, showToast } = useFeedback();
   const navigate = useNavigate();
   const isFreePlan = billingSummary?.profile.plan !== "pro";
 
@@ -92,15 +92,6 @@ export function ReceiptsPage() {
   };
 
   const handleUploadFile = async (file: File) => {
-    if (isFreePlan) {
-      showToast({
-        variant: "error",
-        message: "Receipt upload is available on Pro only. Upgrade to continue.",
-      });
-      navigate("/settings?tab=billing");
-      return;
-    }
-
     try {
       setIsUploading(true);
       setErrorMessage("");
@@ -129,6 +120,21 @@ export function ReceiptsPage() {
     }
   };
 
+  const handleRequestUploadUpgrade = async () => {
+    const confirmed = await confirm({
+      title: "Receipt upload needs Pro",
+      message: "Free plan does not include receipt upload. Upgrade to Pro to continue.",
+      confirmLabel: "Go to billing",
+      cancelLabel: "Not now",
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    navigate("/settings?tab=billing");
+  };
+
   const handleFileSelection = (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
@@ -155,41 +161,43 @@ export function ReceiptsPage() {
               {receipts.length} {t.receiptsUploaded}
             </p>
           </div>
-          <label
+          <button
+            type="button"
             onClick={(event) => {
               if (isFreePlan) {
                 event.preventDefault();
-                showToast({
-                  variant: "error",
-                  message: "Receipt upload is available on Pro only. Upgrade to continue.",
-                });
-                navigate("/settings?tab=billing");
+                void handleRequestUploadUpgrade();
+                return;
               }
+
+              const input = event.currentTarget.querySelector(
+                'input[type="file"]',
+              ) as HTMLInputElement | null;
+
+              input?.click();
             }}
             className="flex items-center gap-2 bg-[#16A34A] text-white px-5 py-2.5 rounded-xl hover:bg-[#15803d] transition-all shadow-sm cursor-pointer"
             style={{ fontWeight: 600, fontSize: "0.875rem" }}
           >
             <Plus className="w-4 h-4" />
             {isFreePlan ? "Upgrade to Pro" : isUploading ? "Uploading..." : t.uploadReceipt}
-            <input
-              type="file"
-              className="hidden"
-              accept=".png,.jpg,.jpeg,.pdf"
-              disabled={isUploading}
-              onChange={handleFileSelection}
-            />
-          </label>
+            {!isFreePlan && (
+              <input
+                type="file"
+                className="hidden"
+                accept=".png,.jpg,.jpeg,.pdf"
+                disabled={isUploading}
+                onChange={handleFileSelection}
+              />
+            )}
+          </button>
         </div>
 
         <label
           onClick={(event) => {
             if (isFreePlan) {
               event.preventDefault();
-              showToast({
-                variant: "error",
-                message: "Receipt upload is available on Pro only. Upgrade to continue.",
-              });
-              navigate("/settings?tab=billing");
+              void handleRequestUploadUpgrade();
             }
           }}
           className={`border-2 border-dashed rounded-2xl p-10 mb-7 text-center transition-all cursor-pointer ${
@@ -298,20 +306,36 @@ export function ReceiptsPage() {
                 {receipts.length === 0 ? t.noReceiptsDesc : t.adjustFilter}
               </p>
               {receipts.length === 0 && (
-                <label
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    if (isFreePlan) {
+                      event.preventDefault();
+                      void handleRequestUploadUpgrade();
+                      return;
+                    }
+
+                    const input = event.currentTarget.querySelector(
+                      'input[type="file"]',
+                    ) as HTMLInputElement | null;
+
+                    input?.click();
+                  }}
                   className="flex items-center gap-2 bg-[#16A34A] text-white px-5 py-2.5 rounded-xl hover:bg-[#15803d] transition-colors cursor-pointer"
                   style={{ fontWeight: 600, fontSize: "0.875rem" }}
                 >
                   <Upload className="w-4 h-4" />
                   {isUploading ? "Uploading..." : t.uploadFirstReceipt}
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept=".png,.jpg,.jpeg,.pdf"
-                    disabled={isUploading}
-                    onChange={handleFileSelection}
-                  />
-                </label>
+                  {!isFreePlan && (
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept=".png,.jpg,.jpeg,.pdf"
+                      disabled={isUploading}
+                      onChange={handleFileSelection}
+                    />
+                  )}
+                </button>
               )}
             </div>
           ) : (

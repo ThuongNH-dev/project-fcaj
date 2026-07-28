@@ -53,6 +53,8 @@ interface AddExpenseDialogProps {
   currentUserId?: string | null;
   initialExpense?: Partial<NewExpense> | null;
   submitLabel?: string;
+  canUploadReceipt?: boolean;
+  onRequestReceiptUpgrade?: () => Promise<void> | void;
 }
 
 function formatIsoDateForInput(value: Date) {
@@ -87,6 +89,8 @@ export function AddExpenseDialog({
   currentUserId = null,
   initialExpense = null,
   submitLabel,
+  canUploadReceipt = true,
+  onRequestReceiptUpgrade,
 }: AddExpenseDialogProps) {
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
@@ -606,7 +610,17 @@ export function AddExpenseDialog({
                 </button>
               </div>
             ) : (
-              <label className="flex flex-col items-center justify-center gap-2 bg-[#F9FAFB] border-2 border-dashed border-[#D1FAE5] rounded-xl px-4 py-5 cursor-pointer hover:bg-[#F0FAF5] hover:border-[#7EDDBA] transition-all">
+              <label
+                onClick={(event) => {
+                  if (canUploadReceipt) {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  void onRequestReceiptUpgrade?.();
+                }}
+                className="flex flex-col items-center justify-center gap-2 bg-[#F9FAFB] border-2 border-dashed border-[#D1FAE5] rounded-xl px-4 py-5 cursor-pointer hover:bg-[#F0FAF5] hover:border-[#7EDDBA] transition-all"
+              >
                 <div className="w-9 h-9 bg-[#D1FAE5] rounded-xl flex items-center justify-center">
                   <Upload className="w-4 h-4 text-[#16A34A]" />
                 </div>
@@ -626,6 +640,12 @@ export function AddExpenseDialog({
                   className="hidden"
                   accept=".png,.jpg,.jpeg,.pdf"
                   onChange={(event) => {
+                    if (!canUploadReceipt) {
+                      event.target.value = "";
+                      void onRequestReceiptUpgrade?.();
+                      return;
+                    }
+
                     if (event.target.files?.[0]) {
                       setUploadedFile(event.target.files[0]);
                     }

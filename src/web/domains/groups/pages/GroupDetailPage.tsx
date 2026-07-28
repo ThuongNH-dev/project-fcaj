@@ -159,6 +159,20 @@ export function GroupDetailPage() {
   const isFreePlan = billingSummary?.profile.plan !== "pro";
   const groupExpenseCount = group?.expenseCount ?? expenses.length;
   const isFreeGroupExpenseLimitReached = isFreePlan && groupExpenseCount >= 20;
+  const currentMonthExpenseCount = useMemo(() => {
+    const now = new Date();
+
+    return expenses.filter((expense) => {
+      const createdAt = new Date(expense.createdAt);
+
+      return (
+        expense.createdBy === currentUser?.id &&
+        createdAt.getFullYear() === now.getFullYear() &&
+        createdAt.getMonth() === now.getMonth()
+      );
+    }).length;
+  }, [currentUser?.id, expenses]);
+  const isFreeMonthlyExpenseLimitReached = isFreePlan && currentMonthExpenseCount >= 5;
   const totalExpensesByCurrency = expenses.reduce((totals, expense) => {
     addCurrencyAmount(totals, expense.currency, expense.amount);
     return totals;
@@ -189,6 +203,23 @@ export function GroupDetailPage() {
     let receiptId: string | undefined;
 
     if (expense.receiptFile) {
+      if (isFreePlan) {
+        const confirmed = await confirm({
+          title: "Receipt upload needs Pro",
+          message:
+            "Free plan does not include receipt upload in groups. Upgrade to Pro to add a receipt to this expense.",
+          confirmLabel: "Go to billing",
+          cancelLabel: "Not now",
+        });
+
+        if (!confirmed) {
+          return;
+        }
+
+        navigate("/settings?tab=billing");
+        return;
+      }
+
       const uploadedReceipt = await uploadReceiptFile({
         file: expense.receiptFile,
         groupId,
@@ -232,6 +263,15 @@ export function GroupDetailPage() {
       return;
     }
 
+    if (isFreeMonthlyExpenseLimitReached) {
+      showToast({
+        variant: "error",
+        message: "Free plan can create up to 5 expenses per month. Upgrade to Pro to continue.",
+      });
+      navigate("/settings?tab=billing");
+      return;
+    }
+
     if (isFreeGroupExpenseLimitReached) {
       showToast({
         variant: "error",
@@ -242,6 +282,22 @@ export function GroupDetailPage() {
     }
 
     setShowExpenseModal(true);
+  };
+
+  const handleRequestReceiptUpgrade = async () => {
+    const confirmed = await confirm({
+      title: "Receipt upload needs Pro",
+      message:
+        "Free plan does not include receipt upload in groups. Upgrade to Pro to continue.",
+      confirmLabel: "Go to billing",
+      cancelLabel: "Not now",
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    navigate("/settings?tab=billing");
   };
 
   const handleAddMember = async () => {
@@ -694,6 +750,8 @@ export function GroupDetailPage() {
           availableGroups={group ? [group] : []}
           defaultGroupId={groupId}
           currentUserId={currentUser?.id ?? null}
+          canUploadReceipt={!isFreePlan}
+          onRequestReceiptUpgrade={handleRequestReceiptUpgrade}
         />,
         document.body,
       )}
