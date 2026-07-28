@@ -4,6 +4,8 @@ import {
   deleteAdminGroup,
   getAdminGroup,
   getAdminGroups,
+  getAdminSettlements,
+  type AdminSettlementRecord,
 } from "../../../domains/admin-reporting";
 import type { Group } from "../../../domains/groups";
 import { formatLocalDate } from "../../../shared/lib/formatters";
@@ -18,7 +20,12 @@ import {
 import { AdminEmptyState } from "../components/AdminEmptyState";
 import { AdminPagination } from "../components/AdminPagination";
 import { useAdminLayoutContext } from "../layout/AdminLayout";
-import { formatDateTime, useAdminPagination } from "../lib/admin.utils";
+import {
+  formatCurrency,
+  formatDateTime,
+  getSettlementStatusLabel,
+  useAdminPagination,
+} from "../lib/admin.utils";
 
 export function AdminGroupsPage() {
   const [deletingGroupId, setDeletingGroupId] = useState<string | null>(null);
@@ -27,9 +34,13 @@ export function AdminGroupsPage() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isLoadingGroupDetail, setIsLoadingGroupDetail] = useState(false);
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
+  const [isLoadingGroupTransactions, setIsLoadingGroupTransactions] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [selectedGroupTransactions, setSelectedGroupTransactions] = useState<
+    AdminSettlementRecord[]
+  >([]);
   const { confirm, showToast } = useFeedback();
   const { refreshDashboard } = useAdminLayoutContext();
   const { t } = useLanguage();
@@ -71,6 +82,8 @@ export function AdminGroupsPage() {
 
   useEffect(() => {
     if (!selectedGroupId) {
+      setSelectedGroup(null);
+      setSelectedGroupTransactions([]);
       return;
     }
 
@@ -104,10 +117,41 @@ export function AdminGroupsPage() {
     };
   }, [selectedGroupId]);
 
-  function handleViewGroup(groupId: string) {
-    setSelectedGroupId(groupId);
-    setIsDetailOpen(true);
-  }
+  useEffect(() => {
+    if (!selectedGroupId) {
+      setSelectedGroupTransactions([]);
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadGroupTransactions() {
+      try {
+        setIsLoadingGroupTransactions(true);
+        const response = await getAdminSettlements({ groupId: selectedGroupId });
+
+        if (isMounted) {
+          setSelectedGroupTransactions(response.settlements ?? []);
+        }
+      } catch (error) {
+        if (isMounted) {
+          setErrorMessage(
+            error instanceof Error ? error.message : "Unable to load group transactions.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingGroupTransactions(false);
+        }
+      }
+    }
+
+    void loadGroupTransactions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedGroupId]);
 
   const filteredGroups = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -139,6 +183,55 @@ export function AdminGroupsPage() {
     totalPages: groupsTotalPages,
   } = useAdminPagination(filteredGroups);
 
+  const {
+    page: groupTransactionsPage,
+    pageItems: pagedGroupTransactions,
+    setPage: setGroupTransactionsPage,
+    totalPages: groupTransactionsTotalPages,
+  } = useAdminPagination(selectedGroupTransactions);
+
+  const selectedGroupTransactionSummary = useMemo(() => {
+    return selectedGroupTransactions.reduce(
+      (summary, transaction) => {
+        summary.totalCount += 1;
+        summary.amountsByCurrency.set(
+          transaction.currency,
+          (summary.amountsByCurrency.get(transaction.currency) ?? 0) + transaction.amount,
+        );
+
+        if (transaction.settlementStatus === "pending") {
+          summary.pendingCount += 1;
+        } else {
+          summary.settledCount += 1;
+        }
+
+        return summary;
+      },
+      {
+        amountsByCurrency: new Map<string, number>(),
+        pendingCount: 0,
+        settledCount: 0,
+        totalCount: 0,
+      },
+    );
+  }, [selectedGroupTransactions]);
+
+  const selectedGroupTransactionAmountLabel = useMemo(() => {
+    if (selectedGroupTransactionSummary.amountsByCurrency.size === 0) {
+      return "--";
+    }
+
+    return Array.from(selectedGroupTransactionSummary.amountsByCurrency.entries())
+      .map(([currency, amount]) => formatCurrency(amount, currency))
+      .join(", ");
+  }, [selectedGroupTransactionSummary]);
+
+  function handleViewGroup(groupId: string) {
+    setSelectedGroupId(groupId);
+    setGroupTransactionsPage(1);
+    setIsDetailOpen(true);
+  }
+
   async function handleDeleteGroup(group: { id: string; name: string }) {
     const confirmed = await confirm({
       cancelLabel: t.cancel,
@@ -162,6 +255,8 @@ export function AdminGroupsPage() {
       if (selectedGroupId === group.id) {
         setIsDetailOpen(false);
         setSelectedGroup(null);
+        setSelectedGroupTransactions([]);
+        setSelectedGroupId(null);
       }
       showToast({
         message: response.message,
@@ -409,6 +504,106 @@ export function AdminGroupsPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              <div>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm text-[#111827]" style={{ fontWeight: 700 }}>
+                      Transactions
+                    </p>
+                    <p className="text-xs text-[#6B7280]">
+                      All transactions currently recorded in this group.
+                    </p>
+                  </div>
+                  <span
+                    className="rounded-full bg-[#F0FAF5] px-3 py-1 text-xs text-[#166534]"
+                    style={{ fontWeight: 700 }}
+                  >
+                    {selectedGroupTransactionSummary.totalCount} items
+                  </span>
+                </div>
+
+                <div className="mb-3 grid grid-cols-3 gap-3">
+                  <div className="rounded-xl bg-[#F9FAFB] px-3 py-3">
+                    <p className="text-xs uppercase text-[#9CA3AF]">Total</p>
+                    <p className="mt-1 text-sm text-[#111827]" style={{ fontWeight: 700 }}>
+                      {selectedGroupTransactionAmountLabel}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-[#FFF7ED] px-3 py-3">
+                    <p className="text-xs uppercase text-[#9CA3AF]">Pending</p>
+                    <p className="mt-1 text-sm text-[#92400E]" style={{ fontWeight: 700 }}>
+                      {selectedGroupTransactionSummary.pendingCount}
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-[#EFF6FF] px-3 py-3">
+                    <p className="text-xs uppercase text-[#9CA3AF]">Settled</p>
+                    <p className="mt-1 text-sm text-[#1D4ED8]" style={{ fontWeight: 700 }}>
+                      {selectedGroupTransactionSummary.settledCount}
+                    </p>
+                  </div>
+                </div>
+
+                {isLoadingGroupTransactions ? (
+                  <div className="space-y-3">
+                    <div className="h-16 animate-pulse rounded-xl bg-[#F3F4F6]" />
+                    <div className="h-16 animate-pulse rounded-xl bg-[#F3F4F6]" />
+                  </div>
+                ) : selectedGroupTransactions.length > 0 ? (
+                  <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
+                    <div className="space-y-3 p-3">
+                      {pagedGroupTransactions.map((transaction) => (
+                        <div
+                          key={transaction.id}
+                          className="rounded-xl border border-[#E5E7EB] bg-white px-4 py-3"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p
+                                className="truncate text-[#111827]"
+                                style={{ fontWeight: 600 }}
+                              >
+                                {transaction.title}
+                              </p>
+                              <p className="mt-1 text-sm text-[#6B7280]">
+                                Paid by {transaction.paidByName}
+                              </p>
+                              <p className="mt-1 text-xs text-[#9CA3AF]">
+                                {transaction.participantCount} participants •{" "}
+                                {formatLocalDate(transaction.expenseDate)}
+                              </p>
+                            </div>
+                            <div className="shrink-0 text-right">
+                              <p className="text-sm text-[#111827]" style={{ fontWeight: 700 }}>
+                                {formatCurrency(transaction.amount, transaction.currency)}
+                              </p>
+                              <span
+                                className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xs ${
+                                  transaction.settlementStatus === "settled"
+                                    ? "bg-[#D1FAE5] text-[#065F46]"
+                                    : "bg-[#FEF3C7] text-[#92400E]"
+                                }`}
+                                style={{ fontWeight: 600 }}
+                              >
+                                {getSettlementStatusLabel(transaction.settlementStatus)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <AdminPagination
+                      page={groupTransactionsPage}
+                      totalPages={groupTransactionsTotalPages}
+                      onPageChange={setGroupTransactionsPage}
+                    />
+                  </div>
+                ) : (
+                  <div className="rounded-xl bg-[#F9FAFB] px-4 py-4 text-sm text-[#6B7280]">
+                    No transactions found in this group.
+                  </div>
+                )}
               </div>
             </div>
           ) : (

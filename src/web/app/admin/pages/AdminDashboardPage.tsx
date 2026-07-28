@@ -234,6 +234,8 @@ export function AdminDashboardPage() {
     setExpandedGroupId(null);
     setGroupSettlements([]);
     setGroupSettlementsError("");
+    setUserGroupsPage(1);
+    setGroupSettlementsPage(1);
   }
 
   function handleCloseUserDetail() {
@@ -241,22 +243,29 @@ export function AdminDashboardPage() {
     setExpandedGroupId(null);
     setGroupSettlements([]);
     setGroupSettlementsError("");
+    setUserGroupsPage(1);
+    setGroupSettlementsPage(1);
   }
 
   async function handleToggleGroupTransactions(groupId: string) {
     if (expandedGroupId === groupId) {
       setExpandedGroupId(null);
+      setGroupSettlementsPage(1);
       return;
     }
 
     setExpandedGroupId(groupId);
+    setGroupSettlementsPage(1);
     setGroupSettlements([]);
     setGroupSettlementsError("");
 
     try {
       setIsLoadingGroupSettlements(true);
 
-      const response = await getAdminSettlements({ groupId });
+      const response = await getAdminSettlements({
+        groupId,
+        paidByUserId: selectedUserId ?? undefined,
+      });
 
       setGroupSettlements(response.settlements ?? []);
     } catch (error) {
@@ -283,6 +292,18 @@ export function AdminDashboardPage() {
     setPage: setUsersPage,
     totalPages: usersTotalPages,
   } = useAdminPagination(filteredUsers);
+  const {
+    page: userGroupsPage,
+    pageItems: pagedUserGroups,
+    setPage: setUserGroupsPage,
+    totalPages: userGroupsTotalPages,
+  } = useAdminPagination(selectedUser?.groups ?? []);
+  const {
+    page: groupSettlementsPage,
+    pageItems: pagedGroupSettlements,
+    setPage: setGroupSettlementsPage,
+    totalPages: groupSettlementsTotalPages,
+  } = useAdminPagination(groupSettlements);
 
   return (
     <>
@@ -624,8 +645,9 @@ export function AdminDashboardPage() {
                   {t.groupMemberships}
                 </p>
                 {selectedUser.groups.length > 0 ? (
-                  <div className="space-y-3">
-                    {selectedUser.groups.map((group) => {
+                  <div className="overflow-hidden rounded-xl border border-[#E5E7EB] bg-white">
+                    <div className="space-y-3 p-3">
+                    {pagedUserGroups.map((group) => {
                       const isExpanded = expandedGroupId === group.id;
 
                       return (
@@ -682,8 +704,17 @@ export function AdminDashboardPage() {
                                   {groupSettlementsError}
                                 </p>
                               ) : groupSettlements.length > 0 ? (
-                                <div className="space-y-2">
-                                  {groupSettlements.map((settlement) => (
+                                <div className="overflow-hidden rounded-lg border border-[#E5E7EB] bg-white">
+                                  <div className="border-b border-[#E5E7EB] px-3 py-2">
+                                    <p className="text-xs font-semibold uppercase tracking-wider text-[#9CA3AF]">
+                                      Personal Transactions
+                                    </p>
+                                    <p className="text-sm text-[#6B7280]">
+                                      Transactions made by this user in the selected group.
+                                    </p>
+                                  </div>
+                                  <div className="space-y-2 p-2">
+                                  {pagedGroupSettlements.map((settlement) => (
                                     <div
                                       key={settlement.id}
                                       className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2.5"
@@ -725,6 +756,12 @@ export function AdminDashboardPage() {
                                       </div>
                                     </div>
                                   ))}
+                                  </div>
+                                  <AdminPagination
+                                    page={groupSettlementsPage}
+                                    totalPages={groupSettlementsTotalPages}
+                                    onPageChange={setGroupSettlementsPage}
+                                  />
                                 </div>
                               ) : (
                                 <p className="text-sm text-[#6B7280]">
@@ -736,6 +773,12 @@ export function AdminDashboardPage() {
                         </div>
                       );
                     })}
+                    </div>
+                    <AdminPagination
+                      page={userGroupsPage}
+                      totalPages={userGroupsTotalPages}
+                      onPageChange={setUserGroupsPage}
+                    />
                   </div>
                 ) : (
                   <p className="text-sm text-[#6B7280]">{t.noUserGroups}</p>
