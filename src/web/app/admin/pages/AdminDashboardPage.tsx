@@ -601,7 +601,7 @@ export function AdminDashboardPage() {
             className="absolute inset-0 bg-black/35 backdrop-blur-sm"
             onClick={handleCloseUserDetail}
           />
-          <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[1.75rem] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_64px_rgba(17,24,39,0.22)]">
+          <div className="relative max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[1.75rem] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_64px_rgba(17,24,39,0.22)]">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
               {t.userDetail}
@@ -942,7 +942,7 @@ export function AdminDashboardPage() {
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setIsBanDialogOpen(false)}
           />
-          <div className="relative w-full max-w-md rounded-[1.75rem] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_64px_rgba(17,24,39,0.22)]">
+          <div className="relative w-full max-w-xl rounded-[1.75rem] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_64px_rgba(17,24,39,0.22)]">
             <h3 className="text-[#111827]" style={{ fontSize: "1.05rem", fontWeight: 800 }}>
               {selectedUser?.isBanned ? "Unban user" : "Ban user"}
             </h3>

@@ -15,7 +15,7 @@ import { GroupFormDialog } from "../components/GroupFormDialog";
 import { canManageGroup, deleteGroup, getGroups, type Group } from "..";
 import { formatCurrencyBreakdown } from "../../settlements/lib/settlement.utils";
 
-type GroupStatus = "Active" | "Pending" | "Settled";
+type GroupStatus = "Active" | "Pending" | "Settled" | "Banned";
 
 interface GroupExpenseSummary {
   totalExpenses: Map<string, number>;
@@ -48,6 +48,7 @@ export function MyGroupsPage() {
     { key: "active", label: t.active },
     { key: "settled", label: t.settled },
     { key: "pending", label: t.pending },
+    { key: "banned", label: "Banned" },
   ];
 
   const loadGroups = async () => {
@@ -100,7 +101,7 @@ export function MyGroupsPage() {
       summaries.set(group.id, {
         totalExpenses: new Map<string, number>(),
         yourBalance: new Map<string, number>(),
-        status: "Active",
+        status: group.isBanned ? "Banned" : "Active",
       });
     });
 
@@ -220,6 +221,7 @@ export function MyGroupsPage() {
     Active: "bg-[#D1FAE5] text-[#065f46]",
     Settled: "bg-[#F3F4F6] text-[#6B7280]",
     Pending: "bg-[#FEF3C7] text-[#92400e]",
+    Banned: "bg-[#FEE2E2] text-[#991B1B]",
   };
 
   return (
@@ -319,8 +321,9 @@ export function MyGroupsPage() {
                 <article
                   key={group.id}
                   className="bg-white rounded-2xl border border-[#E5E7EB] p-5 transition-all hover:shadow-md hover:-translate-y-0.5 group"
+                  style={group.isBanned ? { borderColor: "#FCA5A5" } : undefined}
                 >
-                  {userCanManageGroup && (
+                  {userCanManageGroup && !group.isBanned && (
                     <div className="mb-4 flex items-center justify-end gap-2">
                       <button
                         type="button"
@@ -333,18 +336,6 @@ export function MyGroupsPage() {
                       >
                         <Pencil className="h-3.5 w-3.5" />
                         {t.editGroup}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void handleDeleteGroup(group);
-                        }}
-                        disabled={deletingGroupId === group.id}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-[#FECACA] bg-[#FEF2F2] px-3 py-1.5 text-xs text-[#B91C1C] hover:bg-[#FEE2E2] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                        style={{ fontWeight: 600 }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        {deletingGroupId === group.id ? t.deleting : t.deleteGroup}
                       </button>
                     </div>
                   )}
@@ -377,10 +368,10 @@ export function MyGroupsPage() {
                         </div>
                       </div>
                       <span
-                        className={`text-xs px-2.5 py-1 rounded-full ${statusStyles[status]}`}
+                        className={`text-xs px-2.5 py-1 rounded-full ${statusStyles[group.isBanned ? "Banned" : status]}`}
                         style={{ fontWeight: 600 }}
                       >
-                        {status}
+                        {group.isBanned ? "Banned" : status}
                       </span>
                     </div>
 

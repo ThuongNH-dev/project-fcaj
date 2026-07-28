@@ -34,6 +34,7 @@ export function AdminGroupsPage() {
   const [isBanDialogOpen, setIsBanDialogOpen] = useState(false);
   const [banReasonDraft, setBanReasonDraft] = useState("");
   const [search, setSearch] = useState("");
+  const [groupFilter, setGroupFilter] = useState<"all" | "active" | "banned">("all");
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [selectedGroupTransactions, setSelectedGroupTransactions] = useState<
@@ -100,6 +101,8 @@ export function AdminGroupsPage() {
           setErrorMessage(
             error instanceof Error ? error.message : "Unable to load admin group detail.",
           );
+          setIsDetailOpen(false);
+          setSelectedGroupId(null);
         }
       } finally {
         if (isMounted) {
@@ -136,6 +139,7 @@ export function AdminGroupsPage() {
           setErrorMessage(
             error instanceof Error ? error.message : "Unable to load group transactions.",
           );
+          setSelectedGroupTransactions([]);
         }
       } finally {
         if (isMounted) {
@@ -155,6 +159,14 @@ export function AdminGroupsPage() {
     const keyword = search.trim().toLowerCase();
 
     return groups.filter((group) => {
+      if (groupFilter === "banned" && !group.isBanned) {
+        return false;
+      }
+
+      if (groupFilter === "active" && group.isBanned) {
+        return false;
+      }
+
       if (!keyword) {
         return true;
       }
@@ -172,7 +184,7 @@ export function AdminGroupsPage() {
         )
       );
     });
-  }, [groups, search]);
+  }, [groupFilter, groups, search]);
 
   const {
     page: groupsPage,
@@ -225,9 +237,26 @@ export function AdminGroupsPage() {
   }, [selectedGroupTransactionSummary]);
 
   function handleViewGroup(groupId: string) {
+    setErrorMessage("");
+    setSelectedGroup(null);
+    setSelectedGroupTransactions([]);
     setSelectedGroupId(groupId);
     setGroupTransactionsPage(1);
+    setIsLoadingGroupDetail(true);
+    setIsLoadingGroupTransactions(true);
     setIsDetailOpen(true);
+  }
+
+  function handleCloseGroupDetail() {
+    setIsDetailOpen(false);
+    setIsBanDialogOpen(false);
+    setIsLoadingGroupDetail(false);
+    setIsLoadingGroupTransactions(false);
+    setSelectedGroupId(null);
+    setSelectedGroup(null);
+    setSelectedGroupTransactions([]);
+    setGroupTransactionsPage(1);
+    setBanReasonDraft("");
   }
 
   async function handleDeleteGroup(group: { id: string; name: string }) {
@@ -386,6 +415,30 @@ export function AdminGroupsPage() {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-1 border-b border-[#F3F4F6] bg-[#FAFAFA] px-5 py-3">
+          {[
+            { key: "all", label: "All groups" },
+            { key: "active", label: "Active" },
+            { key: "banned", label: "Banned" },
+          ].map((filterOption) => (
+            <button
+              key={filterOption.key}
+              type="button"
+              onClick={() =>
+                setGroupFilter(filterOption.key as "all" | "active" | "banned")
+              }
+              className={`rounded-lg px-4 py-2 text-sm transition-all ${
+                groupFilter === filterOption.key
+                  ? "bg-[#16A34A] text-white shadow-sm"
+                  : "text-[#6B7280] hover:text-[#111827]"
+              }`}
+              style={{ fontWeight: 600 }}
+            >
+              {filterOption.label}
+            </button>
+          ))}
+        </div>
+
         {isLoadingGroups ? (
           <div className="space-y-3 p-5">
             <div className="h-14 animate-pulse rounded-xl bg-[#F3F4F6]" />
@@ -423,31 +476,42 @@ export function AdminGroupsPage() {
                       <tr
                         key={group.id}
                         onClick={() => handleViewGroup(group.id)}
-                        className="cursor-pointer border-b border-[#F9FAFB] transition-colors hover:bg-[#F0FAF5]"
+                        className={`cursor-pointer border-b border-[#F9FAFB] transition-colors ${
+                          group.isBanned
+                            ? "bg-[#FEF2F2] hover:bg-[#FEE2E2]"
+                            : "hover:bg-[#F0FAF5]"
+                        }`}
                       >
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-3">
                             <div
-                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base shadow-sm"
+                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base shadow-sm ${
+                                group.isBanned ? "ring-1 ring-[#FCA5A5]" : ""
+                              }`}
                               style={{ background: group.color }}
                             >
                               {group.icon}
                             </div>
                             <p
-                              className="text-sm text-[#111827]"
+                              className={`text-sm ${group.isBanned ? "text-[#991B1B]" : "text-[#111827]"}`}
                               style={{ fontWeight: 700 }}
                             >
                               {group.name}
                             </p>
+                            {group.isBanned && (
+                              <span className="rounded-full bg-[#FEE2E2] px-2.5 py-1 text-[10px] uppercase tracking-wide text-[#991B1B]">
+                                banned
+                              </span>
+                            )}
                           </div>
                         </td>
-                        <td className="whitespace-nowrap px-5 py-3.5 text-sm text-[#374151]">
+                        <td className={`whitespace-nowrap px-5 py-3.5 text-sm ${group.isBanned ? "text-[#B91C1C]" : "text-[#374151]"}`}>
                           {owner?.name ?? "Unknown"}
                         </td>
-                        <td className="whitespace-nowrap px-5 py-3.5 text-sm text-[#374151]">
+                        <td className={`whitespace-nowrap px-5 py-3.5 text-sm ${group.isBanned ? "text-[#B91C1C]" : "text-[#374151]"}`}>
                           {group.members.length} {t.members}
                         </td>
-                        <td className="whitespace-nowrap px-5 py-3.5 text-sm text-[#374151]">
+                        <td className={`whitespace-nowrap px-5 py-3.5 text-sm ${group.isBanned ? "text-[#B91C1C]" : "text-[#374151]"}`}>
                           {formatLocalDate(group.updatedAt)}
                         </td>
                         <td className="whitespace-nowrap px-5 py-3.5">
@@ -463,18 +527,20 @@ export function AdminGroupsPage() {
                             >
                               <Eye className="h-4 w-4" />
                             </button>
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                void handleDeleteGroup(group);
-                              }}
-                              disabled={deletingGroupId === group.id}
-                              className="flex h-8 w-8 items-center justify-center rounded-lg text-[#6B7280] transition-colors hover:bg-[#FEF2F2] hover:text-[#B91C1C] disabled:cursor-not-allowed disabled:opacity-40"
-                              title={t.deleteGroup}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            {!group.isBanned && (
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void handleDeleteGroup(group);
+                                }}
+                                disabled={deletingGroupId === group.id}
+                                className="flex h-8 w-8 items-center justify-center rounded-lg text-[#6B7280] transition-colors hover:bg-[#FEF2F2] hover:text-[#B91C1C] disabled:cursor-not-allowed disabled:opacity-40"
+                                title={t.deleteGroup}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -504,7 +570,7 @@ export function AdminGroupsPage() {
             className="absolute inset-0 bg-black/35 backdrop-blur-sm"
             onClick={handleCloseGroupDetail}
           />
-          <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[1.75rem] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_64px_rgba(17,24,39,0.22)]">
+          <div className="relative min-h-[28rem] max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[1.75rem] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_64px_rgba(17,24,39,0.22)]">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
                 Group Detail
@@ -525,16 +591,18 @@ export function AdminGroupsPage() {
                     <Shield className="h-3.5 w-3.5" />
                     {selectedGroup.isBanned ? "Unban group" : "Ban group"}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleDeleteGroup(selectedGroup)}
-                    disabled={deletingGroupId === selectedGroup.id}
-                    className="inline-flex items-center gap-2 rounded-xl bg-[#FEF2F2] px-3 py-1.5 text-xs text-[#B91C1C] transition-colors hover:bg-[#FEE2E2] disabled:cursor-not-allowed disabled:opacity-60"
-                    style={{ fontWeight: 600 }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    {deletingGroupId === selectedGroup.id ? t.deleting : t.deleteGroup}
-                  </button>
+                  {!selectedGroup.isBanned && (
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteGroup(selectedGroup)}
+                      disabled={deletingGroupId === selectedGroup.id}
+                      className="inline-flex items-center gap-2 rounded-xl bg-[#FEF2F2] px-3 py-1.5 text-xs text-[#B91C1C] transition-colors hover:bg-[#FEE2E2] disabled:cursor-not-allowed disabled:opacity-60"
+                      style={{ fontWeight: 600 }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      {deletingGroupId === selectedGroup.id ? t.deleting : t.deleteGroup}
+                    </button>
+                  )}
                 </div>
               )}
             </div>

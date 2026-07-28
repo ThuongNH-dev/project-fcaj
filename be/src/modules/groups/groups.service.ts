@@ -84,6 +84,12 @@ async function getGroupDocumentById(groupId: string): Promise<GroupDocument | nu
   });
 }
 
+export function assertGroupIsActive(group: Pick<GroupDocument, "isBanned">) {
+  if (group.isBanned) {
+    throw new Error("This group has been banned.");
+  }
+}
+
 function normalizeGroupCurrency(currency?: string): SupportedCurrency {
   const normalizedCurrency = currency?.trim().toUpperCase();
 
@@ -317,7 +323,6 @@ export async function getGroupsByUserId(userId: string): Promise<PublicGroup[]> 
   const groupDocuments = await groups
     .find({
       "members.userId": userId,
-      isBanned: { $ne: true },
     })
     .sort({ updatedAt: -1 })
     .toArray();
@@ -331,7 +336,6 @@ export async function getGroupIdsByUserId(userId: string): Promise<string[]> {
     .find(
       {
         "members.userId": userId,
-        isBanned: { $ne: true },
       },
       {
         projection: {
@@ -368,10 +372,6 @@ export async function getGroupByIdForUser(
 
   if (getGroupPermission(groupDocument.members, userId) === "non-member") {
     return null;
-  }
-
-  if (groupDocument.isBanned) {
-    throw new Error("This group has been banned.");
   }
 
   return toPublicGroupWithMembers(groupDocument);
