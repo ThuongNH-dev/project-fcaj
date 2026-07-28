@@ -25,6 +25,10 @@ export interface LoginPayload {
   password: string;
 }
 
+export interface GoogleAuthPayload {
+  accessToken: string;
+}
+
 export interface RegisterPayload {
   firstName: string;
   lastName: string;

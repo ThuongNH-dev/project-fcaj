@@ -3,6 +3,7 @@ import type {
   AuthResponse,
   ForgotPasswordPayload,
   ForgotPasswordResponse,
+  GoogleAuthPayload,
   LoginPayload,
   RegisterPayload,
   ResetPasswordPayload,
@@ -17,6 +18,10 @@ export function loginUser(payload: LoginPayload) {
 
 export function registerUser(payload: RegisterPayload) {
   return postJson<RegisterPayload, AuthResponse>("/api/auth/register", payload);
+}
+
+export function loginWithGoogle(payload: GoogleAuthPayload) {
+  return postJson<GoogleAuthPayload, AuthResponse>("/api/auth/google", payload);
 }
 
 export function forgotPassword(payload: ForgotPasswordPayload) {
