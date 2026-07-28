@@ -94,6 +94,7 @@ export function Sidebar({ currentPath }: SidebarProps) {
         <div className={`px-3 pb-3 ${collapsed ? "flex justify-center" : ""}`}>
           <div className="flex items-center gap-0.5 bg-[#F3F4F6] rounded-xl p-0.5 w-full">
             <button
+              type="button"
               onClick={() => setLang("en")}
               className={`flex-1 py-1.5 rounded-lg text-xs transition-all duration-150 ${
                 lang === "en"
@@ -105,6 +106,7 @@ export function Sidebar({ currentPath }: SidebarProps) {
               EN
             </button>
             <button
+              type="button"
               onClick={() => setLang("vi")}
               className={`flex-1 py-1.5 rounded-lg text-xs transition-all duration-150 ${
                 lang === "vi"

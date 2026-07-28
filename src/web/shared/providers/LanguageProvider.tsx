@@ -532,7 +532,7 @@ export const translations = {
     billingProDesc: "Gói Pro của bạn đang hoạt động.",
     currentPlanSectionTitle: "Gói hiện tại",
     proInclusionsTitle: "Pro bao gồm gì",
-    billingFreeInclusionsTitle: "Bạn sẽ nhận được gì với gói Free",
+    billingFreeInclusionsTitle: "Bạn sẽ nhận được gì với gói Pro",
     autoRenewTitle: "Tự động gia hạn gói Pro",
     autoRenewDesc: "Khi bật, việc gia hạn gói Pro sẽ được chuẩn bị tự động cho chu kỳ tiếp theo.",
     autoRenewOn: "Tự động gia hạn đang bật",

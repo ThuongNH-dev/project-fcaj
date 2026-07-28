@@ -59,6 +59,7 @@ export function Navbar({ currentPath }: NavbarProps) {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-0.5 bg-[#F3F4F6] rounded-xl p-0.5">
             <button
+              type="button"
               onClick={() => setLang("en")}
               className={`px-2.5 py-1 rounded-lg text-xs transition-all ${
                 lang === "en"
@@ -70,6 +71,7 @@ export function Navbar({ currentPath }: NavbarProps) {
               EN
             </button>
             <button
+              type="button"
               onClick={() => setLang("vi")}
               className={`px-2.5 py-1 rounded-lg text-xs transition-all ${
                 lang === "vi"
