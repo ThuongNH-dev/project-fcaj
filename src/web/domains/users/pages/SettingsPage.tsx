@@ -571,7 +571,9 @@ export function SettingsPage() {
   ];
 
   const currentBillingPlan = billingSummary.profile.plan;
-  const isProPlan = currentBillingPlan === "pro";
+  const normalizedBillingPlan = String(currentBillingPlan ?? "").trim().toLowerCase();
+  const isFreePlan = normalizedBillingPlan === "free";
+  const isProPlan = !isFreePlan;
   const billingPlanLabel = isProPlan ? t.pro : t.free;
   const billingPlanDescription = isProPlan
     ? t.billingProDesc
@@ -588,22 +590,27 @@ export function SettingsPage() {
   const autoRenewEnabled = billingSummary.profile.autoRenew;
   const currentPlanLimits = isProPlan
     ? [
-        "Unlimited groups",
-        "Unlimited expenses",
-        "Receipt scan included",
+        t.unlimitedGroups ?? "Unlimited groups",
+        t.unlimitedExpenses ?? "Unlimited expenses",
+        t.receiptScanIncluded ?? "Receipt scan included",
       ]
     : [
-        `Groups limited to ${billingSummary.usage.groupLimit ?? 0}`,
-        `Expenses limited to ${billingSummary.usage.expenseLimit ?? 0} per month`,
-        "Receipt scan not included",
+        t.groupsLimitedTo?.replace("{limit}", String(billingSummary.usage.groupLimit ?? 0)) ??
+          `Groups limited to ${billingSummary.usage.groupLimit ?? 0}`,
+        t.expensesLimitedTo
+          ?.replace("{limit}", String(billingSummary.usage.expenseLimit ?? 0))
+          .replace("{period}", "per month") ??
+          `Expenses limited to ${billingSummary.usage.expenseLimit ?? 0} per month`,
+        t.receiptScanNotIncluded ?? "Receipt scan not included",
       ];
   const proBenefits = [
     billingSummary.profile.plan === "pro"
-      ? `Unlimited groups and expenses`
-      : `Unlimited groups and expenses after upgrade`,
+      ? t.unlimitedGroupsAndExpenses ?? "Unlimited groups and expenses"
+      : t.unlimitedGroupsAndExpensesAfterUpgrade ??
+        "Unlimited groups and expenses after upgrade",
     billingSummary.profile.plan === "pro"
-      ? `Receipt scan is included`
-      : `Receipt scan unlocks with Pro`,
+      ? t.receiptScanIncludedBenefit ?? "Receipt scan is included"
+      : t.receiptScanUnlocksWithPro ?? "Receipt scan unlocks with Pro",
   ];
 
   return (
@@ -1219,8 +1226,8 @@ export function SettingsPage() {
                       </ul>
                     </div>
                     <div className="rounded-2xl border border-[#E5E7EB] bg-[#F9FAFB] p-4">
-                      <p className="text-sm text-[#111827]" style={{ fontWeight: 700 }}>
-                        {isProPlan ? "What Pro includes" : "What you'll get with Pro"}
+                    <p className="text-sm text-[#111827]" style={{ fontWeight: 700 }}>
+                        {isProPlan ? t.proInclusionsTitle : t.billingFreeInclusionsTitle}
                       </p>
                       <ul className="mt-3 space-y-2 text-sm text-[#374151]">
                         {proBenefits.map((benefit) => (
@@ -1235,12 +1242,12 @@ export function SettingsPage() {
                       <div className="flex items-center justify-between gap-4">
                         <div>
                           <p className="text-sm text-[#111827]" style={{ fontWeight: 700 }}>
-                            {t.autoRenew ?? "Auto-renew Pro plan"}
-                          </p>
-                          <p className="text-xs text-[#6B7280] mt-1">
+                          {t.autoRenewTitle ?? "Auto-renew Pro plan"}
+                        </p>
+                        <p className="text-xs text-[#6B7280] mt-1">
                             {t.autoRenewDesc ??
                               "When enabled, your Pro plan renewal will be prepared automatically for the next cycle."}
-                          </p>
+                        </p>
                         </div>
                         <button
                           type="button"
@@ -1255,13 +1262,13 @@ export function SettingsPage() {
                         </button>
                       </div>
                       <p className="text-xs text-[#6B7280] mt-3">
-                        {autoRenewEnabled
-                          ? t.autoRenewEnabled ?? "Auto-renew is on"
-                          : t.autoRenewDisabled ?? "Auto-renew is off"}
+                          {autoRenewEnabled
+                          ? t.autoRenewOn ?? "Auto-renew is on"
+                          : t.autoRenewOff ?? "Auto-renew is off"}
                       </p>
                       {!isProPlan && (
                         <p className="text-xs text-[#B45309] mt-2">
-                          Auto-renew is available only while Pro is active.
+                          {t.autoRenewProOnly ?? "Auto-renew is available only while Pro is active."}
                         </p>
                       )}
                     </div>
