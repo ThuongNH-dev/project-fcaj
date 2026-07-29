@@ -4,6 +4,7 @@ import {
   getJson,
   patchJson,
 } from "../../../shared/api/client";
+import { getStoredToken } from "../../auth";
 import type {
   AdminActivityResponse,
   AdminDashboardResponse,
@@ -53,6 +54,22 @@ export function deleteAdminUser(userId: string) {
 
 export function downloadAdminUsersExport() {
   return downloadFile("/api/admin/users/export");
+}
+
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL?.replace(/\/$/, "") || "http://localhost:5000";
+
+export async function fetchAdminUsersExportText() {
+  const token = getStoredToken();
+  const response = await fetch(`${API_BASE_URL}/api/admin/users/export`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+
+  if (!response.ok) {
+    throw new Error("Unable to export users.");
+  }
+
+  return response.text();
 }
 
 export function getAdminGroups() {
