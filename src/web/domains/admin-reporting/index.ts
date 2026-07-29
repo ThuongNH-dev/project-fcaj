@@ -2,6 +2,7 @@ export {
   deleteAdminUser,
   deleteAdminGroup,
   downloadAdminUsersExport,
+  fetchAdminUsersExportText,
   getAdminActivityLogs,
   getAdminDashboard,
   getAdminGroup,
