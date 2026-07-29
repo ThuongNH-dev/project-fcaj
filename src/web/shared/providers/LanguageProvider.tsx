@@ -188,6 +188,7 @@ export const translations = {
     // Admin
     adminTitle: "Admin Dashboard", adminDesc: "Manage users, monitor activity, and export data.",
     exportData: "Export Data", totalUsers: "Total Users", totalGroups: "Total Groups",
+    exportPrint: "Print", exportCsv: "Csv", exportExcel: "Excel", exportPdf: "Pdf", exportCopy: "Copy",
     rejectedTx: "Rejected Tx", users: "Users", uploads: "Uploads",
     activityLogs: "Activity Logs", searchUsers: "Search users...",
     noUsersYet: "No users yet", noUsersDesc: "Users will appear here once they sign up.",
@@ -484,6 +485,7 @@ export const translations = {
     // Admin
     adminTitle: "Bảng quản trị", adminDesc: "Quản lý người dùng, theo dõi hoạt động và xuất dữ liệu.",
     exportData: "Xuất dữ liệu", totalUsers: "Tổng người dùng", totalGroups: "Tổng nhóm",
+    exportPrint: "In", exportCsv: "Csv", exportExcel: "Excel", exportPdf: "Pdf", exportCopy: "Sao chép",
     rejectedTx: "Giao dịch từ chối", users: "Người dùng", uploads: "Tải lên",
     activityLogs: "Nhật ký hoạt động", searchUsers: "Tìm kiếm người dùng...",
     noUsersYet: "Chưa có người dùng", noUsersDesc: "Người dùng sẽ xuất hiện khi họ đăng ký.",
