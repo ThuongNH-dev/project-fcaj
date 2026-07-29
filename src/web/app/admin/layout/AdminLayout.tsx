@@ -1,10 +1,23 @@
-import { Download, Loader2, LogOut, Shield } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  ChevronDown,
+  Copy,
+  Download,
+  FileSpreadsheet,
+  FileText,
+  FileType,
+  Loader2,
+  LogOut,
+  Printer,
+  Shield,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, Outlet, useLocation, useNavigate, useOutletContext } from "react-router";
 import { AdminRoute } from "../guards/AdminRoute";
 import type { AdminDashboardStats } from "../../../domains/admin-reporting";
 import {
   downloadAdminUsersExport,
+  fetchAdminUsersExportText,
   getAdminDashboard,
 } from "../../../domains/admin-reporting";
 import { clearStoredUser, getStoredBanNotice, useStoredUser } from "../../../domains/auth";
@@ -26,8 +39,15 @@ export function useAdminLayoutContext() {
 export function AdminLayout() {
   const [errorMessage, setErrorMessage] = useState("");
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [exportMenuPosition, setExportMenuPosition] = useState<{
+    top: number;
+    right: number;
+  } | null>(null);
   const [isLoadingDashboard, setIsLoadingDashboard] = useState(true);
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+  const exportMenuPortalRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const { showToast } = useFeedback();
@@ -56,6 +76,28 @@ export function AdminLayout() {
     void loadDashboard();
   }, []);
 
+  useEffect(() => {
+    if (!isExportMenuOpen) {
+      return;
+    }
+
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Node;
+      const clickedTrigger = exportMenuRef.current?.contains(target);
+      const clickedMenu = exportMenuPortalRef.current?.contains(target);
+
+      if (!clickedTrigger && !clickedMenu) {
+        setIsExportMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isExportMenuOpen]);
+
   const statCards = getAdminStatCards(
     {
       newUsersLast7Days: stats?.newUsersLast7Days,
@@ -71,10 +113,97 @@ export function AdminLayout() {
   const isUsersPage =
     location.pathname === "/admin" || location.pathname.startsWith("/admin/users");
 
-  async function handleExportData() {
+  function parseCsv(csvText: string): string[][] {
+    const rows: string[][] = [];
+    let currentRow: string[] = [];
+    let currentField = "";
+    let isInsideQuotes = false;
+
+    for (let index = 0; index < csvText.length; index += 1) {
+      const char = csvText[index];
+
+      if (isInsideQuotes) {
+        if (char === '"' && csvText[index + 1] === '"') {
+          currentField += '"';
+          index += 1;
+        } else if (char === '"') {
+          isInsideQuotes = false;
+        } else {
+          currentField += char;
+        }
+        continue;
+      }
+
+      if (char === '"') {
+        isInsideQuotes = true;
+      } else if (char === ",") {
+        currentRow.push(currentField);
+        currentField = "";
+      } else if (char === "\n" || char === "\r") {
+        if (char === "\r" && csvText[index + 1] === "\n") {
+          index += 1;
+        }
+        currentRow.push(currentField);
+        rows.push(currentRow);
+        currentRow = [];
+        currentField = "";
+      } else {
+        currentField += char;
+      }
+    }
+
+    if (currentField.length > 0 || currentRow.length > 0) {
+      currentRow.push(currentField);
+      rows.push(currentRow);
+    }
+
+    return rows.filter((row) => row.some((cell) => cell.trim().length > 0));
+  }
+
+  function buildPrintableUsersHtml(csvText: string) {
+    const rows = parseCsv(csvText);
+    const [headerRow, ...bodyRows] = rows;
+    const headerHtml = (headerRow ?? [])
+      .map((cell) => `<th>${cell}</th>`)
+      .join("");
+    const bodyHtml = bodyRows
+      .map(
+        (row) =>
+          `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`,
+      )
+      .join("");
+
+    return `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Splitly - User Export</title>
+    <style>
+      body { font-family: Arial, sans-serif; padding: 24px; color: #111827; }
+      h1 { font-size: 18px; margin-bottom: 4px; }
+      p { font-size: 12px; color: #6B7280; margin-top: 0; margin-bottom: 16px; }
+      table { width: 100%; border-collapse: collapse; font-size: 11px; }
+      th, td { border: 1px solid #E5E7EB; padding: 6px 8px; text-align: left; white-space: nowrap; }
+      th { background: #F9FAFB; }
+    </style>
+  </head>
+  <body>
+    <h1>Splitly - User Export</h1>
+    <p>Generated on ${new Date().toLocaleString()}</p>
+    <table>
+      <thead><tr>${headerHtml}</tr></thead>
+      <tbody>${bodyHtml}</tbody>
+    </table>
+  </body>
+</html>`;
+  }
+
+  async function handleCsvExport() {
     if (!isUsersPage) {
       return;
     }
+
+    setIsExportMenuOpen(false);
 
     try {
       setIsExporting(true);
@@ -93,6 +222,94 @@ export function AdminLayout() {
       setIsExporting(false);
     }
   }
+
+  async function handlePrintExport() {
+    if (!isUsersPage) {
+      return;
+    }
+
+    setIsExportMenuOpen(false);
+
+    try {
+      setIsExporting(true);
+      const csvText = await fetchAdminUsersExportText();
+      const printFrame = document.createElement("iframe");
+
+      printFrame.style.position = "fixed";
+      printFrame.style.right = "0";
+      printFrame.style.bottom = "0";
+      printFrame.style.width = "0";
+      printFrame.style.height = "0";
+      printFrame.style.border = "0";
+      document.body.appendChild(printFrame);
+
+      const frameDocument = printFrame.contentWindow?.document;
+
+      if (!frameDocument) {
+        throw new Error("Unable to open the print preview.");
+      }
+
+      frameDocument.open();
+      frameDocument.write(buildPrintableUsersHtml(csvText));
+      frameDocument.close();
+
+      printFrame.onload = () => {
+        printFrame.contentWindow?.focus();
+        printFrame.contentWindow?.print();
+        window.setTimeout(() => {
+          document.body.removeChild(printFrame);
+        }, 1000);
+      };
+    } catch (error) {
+      showToast({
+        variant: "error",
+        message:
+          error instanceof Error ? error.message : "Unable to print users.",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
+  async function handleCopyExport() {
+    if (!isUsersPage) {
+      return;
+    }
+
+    setIsExportMenuOpen(false);
+
+    try {
+      setIsExporting(true);
+      const csvText = await fetchAdminUsersExportText();
+
+      await navigator.clipboard.writeText(csvText);
+      showToast({
+        variant: "success",
+        message: "User data copied to clipboard.",
+      });
+    } catch (error) {
+      showToast({
+        variant: "error",
+        message:
+          error instanceof Error ? error.message : "Unable to copy users.",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
+  const exportMenuOptions = [
+    { key: "print", icon: Printer, label: t.exportPrint, onSelect: () => void handlePrintExport() },
+    { key: "csv", icon: FileText, label: t.exportCsv, onSelect: () => void handleCsvExport() },
+    {
+      key: "excel",
+      icon: FileSpreadsheet,
+      label: t.exportExcel,
+      onSelect: () => void handleCsvExport(),
+    },
+    { key: "pdf", icon: FileType, label: t.exportPdf, onSelect: () => void handlePrintExport() },
+    { key: "copy", icon: Copy, label: t.exportCopy, onSelect: () => void handleCopyExport() },
+  ];
 
   function handleLogout() {
     clearStoredUser();
@@ -161,25 +378,68 @@ export function AdminLayout() {
                   <p className="text-sm text-[#6B7280] mt-0.5">{t.adminDesc}</p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => void handleExportData()}
-                disabled={!isUsersPage || isExporting}
-                className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
-                  isUsersPage
-                    ? "bg-[#111827] text-white shadow-sm hover:bg-[#1F2937] active:scale-[0.98]"
-                    : "border border-[#E5E7EB] bg-white text-[#9CA3AF]"
-                }`}
-                style={{ fontWeight: 600 }}
-                title={isUsersPage ? t.exportData : "User export is available on the Users tab."}
-              >
-                {isExporting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="h-4 w-4" />
-                )}
-                {isExporting ? "Exporting..." : t.exportData}
-              </button>
+              <div className="relative" ref={exportMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!isUsersPage) {
+                      return;
+                    }
+
+                    const buttonRect = exportMenuRef.current?.getBoundingClientRect();
+
+                    if (buttonRect) {
+                      setExportMenuPosition({
+                        top: buttonRect.bottom + 8,
+                        right: window.innerWidth - buttonRect.right,
+                      });
+                    }
+
+                    setIsExportMenuOpen((open) => !open);
+                  }}
+                  disabled={!isUsersPage || isExporting}
+                  className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+                    isUsersPage
+                      ? "bg-[#111827] text-white shadow-sm hover:bg-[#1F2937] active:scale-[0.98]"
+                      : "border border-[#E5E7EB] bg-white text-[#9CA3AF]"
+                  }`}
+                  style={{ fontWeight: 600 }}
+                  title={isUsersPage ? t.exportData : "User export is available on the Users tab."}
+                >
+                  {isExporting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  {isExporting ? "Exporting..." : t.exportData}
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 transition-transform ${isExportMenuOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+
+                {isExportMenuOpen && exportMenuPosition &&
+                  createPortal(
+                    <div
+                      ref={exportMenuPortalRef}
+                      className="fixed z-[140] w-44 overflow-hidden rounded-xl border border-[#E5E7EB] bg-white py-1.5 shadow-[0_12px_32px_rgba(17,24,39,0.14)]"
+                      style={{ top: exportMenuPosition.top, right: exportMenuPosition.right }}
+                    >
+                      {exportMenuOptions.map(({ key, icon: OptionIcon, label, onSelect }) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={onSelect}
+                          className="flex w-full items-center gap-2.5 px-4 py-2 text-left text-sm text-[#374151] transition-colors hover:bg-[#F9FAFB]"
+                          style={{ fontWeight: 500 }}
+                      >
+                        <OptionIcon className="h-4 w-4 text-[#6B7280]" />
+                        {label}
+                      </button>
+                    ))}
+                    </div>,
+                    document.body,
+                  )}
+              </div>
             </div>
           </div>
 
