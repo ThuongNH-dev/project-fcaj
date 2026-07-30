@@ -24,6 +24,7 @@ import type {
 } from "../models/settlements.types";
 
 const PAGE_LIMIT = 10;
+const SENT_TIMELINE_PAGE_LIMIT = 4;
 const SUMMARY_PAGE_LIMIT = 100;
 const EMPTY_PAGINATION: SettlementPagination = {
   page: 1,
@@ -208,7 +209,7 @@ export function SettlementPage() {
       setSentErrorMessage("");
       const response = await getMySettlements({
         page: sentPage,
-        limit: PAGE_LIMIT,
+        limit: SENT_TIMELINE_PAGE_LIMIT,
         status: "sent",
       });
 
