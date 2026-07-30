@@ -410,38 +410,38 @@ export function AdminDashboardPage() {
         </div>
       )}
 
-      <AdminSearchInput
-        placeholder={t.searchUsers}
-        value={search}
-        onChange={setSearch}
-      />
-
-      <div className="mb-5 flex w-fit flex-wrap items-center gap-1 rounded-xl border border-[#E5E7EB] bg-white p-1">
-        {[
-        { key: "all", label: t.allUsers },
-          { key: "admin", label: t.adminsOnly },
-          { key: "user", label: t.standardUsersOnly },
-          { key: "banned", label: "Banned" },
-        ].map((filterOption) => (
-          <button
-            key={filterOption.key}
-            type="button"
-            onClick={() =>
-              setRoleFilter(filterOption.key as "all" | "admin" | "user" | "banned")
-            }
-            className={`rounded-lg px-4 py-2 text-sm transition-all ${
-              roleFilter === filterOption.key
-                ? "bg-[#16A34A] text-white shadow-sm"
-                : "text-[#6B7280] hover:text-[#111827]"
-            }`}
-            style={{ fontWeight: 600 }}
-          >
-            {filterOption.label}
-          </button>
-        ))}
-      </div>
-
       <div className="overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#F3F4F6] px-5 py-4">
+          <div>
+            <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
+              {t.userManagement}
+            </h3>
+            <p className="mt-1 text-sm text-[#6B7280]">{t.userManagementDesc}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative">
+              <select
+                value={roleFilter}
+                onChange={(event) =>
+                  setRoleFilter(event.target.value as "all" | "admin" | "user" | "banned")
+                }
+                className="h-9 w-full appearance-none rounded-xl border border-[#E5E7EB] bg-white pl-4 pr-9 text-sm text-[#374151] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] sm:w-44"
+              >
+                <option value="all">{t.allUsers}</option>
+                <option value="admin">{t.adminsOnly}</option>
+                <option value="user">{t.standardUsersOnly}</option>
+                <option value="banned">Banned</option>
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
+            </div>
+            <AdminSearchInput
+              className="w-full max-w-xs sm:w-64"
+              placeholder={t.searchUsers}
+              value={search}
+              onChange={setSearch}
+            />
+          </div>
+        </div>
         {isLoadingUsers ? (
             <div className="space-y-3 p-5">
               <div className="h-14 animate-pulse rounded-xl bg-[#F3F4F6]" />
@@ -452,14 +452,6 @@ export function AdminDashboardPage() {
             </div>
           ) : filteredUsers.length > 0 ? (
             <>
-              <div className="px-5 py-4 border-b border-[#F3F4F6]">
-                <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
-                  {t.userManagement}
-                </h3>
-                <p className="mt-1 text-sm text-[#6B7280]">
-                  {t.userManagementDesc}
-                </p>
-              </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>

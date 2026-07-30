@@ -1,4 +1,4 @@
-import { TrendingUp, X } from "lucide-react";
+import { ChevronDown, TrendingUp, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
@@ -202,36 +202,6 @@ export function AdminSettlementsPage() {
         </div>
       )}
 
-      <AdminSearchInput
-        placeholder="Search settlements..."
-        value={search}
-        onChange={setSearch}
-      />
-
-      <div className="mb-5 flex flex-wrap items-center gap-2">
-        {[
-          { key: "all", label: "All" },
-          { key: "pending", label: "Pending" },
-          { key: "settled", label: "Settled" },
-        ].map((filterOption) => (
-          <button
-            key={filterOption.key}
-            type="button"
-            onClick={() =>
-              setSettlementFilter(filterOption.key as "all" | "pending" | "settled")
-            }
-            className={`rounded-xl px-4 py-2 text-sm transition-all ${
-              settlementFilter === filterOption.key
-                ? "bg-[#16A34A] text-white shadow-sm"
-                : "border border-[#E5E7EB] bg-white text-[#6B7280] hover:text-[#111827]"
-            }`}
-            style={{ fontWeight: 600 }}
-          >
-            {filterOption.label}
-          </button>
-        ))}
-      </div>
-
       <div className="space-y-6">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
@@ -275,6 +245,40 @@ export function AdminSettlementsPage() {
         </div>
 
         <div className="overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#F3F4F6] px-5 py-4">
+            <div>
+              <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
+                Settlement Queue
+              </h3>
+              <p className="mt-1 text-sm text-[#6B7280]">
+                Review pending and settled expenses across all groups.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative">
+                <select
+                  value={settlementFilter}
+                  onChange={(event) =>
+                    setSettlementFilter(
+                      event.target.value as "all" | "pending" | "settled",
+                    )
+                  }
+                  className="h-9 w-full appearance-none rounded-xl border border-[#E5E7EB] bg-white pl-4 pr-9 text-sm text-[#374151] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] sm:w-40"
+                >
+                  <option value="all">All</option>
+                  <option value="pending">Pending</option>
+                  <option value="settled">Settled</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9CA3AF]" />
+              </div>
+              <AdminSearchInput
+                className="w-full max-w-xs sm:w-64"
+                placeholder="Search settlements..."
+                value={search}
+                onChange={setSearch}
+              />
+            </div>
+          </div>
           {isLoadingSettlements ? (
               <div className="space-y-3 p-5">
                 <div className="h-16 animate-pulse rounded-xl bg-[#F3F4F6]" />
@@ -283,14 +287,6 @@ export function AdminSettlementsPage() {
               </div>
             ) : filteredSettlements.length > 0 ? (
               <div className="divide-y divide-[#F3F4F6]">
-                <div className="px-5 py-4">
-                  <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
-                    Settlement Queue
-                  </h3>
-                  <p className="mt-1 text-sm text-[#6B7280]">
-                    Review pending and settled expenses across all groups.
-                  </p>
-                </div>
                 {pagedSettlements.map((settlement) => {
                   const isSelected = selectedSettlementId === settlement.id;
                   const statusClassName =
