@@ -702,19 +702,21 @@ export function GroupDetailPage() {
                               >
                                 {toTitleCase(expense.settlementStatus)}
                               </span>
-                              <span
-                                className={`text-xs px-2.5 py-1 rounded-full ${
-                                  reviewStyles[expense.reviewStatus] ||
-                                  "bg-[#F3F4F6] text-[#6B7280]"
-                                }`}
-                                style={{ fontWeight: 500 }}
-                              >
-                                {expense.reviewStatus === "approved"
-                                  ? "Receipt approved"
-                                  : expense.reviewStatus === "rejected"
-                                    ? "Receipt rejected"
-                                    : "Receipt pending"}
-                              </span>
+                              {expense.receiptId ? (
+                                <span
+                                  className={`text-xs px-2.5 py-1 rounded-full ${
+                                    reviewStyles[expense.reviewStatus] ||
+                                    "bg-[#F3F4F6] text-[#6B7280]"
+                                  }`}
+                                  style={{ fontWeight: 500 }}
+                                >
+                                  {expense.reviewStatus === "approved"
+                                    ? "Receipt approved"
+                                    : expense.reviewStatus === "rejected"
+                                      ? "Receipt rejected"
+                                      : "Receipt pending"}
+                                </span>
+                              ) : null}
                             </div>
                           </td>
                           <td className="px-5 py-3.5 text-right">
