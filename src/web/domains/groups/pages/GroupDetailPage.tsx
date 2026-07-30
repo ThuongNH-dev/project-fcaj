@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useParams } from "react-router";
 import {
+  Eye,
   ArrowLeft,
   Plus,
   Users,
@@ -23,6 +24,7 @@ import {
   type NewExpense,
 } from "../../expenses";
 import { uploadReceiptFile } from "../../receipts";
+import { getReceiptViewUrl } from "../../receipts";
 import {
   addGroupMember,
   canManageGroupMembers,
@@ -53,6 +55,12 @@ const statusStyles: Record<string, string> = {
   pending: "bg-[#FEF3C7] text-[#92400e]",
 };
 
+const reviewStyles: Record<string, string> = {
+  approved: "bg-[#D1FAE5] text-[#065f46]",
+  pending: "bg-[#FEF3C7] text-[#92400e]",
+  rejected: "bg-[#FEE2E2] text-[#991b1b]",
+};
+
 function addCurrencyAmount(totals: Map<string, number>, currency: string, amount: number) {
   totals.set(currency, Number(((totals.get(currency) ?? 0) + amount).toFixed(2)));
 }
@@ -69,6 +77,8 @@ export function GroupDetailPage() {
   const [memberEmail, setMemberEmail] = useState("");
   const [isSubmittingMember, setIsSubmittingMember] = useState(false);
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
+  const [selectedReceiptUrl, setSelectedReceiptUrl] = useState("");
+  const [selectedReceiptTitle, setSelectedReceiptTitle] = useState("");
   const { t } = useLanguage();
   const { confirm, showToast } = useFeedback();
   const currentUser = useStoredUser();
@@ -412,6 +422,28 @@ export function GroupDetailPage() {
     }
   };
 
+  const handleOpenReceipt = async (expense: Expense) => {
+    if (!expense.receiptId) {
+      return;
+    }
+
+    try {
+      const response = await getReceiptViewUrl(expense.receiptId);
+      setSelectedReceiptUrl(response.url ?? "");
+      setSelectedReceiptTitle(expense.title);
+    } catch (error) {
+      showToast({
+        variant: "error",
+        message: error instanceof Error ? error.message : "Unable to open receipt.",
+      });
+    }
+  };
+
+  const handleCloseReceipt = () => {
+    setSelectedReceiptUrl("");
+    setSelectedReceiptTitle("");
+  };
+
   return (
     <div className="lg:pl-60 min-h-screen bg-[#F6FBF8]">
       <div className="max-w-7xl mx-auto px-6 py-8 pt-16 lg:pt-8">
@@ -590,7 +622,7 @@ export function GroupDetailPage() {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-[#F3F4F6]">
-                        {[t.expense, t.category, t.paidBy, t.amount, t.date, t.status].map(
+                        {[t.expense, t.category, t.paidBy, t.amount, t.date, t.status, "Action"].map(
                           (heading) => (
                             <th
                               key={heading}
@@ -649,15 +681,45 @@ export function GroupDetailPage() {
                             {formatShortDate(expense.expenseDate)}
                           </td>
                           <td className="px-5 py-3.5">
-                            <span
-                              className={`text-xs px-2.5 py-1 rounded-full ${
-                                statusStyles[expense.settlementStatus] ||
-                                "bg-[#F3F4F6] text-[#6B7280]"
-                              }`}
-                              style={{ fontWeight: 500 }}
-                            >
-                              {toTitleCase(expense.settlementStatus)}
-                            </span>
+                            <div className="flex flex-wrap gap-2">
+                              <span
+                                className={`text-xs px-2.5 py-1 rounded-full ${
+                                  statusStyles[expense.settlementStatus] ||
+                                  "bg-[#F3F4F6] text-[#6B7280]"
+                                }`}
+                                style={{ fontWeight: 500 }}
+                              >
+                                {toTitleCase(expense.settlementStatus)}
+                              </span>
+                              <span
+                                className={`text-xs px-2.5 py-1 rounded-full ${
+                                  reviewStyles[expense.reviewStatus] ||
+                                  "bg-[#F3F4F6] text-[#6B7280]"
+                                }`}
+                                style={{ fontWeight: 500 }}
+                              >
+                                {expense.reviewStatus === "approved"
+                                  ? "Receipt approved"
+                                  : expense.reviewStatus === "rejected"
+                                    ? "Receipt rejected"
+                                    : "Receipt pending"}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5 text-right">
+                            <div className="flex flex-col items-end gap-2">
+                              {expense.receiptId && (
+                                <button
+                                  type="button"
+                                  onClick={() => void handleOpenReceipt(expense)}
+                                  className="inline-flex h-9 w-28 items-center justify-center gap-1 rounded-full border border-[#D1D5DB] px-3 text-xs text-[#111827] transition-colors hover:bg-[#F9FAFB]"
+                                  style={{ fontWeight: 600 }}
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                  View bill
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -824,6 +886,30 @@ export function GroupDetailPage() {
           onRequestReceiptUpgrade={handleRequestReceiptUpgrade}
         />,
         document.body,
+      )}
+      {selectedReceiptUrl && (
+        <div className="fixed inset-0 z-[240] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/45" onClick={handleCloseReceipt} />
+          <div className="relative w-full max-w-5xl overflow-hidden rounded-[1.5rem] bg-white shadow-[0_24px_64px_rgba(17,24,39,0.22)]">
+            <div className="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-4">
+              <div>
+                <p className="text-sm text-[#111827]" style={{ fontWeight: 700 }}>
+                  {selectedReceiptTitle}
+                </p>
+                <p className="text-xs text-[#6B7280]">Receipt preview</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseReceipt}
+                className="rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm text-[#374151]"
+                style={{ fontWeight: 600 }}
+              >
+                Close
+              </button>
+            </div>
+            <iframe src={selectedReceiptUrl} title={selectedReceiptTitle} className="h-[75vh] w-full" />
+          </div>
+        </div>
       )}
     </div>
   );

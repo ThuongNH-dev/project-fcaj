@@ -323,11 +323,11 @@ export async function markSettlementAsSentHandler(
       });
     }
 
-    // Only the debtor can mark as sent
-    if (existingSettlement.debtorUserId !== currentUser.id) {
-      return res.status(404).json({
+    // Only the creditor can mark as sent
+    if (existingSettlement.creditorUserId !== currentUser.id) {
+      return res.status(403).json({
         ok: false,
-        message: "Settlement not found.",
+        message: "Only the creditor can mark this settlement as paid.",
       });
     }
 
@@ -430,10 +430,10 @@ async function tryCreatePaymentSentNotification(
     amount: number;
     currency: string;
   },
-  debtor: MinimalUser,
+  actor: MinimalUser,
 ): Promise<boolean> {
   try {
-    const debtorName = `${debtor.firstName} ${debtor.lastName}`.trim();
+    const actorName = `${actor.firstName} ${actor.lastName}`.trim();
 
     const formattedAmount =
       settlement.currency === "VND"
@@ -445,10 +445,10 @@ async function tryCreatePaymentSentNotification(
 
     const created = await createNotificationIdempotently({
       recipientUserId: settlement.creditorUserId,
-      actorUserId: debtor.id,
+      actorUserId: actor.id,
       type: "payment_received",
       title: "Payment sent",
-      message: `${debtorName} marked a payment of ${formattedAmount} ${settlement.currency} as sent.`,
+      message: `${actorName} confirmed receipt of ${formattedAmount} ${settlement.currency}.`,
       groupId: settlement.groupId,
       expenseId: settlement.expenseId,
       settlementId,

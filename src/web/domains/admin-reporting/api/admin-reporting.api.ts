@@ -19,7 +19,10 @@ import type {
   AdminSettlementsQuery,
   AdminSettlementsResponse,
   AdminSettlementResponse,
+  AdminUploadViewUrlResponse,
   AdminUploadsResponse,
+  ReviewAdminUploadPayload,
+  ReviewAdminUploadResponse,
   UpdateAdminBanStatusPayload,
   UpdateAdminBanStatusResponse,
   UpdateAdminUserRolePayload,
@@ -106,6 +109,24 @@ export function updateAdminGroupBan(
 
 export function getAdminUploads() {
   return getJson<AdminUploadsResponse>("/api/admin/uploads");
+}
+
+export function getAdminUploadViewUrl(receiptId: string, download?: boolean) {
+  const query = download ? "?download=true" : "";
+
+  return getJson<AdminUploadViewUrlResponse>(
+    `/api/admin/uploads/${encodeURIComponent(receiptId)}/view-url${query}`,
+  );
+}
+
+export function reviewAdminUpload(
+  receiptId: string,
+  payload: ReviewAdminUploadPayload,
+) {
+  return patchJson<ReviewAdminUploadPayload, ReviewAdminUploadResponse>(
+    `/api/admin/uploads/${encodeURIComponent(receiptId)}/review`,
+    payload,
+  );
 }
 
 export function getAdminRejected() {

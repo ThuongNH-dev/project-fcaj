@@ -458,6 +458,7 @@ export function SettlementPage() {
   function renderPendingSettlements(settlements: Settlement[]) {
     return settlements.map((settlement) => {
       const isDebtor = settlement.debtorUserId === currentUser?.id;
+      const isCreditor = settlement.creditorUserId === currentUser?.id;
       const counterpartyId = isDebtor
         ? settlement.creditorUserId
         : settlement.debtorUserId;
@@ -507,7 +508,7 @@ export function SettlementPage() {
             >
               {formatCurrency(settlement.amount, settlement.currency)}
             </p>
-            {isDebtor && settlement.status === "pending" ? (
+            {isCreditor && settlement.status === "pending" ? (
               <button
                 type="button"
                 onClick={() => void handleMarkAsSent(settlement)}
@@ -519,7 +520,7 @@ export function SettlementPage() {
                 }`}
                 style={{ fontWeight: 600 }}
               >
-                {isSending ? t.updating : t.markAsSent}
+                {isSending ? t.updating : t.markAsPaid}
               </button>
             ) : null}
           </div>

@@ -27,7 +27,13 @@ export async function getAdminUploadRecords(): Promise<AdminUploadRecord[]> {
       ),
     ).filter((groupId) => MongoObjectId.isValid(groupId)),
     userIds: Array.from(
-      new Set(receiptDocuments.map((receiptDocument) => receiptDocument.uploadedByUserId)),
+      new Set(
+        receiptDocuments.flatMap((receiptDocument) =>
+          [receiptDocument.uploadedByUserId, receiptDocument.reviewedBy].filter(
+            (userId): userId is string => Boolean(userId),
+          ),
+        ),
+      ),
     ).filter((userId) => MongoObjectId.isValid(userId)),
   });
 
@@ -37,6 +43,9 @@ export async function getAdminUploadRecords(): Promise<AdminUploadRecord[]> {
         email: "",
         name: "Unknown user",
       };
+    const reviewedBy = receiptDocument.reviewedBy
+      ? referenceMaps.usersById.get(receiptDocument.reviewedBy) ?? null
+      : null;
     const expense = receiptDocument.expenseId
       ? referenceMaps.expensesById.get(receiptDocument.expenseId)
       : null;
@@ -55,6 +64,10 @@ export async function getAdminUploadRecords(): Promise<AdminUploadRecord[]> {
       ocrStatus: receiptDocument.ocrStatus,
       originalFileName: receiptDocument.originalFileName,
       processingStatus: receiptDocument.processingStatus,
+      rejectionReason: receiptDocument.rejectionReason,
+      reviewedAt: receiptDocument.reviewedAt?.toISOString() ?? null,
+      reviewedBy: receiptDocument.reviewedBy,
+      reviewedByName: reviewedBy?.name ?? null,
       reviewStatus: receiptDocument.reviewStatus,
       sizeInBytes: receiptDocument.sizeInBytes,
       storagePath: receiptDocument.storagePath,

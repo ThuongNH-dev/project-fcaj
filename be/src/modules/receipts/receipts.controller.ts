@@ -2,10 +2,11 @@ import type { Request, Response } from "express";
 import { ObjectId as MongoObjectId } from "mongodb";
 import { getUserById } from "../auth/auth.service.js";
 import { getExpenseByIdForUser } from "../expenses/expenses.service.js";
-import { getGroupByIdForUser } from "../groups/groups.service.js";
+import { getGroupByIdForUser, getGroupIdsByUserId } from "../groups/groups.service.js";
 import { getUsersCollection } from "../auth/auth.service.js";
 import {
   createReceiptUpload,
+  getReceiptUploadById,
   getReceiptUploadByIdForUser,
   getReceiptUploadsByUserId,
   normalizeReceiptMimeType,
@@ -13,6 +14,7 @@ import {
   normalizeReceiptSizeInBytes,
 } from "./receipts.service.js";
 import {
+  deleteReceiptObject,
   createReceiptFileAccessPresign,
   createReceiptUploadPresign,
 } from "./receipts.storage.js";
@@ -135,13 +137,41 @@ export async function getReceiptViewUrlHandler(req: Request, res: Response) {
       });
     }
 
-    const receipt = await getReceiptUploadByIdForUser(receiptId, currentUser.id);
+    const receipt = await getReceiptUploadById(receiptId);
 
     if (!receipt) {
       return res.status(404).json({
         ok: false,
         message: "Receipt not found.",
       });
+    }
+
+    if (receipt.reviewStatus === "rejected") {
+      return res.status(403).json({
+        ok: false,
+        message: "Rejected receipts cannot be viewed.",
+      });
+    }
+
+    const isAdmin = currentUser.role === "admin";
+    const isUploader = receipt.uploadedByUserId === currentUser.id;
+
+    if (receipt.reviewStatus === "pending" && !isAdmin && !isUploader) {
+      return res.status(403).json({
+        ok: false,
+        message: "Only admins and the uploader can view pending receipts.",
+      });
+    }
+
+    if (receipt.reviewStatus === "approved" && !isAdmin && !isUploader) {
+      const groupIds = await getGroupIdsByUserId(currentUser.id);
+
+      if (!receipt.groupId || !groupIds.includes(receipt.groupId)) {
+        return res.status(403).json({
+          ok: false,
+          message: "Receipt not found.",
+        });
+      }
     }
 
     const presignResult = await createReceiptFileAccessPresign({

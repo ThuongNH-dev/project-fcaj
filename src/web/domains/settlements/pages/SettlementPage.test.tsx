@@ -195,11 +195,11 @@ describe("SettlementPage", () => {
       name: "youAreOwedLabel",
     });
 
-    expect(within(debtorSection).getByRole("button", { name: "markAsSent" })).toBeInTheDocument();
-    expect(within(creditorSection).queryByRole("button", { name: "markAsSent" })).toBeNull();
+    expect(within(debtorSection).queryByRole("button", { name: "markAsPaid" })).toBeNull();
+    expect(within(creditorSection).getByRole("button", { name: "markAsPaid" })).toBeInTheDocument();
   });
 
-  it("marks a debtor settlement as sent and refreshes settlement data", async () => {
+  it("marks a creditor settlement as paid and refreshes settlement data", async () => {
     let wasMarkedAsSent = false;
     mockMarkSettlementAsSent.mockImplementation(async () => {
       wasMarkedAsSent = true;
@@ -229,11 +229,11 @@ describe("SettlementPage", () => {
     renderPage();
 
     fireEvent.click(
-      await screen.findByRole("button", { name: "markAsSent" }),
+      await screen.findByRole("button", { name: "markAsPaid" }),
     );
 
     await waitFor(() => {
-      expect(mockMarkSettlementAsSent).toHaveBeenCalledWith("settlement-debtor");
+      expect(mockMarkSettlementAsSent).toHaveBeenCalledWith("settlement-creditor");
     });
     expect(mockConfirm).toHaveBeenCalled();
     await waitFor(() => {
@@ -243,7 +243,7 @@ describe("SettlementPage", () => {
       });
     });
     await waitFor(() => {
-      expect(screen.queryByRole("button", { name: "markAsSent" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "markAsPaid" })).toBeNull();
     });
   });
 

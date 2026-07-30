@@ -12,9 +12,11 @@ import {
   getAdminSettlementByIdHandler,
   getAdminSettlementsHandler,
   getAdminSessionHandler,
+  getAdminUploadViewUrlHandler,
   getAdminUploadsHandler,
   getAdminUserByIdHandler,
   getAdminUsersHandler,
+  reviewAdminUploadHandler,
   updateAdminGroupBanHandler,
   updateAdminUserBanHandler,
   updateAdminUserRoleHandler,
@@ -35,6 +37,8 @@ adminRouter.get("/groups/:groupId", authMiddleware, requireAdmin, getAdminGroupB
 adminRouter.patch("/groups/:groupId/ban", authMiddleware, requireAdmin, updateAdminGroupBanHandler);
 adminRouter.delete("/groups/:groupId", authMiddleware, requireAdmin, deleteAdminGroupHandler);
 adminRouter.get("/uploads", authMiddleware, requireAdmin, getAdminUploadsHandler);
+adminRouter.get("/uploads/:receiptId/view-url", authMiddleware, requireAdmin, getAdminUploadViewUrlHandler);
+adminRouter.patch("/uploads/:receiptId/review", authMiddleware, requireAdmin, reviewAdminUploadHandler);
 adminRouter.get("/rejected", authMiddleware, requireAdmin, getAdminRejectedHandler);
 adminRouter.get("/settlements", authMiddleware, requireAdmin, getAdminSettlementsHandler);
 adminRouter.get(
