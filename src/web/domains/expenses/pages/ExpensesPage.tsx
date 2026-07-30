@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Pencil, Plus, Search, Receipt, Trash2 } from "lucide-react";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import {
   formatCurrency,
   formatShortDate,
@@ -17,7 +17,10 @@ import { createExpense, deleteExpense, getExpenses, updateExpense, type Expense 
 import { formatCurrencyBreakdown } from "../../settlements/lib/settlement.utils";
 import { getCurrentUserBilling, type CurrentUserBillingSummary } from "../../users";
 import { AdminPagination } from "../../../app/admin/components/AdminPagination";
-import { useAdminPagination } from "../../../app/admin/lib/admin.utils";
+import {
+  ADMIN_PAGE_SIZE,
+  useAdminPagination,
+} from "../../../app/admin/lib/admin.utils";
 
 const catColors: Record<string, string> = {
   food: "bg-[#D1FAE5] text-[#065f46]",
@@ -57,8 +60,13 @@ export function ExpensesPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [expenseToEdit, setExpenseToEdit] = useState<Expense | null>(null);
   const { t } = useLanguage();
+  const location = useLocation();
   const { confirm, showToast } = useFeedback();
   const currentUser = useStoredUser();
+  const focusedExpenseId = useMemo(
+    () => new URLSearchParams(location.search).get("expenseId"),
+    [location.search],
+  );
   const navigate = useNavigate();
   const preferredCurrency =
     currentUser?.defaultCurrency ?? expenses[0]?.currency ?? "VND";
@@ -150,6 +158,36 @@ export function ExpensesPage() {
     setPage: setExpensesPage,
     totalPages: expensesTotalPages,
   } = useAdminPagination(filteredExpenses);
+
+  useEffect(() => {
+    if (!focusedExpenseId || isLoading) {
+      return;
+    }
+
+    const focusedIndex = filteredExpenses.findIndex(
+      (expense) => expense.id === focusedExpenseId,
+    );
+
+    if (focusedIndex >= 0) {
+      setExpensesPage(Math.floor(focusedIndex / ADMIN_PAGE_SIZE) + 1);
+    }
+  }, [filteredExpenses, focusedExpenseId, isLoading, setExpensesPage]);
+
+  useEffect(() => {
+    if (!focusedExpenseId) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      const target = Array.from(
+        document.querySelectorAll<HTMLElement>("[data-expense-id]"),
+      ).find((element) => element.dataset.expenseId === focusedExpenseId);
+
+      target?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [expensesPage, focusedExpenseId, pagedExpenses]);
 
   const totalSpentByCurrency = filteredExpenses.reduce((totals, expense) => {
     const currentUserShare =
@@ -456,7 +494,12 @@ export function ExpensesPage() {
                     {pagedExpenses.map((expense) => (
                     <tr
                       key={expense.id}
-                      className="border-b border-[#F9FAFB] hover:bg-[#FAFAFA] transition-colors"
+                      data-expense-id={expense.id}
+                      className={`border-b transition-colors ${
+                        expense.id === focusedExpenseId
+                          ? "border-[#86EFAC] bg-[#ECFDF5] ring-2 ring-inset ring-[#16A34A]"
+                          : "border-[#F9FAFB] hover:bg-[#FAFAFA]"
+                      }`}
                     >
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-2.5">
