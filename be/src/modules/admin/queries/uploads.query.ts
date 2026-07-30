@@ -7,7 +7,6 @@ export async function getAdminUploadRecords(): Promise<AdminUploadRecord[]> {
   const receipts = await getReceiptsCollection();
   const receiptDocuments = await receipts
     .find({})
-    .sort({ createdAt: -1 })
     .limit(100)
     .toArray();
 
@@ -37,7 +36,14 @@ export async function getAdminUploadRecords(): Promise<AdminUploadRecord[]> {
     ).filter((userId) => MongoObjectId.isValid(userId)),
   });
 
-  return receiptDocuments.map((receiptDocument: ReceiptUploadDocument) => {
+  const statusRank: Record<AdminUploadRecord["reviewStatus"], number> = {
+    pending: 0,
+    approved: 1,
+    rejected: 2,
+  };
+
+  return receiptDocuments
+    .map((receiptDocument: ReceiptUploadDocument) => {
     const uploadedBy =
       referenceMaps.usersById.get(receiptDocument.uploadedByUserId) ?? {
         email: "",
@@ -77,5 +83,17 @@ export async function getAdminUploadRecords(): Promise<AdminUploadRecord[]> {
       uploadedByName: uploadedBy.name,
       uploadedByUserId: receiptDocument.uploadedByUserId,
     };
-  });
+    })
+    .sort((left, right) => {
+      const statusDiff =
+        statusRank[left.reviewStatus] - statusRank[right.reviewStatus];
+
+      if (statusDiff !== 0) {
+        return statusDiff;
+      }
+
+      return (
+        new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+      );
+    });
 }
