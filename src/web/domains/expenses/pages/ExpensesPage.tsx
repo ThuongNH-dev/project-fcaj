@@ -402,7 +402,7 @@ export function ExpensesPage() {
   };
 
   return (
-    <div className="lg:pl-60 min-h-screen bg-[#F6FBF8]">
+    <div className="min-h-screen bg-[#F6FBF8]">
       <div className="max-w-7xl mx-auto px-6 py-8 pt-16 lg:pt-8">
         <div className="flex items-center justify-between mb-8 gap-4 flex-wrap">
           <div>

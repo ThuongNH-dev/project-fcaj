@@ -456,7 +456,7 @@ export function GroupDetailPage() {
   };
 
   return (
-    <div className="lg:pl-60 min-h-screen bg-[#F6FBF8]">
+    <div className="min-h-screen bg-[#F6FBF8]">
       <div className="max-w-7xl mx-auto px-6 py-8 pt-16 lg:pt-8">
         <div className="mb-6">
           <button

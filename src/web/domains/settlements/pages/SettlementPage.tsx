@@ -534,7 +534,7 @@ export function SettlementPage() {
     debtorSettlements.length > 0 || creditorSettlements.length > 0;
 
   return (
-    <div className="lg:pl-60 min-h-screen bg-[#F6FBF8]">
+    <div className="min-h-screen bg-[#F6FBF8]">
       <div className="max-w-7xl mx-auto px-6 py-8 pt-16 lg:pt-8">
         <div className="mb-8">
           <h1 className="text-[#111827]" style={{ fontSize: "1.5rem", fontWeight: 800 }}>
