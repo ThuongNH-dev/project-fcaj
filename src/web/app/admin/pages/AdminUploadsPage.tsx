@@ -23,6 +23,7 @@ export function AdminUploadsPage() {
   const [isLoadingUploads, setIsLoadingUploads] = useState(true);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [isReviewSubmitting, setIsReviewSubmitting] = useState(false);
+  const [isEditingReview, setIsEditingReview] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [search, setSearch] = useState("");
@@ -69,6 +70,7 @@ export function AdminUploadsPage() {
       setSelectedUpload(upload);
       setPreviewUrl("");
       setRejectReason(upload.rejectionReason ?? "");
+      setIsEditingReview(false);
       setIsLoadingPreview(true);
       const response = await getAdminUploadViewUrl(upload.id);
       setPreviewUrl(response.url ?? "");
@@ -89,6 +91,7 @@ export function AdminUploadsPage() {
     setSelectedUpload(null);
     setPreviewUrl("");
     setRejectReason("");
+    setIsEditingReview(false);
     setIsLoadingPreview(false);
     setIsReviewSubmitting(false);
   }
@@ -162,6 +165,8 @@ export function AdminUploadsPage() {
   }
 
   const isReviewLocked = selectedUpload?.reviewStatus === "rejected";
+  const isApprovedUpload = selectedUpload?.reviewStatus === "approved";
+  const isPendingUpload = selectedUpload?.reviewStatus === "pending";
 
   const filteredUploads = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -371,7 +376,7 @@ export function AdminUploadsPage() {
                 </div>
               </div>
 
-              <div className="border-t border-[#F3F4F6] p-5 lg:border-t-0 lg:border-l">
+                            <div className="border-t border-[#F3F4F6] p-5 lg:border-t-0 lg:border-l">
                 <div className="space-y-4">
                   <div className="rounded-2xl bg-[#F9FAFB] p-4">
                     <p className="text-xs uppercase tracking-wider text-[#9CA3AF]">
@@ -395,47 +400,65 @@ export function AdminUploadsPage() {
                     )}
                   </div>
 
-                  <div>
-                    <label
-                      htmlFor="reject-reason"
-                      className="mb-2 block text-sm text-[#111827]"
+                  {isApprovedUpload && !isEditingReview && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingReview(true)}
+                      className="rounded-2xl bg-[#111827] px-4 py-3 text-sm text-white transition-colors hover:bg-[#0F172A]"
                       style={{ fontWeight: 700 }}
                     >
-                      Rejection reason
-                    </label>
-                    <textarea
-                      id="reject-reason"
-                      value={rejectReason}
-                      onChange={(event) => setRejectReason(event.target.value)}
-                      placeholder="Ví dụ: Ảnh mờ, không đọc được thông tin, bill không hợp lệ..."
-                      className="min-h-32 w-full rounded-2xl border border-[#D1D5DB] px-4 py-3 text-sm text-[#111827] outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-[#16A34A]"
-                      disabled={isReviewSubmitting}
-                    />
-                  </div>
+                      Edit
+                    </button>
+                  )}
 
-                  <div className="flex flex-col gap-3">
-                    <button
-                      type="button"
-                      onClick={() => void handleApprove(selectedUpload)}
-                      disabled={isReviewSubmitting || isLoadingPreview || isReviewLocked}
-                      className="rounded-2xl bg-[#16A34A] px-4 py-3 text-sm text-white transition-colors hover:bg-[#15803D] disabled:cursor-not-allowed disabled:opacity-60"
-                      style={{ fontWeight: 700 }}
-                    >
-                      {isReviewSubmitting ? "Saving..." : "Approve bill"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleReject(selectedUpload)}
-                      disabled={isReviewSubmitting || isLoadingPreview || isReviewLocked}
-                      className="rounded-2xl bg-[#DC2626] px-4 py-3 text-sm text-white transition-colors hover:bg-[#B91C1C] disabled:cursor-not-allowed disabled:opacity-60"
-                      style={{ fontWeight: 700 }}
-                    >
-                      {isReviewSubmitting ? "Saving..." : "Reject bill"}
-                    </button>
-                  </div>
+                  {((isPendingUpload && !isReviewLocked) || isEditingReview) && (
+                    <>
+                      <div>
+                        <label
+                          htmlFor="reject-reason"
+                          className="mb-2 block text-sm text-[#111827]"
+                          style={{ fontWeight: 700 }}
+                        >
+                          Rejection reason
+                        </label>
+                        <textarea
+                          id="reject-reason"
+                          value={rejectReason}
+                          onChange={(event) => setRejectReason(event.target.value)}
+                          placeholder="e.g. blurry image, unreadable info, invalid bill..."
+                          className="min-h-32 w-full rounded-2xl border border-[#D1D5DB] px-4 py-3 text-sm text-[#111827] outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-[#16A34A]"
+                          disabled={isReviewSubmitting}
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-3">
+                        {isPendingUpload && (
+                          <button
+                            type="button"
+                            onClick={() => void handleApprove(selectedUpload)}
+                            disabled={isReviewSubmitting || isLoadingPreview || isReviewLocked}
+                            className="rounded-2xl bg-[#16A34A] px-4 py-3 text-sm text-white transition-colors hover:bg-[#15803D] disabled:cursor-not-allowed disabled:opacity-60"
+                            style={{ fontWeight: 700 }}
+                          >
+                            {isReviewSubmitting ? "Saving..." : "Approve bill"}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => void handleReject(selectedUpload)}
+                          disabled={isReviewSubmitting || isLoadingPreview || isReviewLocked}
+                          className="rounded-2xl bg-[#DC2626] px-4 py-3 text-sm text-white transition-colors hover:bg-[#B91C1C] disabled:cursor-not-allowed disabled:opacity-60"
+                          style={{ fontWeight: 700 }}
+                        >
+                          {isReviewSubmitting ? "Saving..." : "Reject bill"}
+                        </button>
+                      </div>
+                    </>
+                  )}
+
                   {isReviewLocked && (
                     <p className="text-xs text-[#B91C1C]">
-                      Bill này đã bị từ chối trước đó nên không thể duyệt lại.
+                      This receipt has already been rejected and cannot be reviewed again.
                     </p>
                   )}
                 </div>
@@ -447,3 +470,4 @@ export function AdminUploadsPage() {
     </>
   );
 }
+
