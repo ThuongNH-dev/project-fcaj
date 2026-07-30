@@ -9,10 +9,9 @@ export interface CurrentUserResponse {
 export interface NotificationPreferences {
   expenseAdded: boolean;
   paymentReceived: boolean;
-  settlementReminder: boolean;
-  weeklyDigest: boolean;
+  settlementReminders: boolean;
   groupInvites: boolean;
-  marketingEmails: boolean;
+  productUpdatesAndTips: boolean;
 }
 
 export type BillingPlan = "free" | "pro";
