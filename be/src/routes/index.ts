@@ -6,6 +6,7 @@ import groupsRouter from "../modules/groups/groups.routes.js";
 import notificationsRouter from "../modules/notifications/notifications.routes.js";
 import paymentsRouter from "../modules/payments/payments.routes.js";
 import receiptsRouter from "../modules/receipts/receipts.routes.js";
+import settlementDisputesRouter from "../modules/settlement-disputes/settlement-disputes.routes.js";
 import settlementsRouter from "../modules/settlements/settlements.routes.js";
 import systemRouter from "../modules/system/system.routes.js";
 import usersRouter from "../modules/users/users.routes.js";
@@ -21,6 +22,7 @@ apiRouter.use("/api/notifications", notificationsRouter);
 apiRouter.use("/api/payments", paymentsRouter);
 apiRouter.use("/api/receipts", receiptsRouter);
 apiRouter.use("/api/settlements", settlementsRouter);
+apiRouter.use("/api/settlement-disputes", settlementDisputesRouter);
 apiRouter.use("/api/users", usersRouter);
 
 export default apiRouter;

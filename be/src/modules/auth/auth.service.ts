@@ -173,6 +173,7 @@ function getBillingUsageSummary(plan: BillingPlan, input: {
       expenseCount: input.expenseCount,
       expenseLimit: null,
       receiptScanIncluded: true,
+      settlementDisputesIncluded: true,
     };
   }
 
@@ -182,7 +183,42 @@ function getBillingUsageSummary(plan: BillingPlan, input: {
     expenseCount: input.expenseCount,
     expenseLimit: 5,
     receiptScanIncluded: false,
+    settlementDisputesIncluded: false,
   };
+}
+
+/**
+ * Returns true if the user has an active Pro subscription.
+ * Checks plan === "pro", status === "active", and expiresAt > now.
+ */
+export async function isUserActivePro(userId: string): Promise<boolean> {
+  if (!MongoObjectId.isValid(userId)) {
+    return false;
+  }
+
+  const users = await getUsersCollection();
+  const user = await users.findOne(
+    { _id: new MongoObjectId(userId) },
+    { projection: { billingProfile: 1 } },
+  );
+
+  if (!user?.billingProfile) {
+    return false;
+  }
+
+  const { plan, status, expiresAt } = user.billingProfile;
+
+  if (plan !== "pro" || status !== "active") {
+    return false;
+  }
+
+  if (!expiresAt) {
+    return false;
+  }
+
+  const normalizedExpiresAt = expiresAt instanceof Date ? expiresAt : new Date(expiresAt);
+
+  return normalizedExpiresAt.getTime() > Date.now();
 }
 
 export function toPublicUser(user: UserDocument): PublicUser {
