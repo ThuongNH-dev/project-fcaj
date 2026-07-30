@@ -45,12 +45,11 @@ import {
 } from "..";
 
 const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
-  expenseAdded: false,
-  paymentReceived: false,
-  settlementReminder: false,
-  weeklyDigest: false,
-  groupInvites: false,
-  marketingEmails: false,
+  expenseAdded: true,
+  paymentReceived: true,
+  settlementReminders: true,
+  groupInvites: true,
+  productUpdatesAndTips: false,
 };
 
 const DEFAULT_BILLING_SUMMARY: CurrentUserBillingSummary = {
@@ -1040,14 +1039,9 @@ export function SettingsPage() {
                       desc: t.paymentReceivedDesc,
                     },
                     {
-                      key: "settlementReminder",
-                      label: t.settlementReminder,
-                      desc: t.settlementReminderDesc,
-                    },
-                    {
-                      key: "weeklyDigest",
-                      label: t.weeklyDigest,
-                      desc: t.weeklyDigestDesc,
+                      key: "settlementReminders",
+                      label: t.settlementReminders,
+                      desc: t.settlementRemindersDesc,
                     },
                     {
                       key: "groupInvites",
@@ -1055,9 +1049,9 @@ export function SettingsPage() {
                       desc: t.groupInvitesDesc,
                     },
                     {
-                      key: "marketingEmails",
-                      label: t.marketingEmails,
-                      desc: t.marketingEmailsDesc,
+                      key: "productUpdatesAndTips",
+                      label: t.productUpdatesAndTips,
+                      desc: t.productUpdatesAndTipsDesc,
                     },
                   ] as {
                     key: keyof typeof notifs;
@@ -1078,6 +1072,9 @@ export function SettingsPage() {
                         <p className="text-xs text-[#9CA3AF] mt-0.5">{desc}</p>
                       </div>
                       <button
+                        type="button"
+                        aria-label={label}
+                        aria-pressed={notifs[key]}
                         onClick={() =>
                           setNotifs((prev) => ({ ...prev, [key]: !prev[key] }))
                         }

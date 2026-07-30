@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate } from "react-router";
 import {
   TrendingUp,
   TrendingDown,
   Users,
   DollarSign,
-  Bell,
   Search,
   Plus,
   ArrowUpRight,
@@ -23,6 +22,18 @@ import {
 import { getUserInitials, useStoredUser } from "../../../domains/auth";
 import { getExpenses, type Expense } from "../../../domains/expenses";
 import { getGroups, type Group } from "../../../domains/groups";
+import {
+  deleteNotification,
+  getNotifications,
+  getNotificationDestination,
+  getUnreadNotificationCount,
+  markAllNotificationsAsRead,
+  markNotificationAsRead,
+  NotificationBellButton,
+  NotificationsPopover,
+  syncNotifications,
+  type AppNotification,
+} from "../../../domains/notifications";
 import { formatCurrencyBreakdown } from "../../../domains/settlements/lib/settlement.utils";
 
 const CATEGORY_DOT_COLORS = [
@@ -76,21 +87,31 @@ export function DashboardPage() {
   const [isLoadingGroups, setIsLoadingGroups] = useState(true);
   const [isLoadingExpenses, setIsLoadingExpenses] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
+  const [notificationErrorMessage, setNotificationErrorMessage] = useState("");
+  const [readingNotificationId, setReadingNotificationId] = useState<string | null>(null);
+  const [deletingNotificationId, setDeletingNotificationId] = useState<string | null>(null);
+  const [isMarkingAllNotificationsAsRead, setIsMarkingAllNotificationsAsRead] =
+    useState(false);
+  const notificationButtonRef = useRef<HTMLButtonElement>(null);
   const { t, lang } = useLanguage();
   const user = useStoredUser();
   const navigate = useNavigate();
-
-  if (user?.role === "admin") {
-    return <Navigate to="/admin" replace />;
-  }
+  const isAdminUser = user?.role === "admin";
 
   const userName = user ? `${user.firstName} ${user.lastName}` : "Guest";
   const userInitials = user ? getUserInitials(user) : "GU";
   const welcomeMessage = user ? `Signed in as ${userName}` : t.welcomeMsg;
-  const isAdminUser = user?.role === "admin";
   const greeting = getGreeting(lang);
 
   useEffect(() => {
+    if (isAdminUser) {
+      return;
+    }
+
     async function loadDashboardData() {
       try {
         setErrorMessage("");
@@ -115,7 +136,173 @@ export function DashboardPage() {
     }
 
     void loadDashboardData();
-  }, []);
+  }, [isAdminUser]);
+
+  useEffect(() => {
+    if (isAdminUser) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    async function syncNotificationSummary() {
+      try {
+        await syncNotifications();
+      } catch {
+        // A failed reminder sync must not prevent the existing unread count
+        // from being shown.
+      }
+
+      try {
+        const response = await getUnreadNotificationCount();
+
+        if (!isCancelled) {
+          setUnreadNotificationCount(response.unreadCount);
+        }
+      } catch {
+        // Keep the badge hidden when the summary cannot be loaded. Opening the
+        // popover exposes a retryable error state for the full request.
+      }
+    }
+
+    void syncNotificationSummary();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isAdminUser]);
+
+  const loadNotificationList = useCallback(async () => {
+    try {
+      setIsLoadingNotifications(true);
+      setNotificationErrorMessage("");
+
+      const [notificationsResponse, unreadCountResponse] = await Promise.all([
+        getNotifications({ page: 1, limit: 20 }),
+        getUnreadNotificationCount(),
+      ]);
+
+      setNotifications(notificationsResponse.notifications);
+      setUnreadNotificationCount(unreadCountResponse.unreadCount);
+    } catch (error) {
+      setNotificationErrorMessage(
+        error instanceof Error ? error.message : t.loadNotificationListError,
+      );
+    } finally {
+      setIsLoadingNotifications(false);
+    }
+  }, [t.loadNotificationListError]);
+
+  function handleNotificationToggle() {
+    if (isNotificationsOpen) {
+      setIsNotificationsOpen(false);
+      return;
+    }
+
+    setIsNotificationsOpen(true);
+    void loadNotificationList();
+  }
+
+  async function handleNotificationClick(notification: AppNotification) {
+    if (readingNotificationId) {
+      return;
+    }
+
+    if (!notification.isRead) {
+      try {
+        setReadingNotificationId(notification.id);
+        setNotificationErrorMessage("");
+        const response = await markNotificationAsRead(notification.id);
+
+        setNotifications((currentNotifications) =>
+          currentNotifications.map((currentNotification) =>
+            currentNotification.id === notification.id
+              ? response.notification
+              : currentNotification,
+          ),
+        );
+        setUnreadNotificationCount((currentCount) =>
+          Math.max(0, currentCount - 1),
+        );
+      } catch (error) {
+        setNotificationErrorMessage(
+          error instanceof Error ? error.message : t.markNotificationReadError,
+        );
+        return;
+      } finally {
+        setReadingNotificationId(null);
+      }
+    }
+
+    const destination = getNotificationDestination(notification);
+
+    if (destination) {
+      setIsNotificationsOpen(false);
+      navigate(destination);
+    }
+  }
+
+  async function handleMarkAllNotificationsAsRead() {
+    if (isMarkingAllNotificationsAsRead) {
+      return;
+    }
+
+    try {
+      setIsMarkingAllNotificationsAsRead(true);
+      setNotificationErrorMessage("");
+      await markAllNotificationsAsRead();
+
+      const readAt = new Date().toISOString();
+      setNotifications((currentNotifications) =>
+        currentNotifications.map((notification) =>
+          notification.isRead
+            ? notification
+            : { ...notification, isRead: true, readAt },
+        ),
+      );
+      setUnreadNotificationCount(0);
+    } catch (error) {
+      setNotificationErrorMessage(
+        error instanceof Error ? error.message : t.markAllNotificationsReadError,
+      );
+    } finally {
+      setIsMarkingAllNotificationsAsRead(false);
+    }
+  }
+
+  async function handleDeleteNotification(notification: AppNotification) {
+    if (deletingNotificationId) {
+      return;
+    }
+
+    try {
+      setDeletingNotificationId(notification.id);
+      setNotificationErrorMessage("");
+      await deleteNotification(notification.id);
+
+      setNotifications((currentNotifications) =>
+        currentNotifications.filter(
+          (currentNotification) => currentNotification.id !== notification.id,
+        ),
+      );
+
+      if (!notification.isRead) {
+        setUnreadNotificationCount((currentCount) =>
+          Math.max(0, currentCount - 1),
+        );
+      }
+    } catch (error) {
+      setNotificationErrorMessage(
+        error instanceof Error ? error.message : t.deleteNotificationError,
+      );
+    } finally {
+      setDeletingNotificationId(null);
+    }
+  }
+
+  if (isAdminUser) {
+    return <Navigate to="/admin" replace />;
+  }
 
   const filteredGroups = groups.filter((group) => {
     const keyword = search.trim().toLowerCase();
@@ -357,12 +544,12 @@ export function DashboardPage() {
                   </button>
                 </>
               ) : null}
-              <button
-                className="relative w-9 h-9 bg-white rounded-xl border border-[#E5E7EB] flex items-center justify-center hover:bg-[#F0FAF5] hover:border-[#BBF7D0] transition-colors flex-shrink-0"
-                title={t.notifications}
-              >
-                <Bell className="w-4 h-4 text-[#6B7280]" />
-              </button>
+              <NotificationBellButton
+                buttonRef={notificationButtonRef}
+                unreadCount={unreadNotificationCount}
+                isOpen={isNotificationsOpen}
+                onClick={handleNotificationToggle}
+              />
               <button
                 onClick={() => navigate("/settings")}
                 className="w-9 h-9 rounded-xl bg-[#7EDDBA] flex items-center justify-center text-[#065f46] text-xs overflow-hidden flex-shrink-0 hover:brightness-95 transition-all ring-2 ring-transparent hover:ring-[#BBF7D0]"
@@ -382,6 +569,23 @@ export function DashboardPage() {
             </div>
           </div>
         </div>
+
+        {isNotificationsOpen ? (
+          <NotificationsPopover
+            anchorRef={notificationButtonRef}
+            deletingNotificationId={deletingNotificationId}
+            errorMessage={notificationErrorMessage}
+            isLoading={isLoadingNotifications}
+            isMarkingAllAsRead={isMarkingAllNotificationsAsRead}
+            notifications={notifications}
+            onClose={() => setIsNotificationsOpen(false)}
+            onDelete={handleDeleteNotification}
+            onMarkAllAsRead={handleMarkAllNotificationsAsRead}
+            onNotificationClick={handleNotificationClick}
+            onRetry={loadNotificationList}
+            readingNotificationId={readingNotificationId}
+          />
+        ) : null}
 
         {errorMessage ? (
           <div className="rounded-2xl border border-[#FECACA] bg-[#FEF2F2] px-5 py-4 text-sm text-[#B91C1C] mb-6">

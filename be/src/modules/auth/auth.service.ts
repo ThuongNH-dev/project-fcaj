@@ -151,7 +151,7 @@ function toPublicBillingProfile(
     ? normalizeDocumentDate(billingProfile.expiresAt, normalizedUpdatedAt)
     : null;
   const isExpired =
-    Boolean(normalizedExpiresAt) && normalizedExpiresAt.getTime() <= Date.now();
+    normalizedExpiresAt !== null && normalizedExpiresAt.getTime() <= Date.now();
 
   return {
     plan: isExpired ? "free" : normalizeBillingPlan(billingProfile?.plan),

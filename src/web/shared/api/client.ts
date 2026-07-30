@@ -99,6 +99,14 @@ export async function patchJson<TPayload, TResponse>(
   });
 }
 
+export async function patchJsonWithoutBody<TResponse>(
+  path: string,
+): Promise<TResponse> {
+  return requestJson<TResponse>(path, {
+    method: "PATCH",
+  });
+}
+
 export async function deleteJson<TResponse>(path: string): Promise<TResponse> {
   return requestJson<TResponse>(path, {
     method: "DELETE",

@@ -13,6 +13,7 @@ const {
   mockDeleteCurrentUser,
   mockGetCurrentUser,
   mockGetCurrentUserBilling,
+  mockGetCurrentUserBillingHistory,
   mockGetCurrentUserNotificationPreferences,
   mockGetUserInitials,
   mockNavigate,
@@ -32,6 +33,7 @@ const {
   mockDeleteCurrentUser: vi.fn(),
   mockGetCurrentUser: vi.fn(),
   mockGetCurrentUserBilling: vi.fn(),
+  mockGetCurrentUserBillingHistory: vi.fn(),
   mockGetCurrentUserNotificationPreferences: vi.fn(),
   mockGetUserInitials: vi.fn(),
   mockNavigate: vi.fn(),
@@ -90,6 +92,7 @@ vi.mock("..", () => ({
   deleteCurrentUser: mockDeleteCurrentUser,
   getCurrentUser: mockGetCurrentUser,
   getCurrentUserBilling: mockGetCurrentUserBilling,
+  getCurrentUserBillingHistory: mockGetCurrentUserBillingHistory,
   getCurrentUserNotificationPreferences: mockGetCurrentUserNotificationPreferences,
   updateCurrentUser: mockUpdateCurrentUser,
   updateCurrentUserBilling: mockUpdateCurrentUserBilling,
@@ -167,6 +170,7 @@ describe("SettingsPage", () => {
     mockDeleteCurrentUser.mockReset();
     mockGetCurrentUser.mockReset();
     mockGetCurrentUserBilling.mockReset();
+    mockGetCurrentUserBillingHistory.mockReset();
     mockGetCurrentUserNotificationPreferences.mockReset();
     mockGetUserInitials.mockReset();
     mockNavigate.mockReset();
@@ -193,10 +197,9 @@ describe("SettingsPage", () => {
       notificationPreferences: {
         expenseAdded: false,
         paymentReceived: false,
-        settlementReminder: false,
-        weeklyDigest: false,
+        settlementReminders: false,
         groupInvites: false,
-        marketingEmails: false,
+        productUpdatesAndTips: false,
       },
     });
     mockGetCurrentUserBilling.mockResolvedValue({
@@ -204,10 +207,47 @@ describe("SettingsPage", () => {
       message: "Billing summary fetched successfully.",
       billing: createBillingSummary(),
     });
+    mockGetCurrentUserBillingHistory.mockResolvedValue({
+      ok: true,
+      message: "Billing history fetched successfully.",
+      history: [],
+    });
     mockUpdateCurrentUser.mockResolvedValue({
       ok: true,
       message: "User profile updated successfully.",
       user: createUser(),
+    });
+  });
+
+  it("saves notification preferences using the backend contract", async () => {
+    mockUpdateCurrentUserNotificationPreferences.mockResolvedValue({
+      ok: true,
+      message: "Notification preferences updated successfully.",
+      notificationPreferences: {
+        expenseAdded: true,
+        paymentReceived: false,
+        settlementReminders: false,
+        groupInvites: false,
+        productUpdatesAndTips: false,
+      },
+    });
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Notifications" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Expense added" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => {
+      expect(mockUpdateCurrentUserNotificationPreferences).toHaveBeenCalledWith({
+        notificationPreferences: {
+          expenseAdded: true,
+          paymentReceived: false,
+          settlementReminders: false,
+          groupInvites: false,
+          productUpdatesAndTips: false,
+        },
+      });
     });
   });
 
@@ -235,10 +275,11 @@ describe("SettingsPage", () => {
       target: { files: [avatarFile] },
     });
 
-    expect(await screen.findByAltText("User avatar")).toHaveAttribute(
-      "src",
-      avatarDataUrl,
-    );
+    const avatarImages = await screen.findAllByAltText("User avatar");
+    expect(avatarImages).toHaveLength(2);
+    avatarImages.forEach((avatarImage) => {
+      expect(avatarImage).toHaveAttribute("src", avatarDataUrl);
+    });
     expect(screen.getByPlaceholderText("https://example.com/avatar.png")).toHaveValue(
       "",
     );
@@ -287,29 +328,29 @@ describe("SettingsPage", () => {
 
     expect(await screen.findByText("Language")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Tiáº¿ng Viá»‡t" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tiếng Việt" }));
 
     await waitFor(() => {
       expect(window.localStorage.getItem("splitly-language")).toBe("vi");
       expect(document.documentElement.lang).toBe("vi");
     });
 
-    expect(screen.getByText("NgĂ´n ngá»¯")).toBeInTheDocument();
+    expect(screen.getByText("Ngôn ngữ")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "English" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Tiáº¿ng Viá»‡t" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tiếng Việt" })).toBeInTheDocument();
   });
 
   it("shows translated password validation after switching to Vietnamese", async () => {
     renderPage();
 
     fireEvent.click(await screen.findByRole("button", { name: "Appearance" }));
-    fireEvent.click(screen.getByRole("button", { name: "Tiáº¿ng Viá»‡t" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Báº£o máº­t" }));
-    fireEvent.click(screen.getByRole("button", { name: "Cáº­p nháº­t máº­t kháº©u" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tiếng Việt" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Bảo mật" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cập nhật mật khẩu" }));
 
     expect(
       await screen.findByText(
-        "Máº­t kháº©u hiá»‡n táº¡i vĂ  máº­t kháº©u má»›i lĂ  báº¯t buá»™c.",
+        "Mật khẩu hiện tại và mật khẩu mới là bắt buộc.",
       ),
     ).toBeInTheDocument();
   });

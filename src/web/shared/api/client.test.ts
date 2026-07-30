@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setStoredAuthSession, setStoredUser } from "../../domains/auth";
-import { downloadFile, getJson } from "./client";
+import { downloadFile, getJson, patchJsonWithoutBody } from "./client";
 
 const mockFetch = vi.fn();
 
@@ -136,6 +136,31 @@ describe("shared api client", () => {
 
     expect(headers.get("Authorization")).toBeNull();
     expect(localStorage.getItem("splitly_user")).toBeNull();
+  });
+
+  it("sends PATCH requests without a request body", async () => {
+    mockFetch.mockResolvedValue({
+      json: async () => ({
+        ok: true,
+      }),
+      ok: true,
+      status: 200,
+    });
+
+    await patchJsonWithoutBody("/api/settlements/settlement-1/sent");
+
+    const [url, requestOptions] = mockFetch.mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    const headers = new Headers(requestOptions.headers);
+
+    expect(url).toBe(
+      "http://localhost:5000/api/settlements/settlement-1/sent",
+    );
+    expect(requestOptions.method).toBe("PATCH");
+    expect(requestOptions.body).toBeUndefined();
+    expect(headers.get("Content-Type")).toBeNull();
   });
 
   it("downloads files with the current auth token and requested filename", async () => {
