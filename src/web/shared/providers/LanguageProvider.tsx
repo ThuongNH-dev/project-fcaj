@@ -185,6 +185,11 @@ export const translations = {
     searchReceipts: "Search receipts...",
     noReceiptsTitle: "No receipts yet", noReceiptsDesc: "Upload a receipt to attach it to an expense.",
     uploadFirstReceipt: "Upload your first receipt",
+    view: "View",
+    billRejected: "Bill was rejected",
+    rejectionReason: "Reason",
+    loadingBillPreview: "Loading bill preview...",
+    noPreviewAvailable: "No preview available.",
 
     // Admin
     adminTitle: "Admin Dashboard", adminDesc: "Manage users, monitor activity, and export data.",
@@ -492,6 +497,11 @@ export const translations = {
     searchReceipts: "Tìm kiếm hóa đơn...",
     noReceiptsTitle: "Chưa có hóa đơn", noReceiptsDesc: "Tải hóa đơn để đính kèm vào chi phí.",
     uploadFirstReceipt: "Tải lên hóa đơn đầu tiên",
+    view: "Xem",
+    billRejected: "Bill đã bị từ chối",
+    rejectionReason: "Lý do",
+    loadingBillPreview: "Đang tải xem bill...",
+    noPreviewAvailable: "Không có bản xem trước.",
 
     // Admin
     adminTitle: "Bảng quản trị", adminDesc: "Quản lý người dùng, theo dõi hoạt động và xuất dữ liệu.",

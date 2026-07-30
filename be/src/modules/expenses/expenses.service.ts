@@ -451,6 +451,10 @@ export async function updateExpense(
     );
   }
 
+  if (existingExpense.reviewStatus !== "approved") {
+    throw new Error("Only approved expenses can be edited.");
+  }
+
   // 2. Validate group membership
   const group = await getGroupByIdForUser(existingExpense.groupId, input.userId);
   if (!group) {

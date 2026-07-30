@@ -594,6 +594,22 @@ export async function reviewAdminUploadHandler(req: Request, res: Response) {
   }
 
   try {
+    const existingReceipt = await getReceiptUploadById(receiptId);
+
+    if (!existingReceipt) {
+      return res.status(404).json({
+        ok: false,
+        message: "Receipt not found.",
+      });
+    }
+
+    if (existingReceipt.reviewStatus === "rejected") {
+      return res.status(409).json({
+        ok: false,
+        message: "Rejected receipts cannot be reviewed again.",
+      });
+    }
+
     const receipt = await reviewReceiptUploadById({
       receiptId,
       rejectionReason,

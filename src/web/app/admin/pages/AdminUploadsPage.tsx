@@ -161,6 +161,8 @@ export function AdminUploadsPage() {
     }
   }
 
+  const isReviewLocked = selectedUpload?.reviewStatus === "rejected";
+
   const filteredUploads = useMemo(() => {
     const keyword = search.trim().toLowerCase();
 
@@ -292,7 +294,7 @@ export function AdminUploadsPage() {
                             style={{ fontWeight: 600 }}
                           >
                             <Eye className="h-3.5 w-3.5" />
-                            Xem bill
+                            View bill
                           </button>
                         </div>
                       </td>
@@ -415,22 +417,27 @@ export function AdminUploadsPage() {
                     <button
                       type="button"
                       onClick={() => void handleApprove(selectedUpload)}
-                      disabled={isReviewSubmitting || isLoadingPreview}
+                      disabled={isReviewSubmitting || isLoadingPreview || isReviewLocked}
                       className="rounded-2xl bg-[#16A34A] px-4 py-3 text-sm text-white transition-colors hover:bg-[#15803D] disabled:cursor-not-allowed disabled:opacity-60"
                       style={{ fontWeight: 700 }}
                     >
-                      {isReviewSubmitting ? "Saving..." : "Duyệt bill"}
+                      {isReviewSubmitting ? "Saving..." : "Approve bill"}
                     </button>
                     <button
                       type="button"
                       onClick={() => void handleReject(selectedUpload)}
-                      disabled={isReviewSubmitting || isLoadingPreview}
+                      disabled={isReviewSubmitting || isLoadingPreview || isReviewLocked}
                       className="rounded-2xl bg-[#DC2626] px-4 py-3 text-sm text-white transition-colors hover:bg-[#B91C1C] disabled:cursor-not-allowed disabled:opacity-60"
                       style={{ fontWeight: 700 }}
                     >
-                      {isReviewSubmitting ? "Saving..." : "Từ chối bill"}
+                      {isReviewSubmitting ? "Saving..." : "Reject bill"}
                     </button>
                   </div>
+                  {isReviewLocked && (
+                    <p className="text-xs text-[#B91C1C]">
+                      Bill này đã bị từ chối trước đó nên không thể duyệt lại.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

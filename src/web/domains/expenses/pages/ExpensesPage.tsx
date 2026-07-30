@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Eye, Pencil, Plus, Search, Receipt, Trash2 } from "lucide-react";
+import { Pencil, Plus, Search, Receipt, Trash2 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router";
 import {
   formatCurrency,
@@ -14,7 +14,7 @@ import { uploadReceiptFile } from "../../receipts";
 import { useFeedback } from "../../../shared/providers/FeedbackProvider";
 import { AddExpenseDialog, type NewExpense } from "../components/AddExpenseDialog";
 import { createExpense, deleteExpense, getExpenses, updateExpense, type Expense } from "..";
-import { getReceiptViewUrl } from "../../receipts";
+import { getReceipt, getReceiptViewUrl, type ReceiptUpload } from "../../receipts";
 import { formatCurrencyBreakdown } from "../../settlements/lib/settlement.utils";
 import { getCurrentUserBilling, type CurrentUserBillingSummary } from "../../users";
 import { AdminPagination } from "../../../app/admin/components/AdminPagination";
@@ -68,6 +68,7 @@ export function ExpensesPage() {
   const [expenseToEdit, setExpenseToEdit] = useState<Expense | null>(null);
   const [selectedReceiptUrl, setSelectedReceiptUrl] = useState("");
   const [selectedReceiptTitle, setSelectedReceiptTitle] = useState("");
+  const [selectedReceiptMeta, setSelectedReceiptMeta] = useState<ReceiptUpload | null>(null);
   const { t } = useLanguage();
   const location = useLocation();
   const { confirm, showToast } = useFeedback();
@@ -373,10 +374,20 @@ export function ExpensesPage() {
     }
 
     try {
-      const response = await getReceiptViewUrl(expense.receiptId);
-      setSelectedReceiptUrl(response.url ?? "");
-      setSelectedReceiptTitle(expense.title);
+      const response = await getReceipt(expense.receiptId);
+      const receipt = response.receipt ?? null;
+      setSelectedReceiptMeta(receipt);
+      setSelectedReceiptTitle(receipt?.originalFileName ?? expense.title);
+
+      if (receipt?.reviewStatus === "rejected") {
+        setSelectedReceiptUrl("");
+        return;
+      }
+
+      const previewResponse = await getReceiptViewUrl(expense.receiptId);
+      setSelectedReceiptUrl(previewResponse.url ?? "");
     } catch (error) {
+      setSelectedReceiptMeta(null);
       showToast({
         variant: "error",
         message: error instanceof Error ? error.message : "Unable to open receipt.",
@@ -387,6 +398,7 @@ export function ExpensesPage() {
   const handleCloseReceipt = () => {
     setSelectedReceiptUrl("");
     setSelectedReceiptTitle("");
+    setSelectedReceiptMeta(null);
   };
 
   return (
@@ -621,21 +633,20 @@ export function ExpensesPage() {
                             <button
                               type="button"
                               onClick={() => void handleOpenReceipt(expense)}
-                              className="inline-flex h-9 w-28 items-center justify-center gap-1 rounded-full border border-[#D1D5DB] px-3 text-xs text-[#111827] transition-colors hover:bg-[#F9FAFB]"
+                              className="inline-flex h-9 w-24 items-center justify-center rounded-full border border-[#D1D5DB] px-3 text-xs text-[#111827] transition-colors hover:bg-[#F9FAFB]"
                               style={{ fontWeight: 600 }}
                             >
-                              <Eye className="h-3.5 w-3.5" />
-                              View bill
+                              {t.view}
                             </button>
                           )}
-                          {expense.createdBy === currentUser?.id && (
-                            <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                              {expense.createdBy === currentUser?.id && (
+                                <div className="flex items-center justify-end gap-2 whitespace-nowrap">
                               <button
                                 type="button"
                                 onClick={() => setExpenseToEdit(expense)}
-                                disabled={isExpenseInBannedGroup(expense)}
+                                disabled={isExpenseInBannedGroup(expense) || expense.reviewStatus !== "approved"}
                                 className={`inline-flex h-9 items-center gap-1 rounded-full border px-3 text-xs transition-colors ${
-                                  isExpenseInBannedGroup(expense)
+                                  isExpenseInBannedGroup(expense) || expense.reviewStatus !== "approved"
                                     ? "cursor-not-allowed border-[#E5E7EB] bg-[#F9FAFB] text-[#9CA3AF]"
                                     : "border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#F9FAFB]"
                                 }`}
@@ -720,7 +731,7 @@ export function ExpensesPage() {
         />,
         document.body,
       )}
-      {selectedReceiptUrl && (
+      {(selectedReceiptUrl || selectedReceiptMeta) && (
         <div className="fixed inset-0 z-[240] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/45" onClick={handleCloseReceipt} />
           <div className="relative w-full max-w-5xl overflow-hidden rounded-[1.5rem] bg-white shadow-[0_24px_64px_rgba(17,24,39,0.22)]">
@@ -740,7 +751,20 @@ export function ExpensesPage() {
                 Close
               </button>
             </div>
-            <iframe src={selectedReceiptUrl} title={selectedReceiptTitle} className="h-[75vh] w-full" />
+            {selectedReceiptMeta?.reviewStatus === "rejected" ? (
+              <div className="flex min-h-[55vh] items-center justify-center bg-[#F9FAFB] p-6">
+                <div className="max-w-2xl rounded-2xl border border-[#FECACA] bg-[#FFF1F2] px-6 py-5 text-center">
+                  <p className="text-base text-[#991b1b]" style={{ fontWeight: 800 }}>
+                    {t.billRejected}
+                  </p>
+                  <p className="mt-2 text-sm text-[#7F1D1D]">
+                    {t.rejectionReason}: {selectedReceiptMeta.rejectionReason?.trim() || "No reason provided."}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <iframe src={selectedReceiptUrl} title={selectedReceiptTitle} className="h-[75vh] w-full" />
+            )}
           </div>
         </div>
       )}

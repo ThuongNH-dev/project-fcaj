@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate, useParams } from "react-router";
 import {
-  Eye,
   ArrowLeft,
   Plus,
   Users,
@@ -24,7 +23,7 @@ import {
   type NewExpense,
 } from "../../expenses";
 import { uploadReceiptFile } from "../../receipts";
-import { getReceiptViewUrl } from "../../receipts";
+import { getReceipt, getReceiptViewUrl, type ReceiptUpload } from "../../receipts";
 import {
   addGroupMember,
   canManageGroupMembers,
@@ -79,6 +78,7 @@ export function GroupDetailPage() {
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [selectedReceiptUrl, setSelectedReceiptUrl] = useState("");
   const [selectedReceiptTitle, setSelectedReceiptTitle] = useState("");
+  const [selectedReceiptMeta, setSelectedReceiptMeta] = useState<ReceiptUpload | null>(null);
   const { t } = useLanguage();
   const { confirm, showToast } = useFeedback();
   const currentUser = useStoredUser();
@@ -428,10 +428,20 @@ export function GroupDetailPage() {
     }
 
     try {
-      const response = await getReceiptViewUrl(expense.receiptId);
-      setSelectedReceiptUrl(response.url ?? "");
-      setSelectedReceiptTitle(expense.title);
+      const response = await getReceipt(expense.receiptId);
+      const receipt = response.receipt ?? null;
+      setSelectedReceiptMeta(receipt);
+      setSelectedReceiptTitle(receipt?.originalFileName ?? expense.title);
+
+      if (receipt?.reviewStatus === "rejected") {
+        setSelectedReceiptUrl("");
+        return;
+      }
+
+      const previewResponse = await getReceiptViewUrl(expense.receiptId);
+      setSelectedReceiptUrl(previewResponse.url ?? "");
     } catch (error) {
+      setSelectedReceiptMeta(null);
       showToast({
         variant: "error",
         message: error instanceof Error ? error.message : "Unable to open receipt.",
@@ -442,6 +452,7 @@ export function GroupDetailPage() {
   const handleCloseReceipt = () => {
     setSelectedReceiptUrl("");
     setSelectedReceiptTitle("");
+    setSelectedReceiptMeta(null);
   };
 
   return (
@@ -712,11 +723,10 @@ export function GroupDetailPage() {
                                 <button
                                   type="button"
                                   onClick={() => void handleOpenReceipt(expense)}
-                                  className="inline-flex h-9 w-28 items-center justify-center gap-1 rounded-full border border-[#D1D5DB] px-3 text-xs text-[#111827] transition-colors hover:bg-[#F9FAFB]"
+                                  className="inline-flex h-9 w-24 items-center justify-center rounded-full border border-[#D1D5DB] px-3 text-xs text-[#111827] transition-colors hover:bg-[#F9FAFB]"
                                   style={{ fontWeight: 600 }}
                                 >
-                                  <Eye className="h-3.5 w-3.5" />
-                                  View bill
+                                  {t.view}
                                 </button>
                               )}
                             </div>
@@ -887,7 +897,7 @@ export function GroupDetailPage() {
         />,
         document.body,
       )}
-      {selectedReceiptUrl && (
+      {(selectedReceiptUrl || selectedReceiptMeta) && (
         <div className="fixed inset-0 z-[240] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/45" onClick={handleCloseReceipt} />
           <div className="relative w-full max-w-5xl overflow-hidden rounded-[1.5rem] bg-white shadow-[0_24px_64px_rgba(17,24,39,0.22)]">
@@ -907,7 +917,20 @@ export function GroupDetailPage() {
                 Close
               </button>
             </div>
-            <iframe src={selectedReceiptUrl} title={selectedReceiptTitle} className="h-[75vh] w-full" />
+            {selectedReceiptMeta?.reviewStatus === "rejected" ? (
+              <div className="flex min-h-[55vh] items-center justify-center bg-[#F9FAFB] p-6">
+                <div className="max-w-2xl rounded-2xl border border-[#FECACA] bg-[#FFF1F2] px-6 py-5 text-center">
+                  <p className="text-base text-[#991b1b]" style={{ fontWeight: 800 }}>
+                    {t.billRejected}
+                  </p>
+                  <p className="mt-2 text-sm text-[#7F1D1D]">
+                    {t.rejectionReason}: {selectedReceiptMeta.rejectionReason?.trim() || "No reason provided."}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <iframe src={selectedReceiptUrl} title={selectedReceiptTitle} className="h-[75vh] w-full" />
+            )}
           </div>
         </div>
       )}
