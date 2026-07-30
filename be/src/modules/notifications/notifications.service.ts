@@ -166,6 +166,7 @@ export interface NotificationDocument {
   groupId: string | null;
   expenseId: string | null;
   settlementId: string | null;
+  disputeId?: string | null;
   isRead: boolean;
   readAt: Date | null;
   /**
@@ -258,6 +259,7 @@ export function toPublicNotification(
     groupId: doc.groupId,
     expenseId: doc.expenseId,
     settlementId: doc.settlementId,
+    disputeId: doc.disputeId ?? null,
     isRead: doc.isRead,
     readAt: doc.readAt?.toISOString() ?? null,
     // Field is optional in the document; always expose as null when absent.
@@ -449,6 +451,7 @@ export interface CreateNotificationInput {
   groupId: string | null;
   expenseId: string | null;
   settlementId: string | null;
+  disputeId?: string | null;
   deduplicationKey: string;
 }
 
@@ -473,6 +476,7 @@ export async function createNotificationIdempotently(
     groupId: input.groupId,
     expenseId: input.expenseId,
     settlementId: input.settlementId,
+    disputeId: input.disputeId ?? null,
     isRead: false,
     readAt: null,
     deduplicationKey: input.deduplicationKey,
@@ -525,6 +529,7 @@ export async function createNotificationsIdempotently(
         groupId: input.groupId,
         expenseId: input.expenseId,
         settlementId: input.settlementId,
+        disputeId: input.disputeId ?? null,
         isRead: false,
         readAt: null,
         deduplicationKey: input.deduplicationKey,
@@ -1019,4 +1024,60 @@ export async function createProductUpdateNotifications(
   }
 
   return { recipientCount, createdCount };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Settlement Dispute Notification
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface NotifyAdminsOfSettlementDisputeInput {
+  disputeId: string;
+  settlementId: string;
+  groupId: string;
+  createdByUserId: string;
+}
+
+/**
+ * Creates in-app notifications for all active admins when a new settlement dispute is created.
+ * Failures here are logged and swallowed so they don't break the dispute creation flow.
+ */
+export async function notifyAdminsOfSettlementDispute(
+  input: NotifyAdminsOfSettlementDisputeInput,
+): Promise<void> {
+  try {
+    const users = await getUsersCollection();
+
+    // Query active admins
+    const admins = await users
+      .find(
+        { role: "admin", isBanned: { $ne: true } },
+        { projection: { _id: 1 } },
+      )
+      .toArray();
+
+    if (admins.length === 0) {
+      return;
+    }
+
+    const now = new Date();
+    const notifications: CreateNotificationInput[] = admins.map((admin) => {
+      const adminId = admin._id.toString();
+      return {
+        recipientUserId: adminId,
+        actorUserId: input.createdByUserId,
+        type: "settlement_dispute_created",
+        title: "New settlement dispute",
+        message: "A new settlement dispute has been submitted and requires review.",
+        groupId: input.groupId,
+        expenseId: null,
+        settlementId: input.settlementId,
+        disputeId: input.disputeId,
+        deduplicationKey: `settlement-dispute-created:${input.disputeId}:${adminId}`,
+      };
+    });
+
+    await createNotificationsIdempotently(notifications);
+  } catch (error) {
+    console.error("[notifications] Failed to notify admins of settlement dispute:", error);
+  }
 }

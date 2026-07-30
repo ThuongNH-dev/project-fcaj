@@ -13,6 +13,7 @@ import {
   toPublicSettlementDispute,
   updateDisputeStatusByAdmin,
 } from "./settlement-disputes.service.js";
+import { notifyAdminsOfSettlementDispute } from "../notifications/notifications.service.js";
 import {
   createDisputeEvidenceUploadPresign,
   createDisputeEvidenceViewUrl,
@@ -469,6 +470,14 @@ export async function createDisputeHandler(req: Request, res: Response) {
       createdByUserId: userId,
       againstUserId,
       groupId,
+    });
+
+    // Notify admins
+    await notifyAdminsOfSettlementDispute({
+      disputeId: dispute.id,
+      settlementId: dispute.settlementId,
+      groupId: dispute.groupId,
+      createdByUserId: userId,
     });
 
     return res.status(201).json({
