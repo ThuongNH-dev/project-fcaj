@@ -22,6 +22,12 @@ import {
   updateAdminUserRoleHandler,
   sendProductUpdateHandler,
 } from "./admin.controller.js";
+import {
+  adminGetDisputesHandler,
+  adminGetDisputeByIdHandler,
+  adminUpdateDisputeStatusHandler,
+  adminGetDisputeEvidenceViewUrlHandler,
+} from "../settlement-disputes/settlement-disputes.controller.js";
 
 const adminRouter = Router();
 
@@ -54,6 +60,32 @@ adminRouter.post(
   authMiddleware,
   requireAdmin,
   sendProductUpdateHandler,
+);
+
+// ── Settlement Disputes (Admin) ──────────────────────────────────────────────
+adminRouter.get(
+  "/settlement-disputes",
+  authMiddleware,
+  requireAdmin,
+  adminGetDisputesHandler,
+);
+adminRouter.get(
+  "/settlement-disputes/:disputeId",
+  authMiddleware,
+  requireAdmin,
+  adminGetDisputeByIdHandler,
+);
+adminRouter.patch(
+  "/settlement-disputes/:disputeId/status",
+  authMiddleware,
+  requireAdmin,
+  adminUpdateDisputeStatusHandler,
+);
+adminRouter.get(
+  "/settlement-disputes/:disputeId/evidence/:evidenceId/view-url",
+  authMiddleware,
+  requireAdmin,
+  adminGetDisputeEvidenceViewUrlHandler,
 );
 
 export default adminRouter;

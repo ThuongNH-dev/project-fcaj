@@ -16,6 +16,7 @@ export interface UserBillingUsageSummary {
   expenseCount: number;
   expenseLimit: number | null;
   receiptScanIncluded: boolean;
+  settlementDisputesIncluded: boolean;
 }
 
 export interface CurrentUserBillingSummary {

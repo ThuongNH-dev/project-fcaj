@@ -1974,6 +1974,7 @@ swaggerSpec.paths = {
                             "settlement_reminder",
                             "group_invite",
                             "product_update",
+                            "settlement_dispute_created",
                           ],
                         },
                         title: { type: "string" },
@@ -1981,6 +1982,7 @@ swaggerSpec.paths = {
                         groupId: { type: "string", nullable: true },
                         expenseId: { type: "string", nullable: true },
                         settlementId: { type: "string", nullable: true },
+                        disputeId: { type: "string", nullable: true },
                         isRead: { type: "boolean" },
                         readAt: { type: "string", format: "date-time", nullable: true },
                         deduplicationKey: { type: "string", nullable: true },
@@ -2297,6 +2299,440 @@ swaggerSpec.paths = {
       },
     },
   },
+
+  // ─── Settlement Disputes — User APIs ───────────────────────────────────────
+
+  "/api/settlement-disputes/evidence/presign": {
+    post: {
+      summary: "Create presigned URL for evidence upload (Pro only)",
+      description: "Requires an active Pro subscription. Returns a presigned S3 PUT URL. The client must upload the file directly to S3 before calling POST /api/settlement-disputes.",
+      tags: ["Settlement Disputes"],
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["settlementId", "originalFileName", "mimeType", "sizeInBytes"],
+              properties: {
+                settlementId: { type: "string", example: "64a1f2b3c4d5e6f7a8b9c0d1" },
+                originalFileName: { type: "string", example: "bank-transfer.jpg" },
+                mimeType: {
+                  type: "string",
+                  enum: ["image/jpeg", "image/png", "image/webp"],
+                  example: "image/jpeg",
+                },
+                sizeInBytes: { type: "integer", example: 245000 },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        201: {
+          description: "Presigned upload URL created successfully",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  message: { type: "string" },
+                  uploadUrl: { type: "string" },
+                  objectKey: { type: "string" },
+                  expiresIn: { type: "integer" },
+                  headers: {
+                    type: "object",
+                    properties: {
+                      "Content-Type": { type: "string" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        400: { description: "Validation error (invalid file type, size exceeds limit, etc.)" },
+        401: { description: "Missing or invalid bearer token" },
+        403: { description: "User does not have an active Pro subscription" },
+        404: { description: "Settlement not found or user is not debtor/creditor" },
+        409: { description: "Settlement is not sent, or user has already disputed this settlement" },
+        503: { description: "Database or S3 failure" },
+      },
+    },
+  },
+
+  "/api/settlement-disputes": {
+    post: {
+      summary: "Create a settlement dispute (Pro only)",
+      description: "Creates a dispute for a sent settlement. User must have an active Pro subscription. Evidence must be uploaded to S3 first via the presign endpoint.",
+      tags: ["Settlement Disputes"],
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["settlementId", "reason", "description"],
+              properties: {
+                settlementId: { type: "string", example: "64a1f2b3c4d5e6f7a8b9c0d1" },
+                reason: {
+                  type: "string",
+                  enum: [
+                    "payment_not_received",
+                    "incorrect_amount",
+                    "unauthorized_settlement",
+                    "other",
+                  ],
+                  example: "payment_not_received",
+                },
+                description: {
+                  type: "string",
+                  minLength: 10,
+                  maxLength: 1000,
+                  example: "The settlement was marked as sent but I have not received the payment.",
+                },
+                evidence: {
+                  type: "array",
+                  maxItems: 3,
+                  items: {
+                    type: "object",
+                    required: ["objectKey", "originalFileName", "mimeType", "sizeInBytes"],
+                    properties: {
+                      objectKey: { type: "string" },
+                      originalFileName: { type: "string", example: "bank-transfer.jpg" },
+                      mimeType: {
+                        type: "string",
+                        enum: ["image/jpeg", "image/png", "image/webp"],
+                      },
+                      sizeInBytes: { type: "integer", example: 245000 },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        201: {
+          description: "Settlement dispute created successfully",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  message: { type: "string" },
+                  dispute: { type: "object" },
+                },
+              },
+            },
+          },
+        },
+        400: { description: "Validation error" },
+        401: { description: "Missing or invalid bearer token" },
+        403: { description: "User does not have an active Pro subscription" },
+        404: { description: "Settlement not found or user is not debtor/creditor" },
+        409: { description: "Duplicate dispute or settlement is not sent" },
+        503: { description: "Database or S3 failure" },
+      },
+    },
+  },
+
+  "/api/settlement-disputes/my": {
+    get: {
+      summary: "List current user's settlement disputes",
+      description: "Returns disputes created by the authenticated user. Viewing does not require Pro.",
+      tags: ["Settlement Disputes"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        { in: "query", name: "page", schema: { type: "integer", default: 1 } },
+        { in: "query", name: "limit", schema: { type: "integer", default: 20, maximum: 100 } },
+        {
+          in: "query",
+          name: "status",
+          schema: { type: "string", enum: ["pending", "resolved", "rejected"] },
+        },
+        { in: "query", name: "settlementId", schema: { type: "string" } },
+        { in: "query", name: "groupId", schema: { type: "string" } },
+      ],
+      responses: {
+        200: {
+          description: "List of disputes fetched successfully",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  message: { type: "string" },
+                  disputes: { type: "array", items: { type: "object" } },
+                  pagination: {
+                    type: "object",
+                    properties: {
+                      page: { type: "integer" },
+                      limit: { type: "integer" },
+                      total: { type: "integer" },
+                      totalPages: { type: "integer" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        400: { description: "Invalid query parameter" },
+        401: { description: "Missing or invalid bearer token" },
+        503: { description: "Database failure" },
+      },
+    },
+  },
+
+  "/api/settlement-disputes/{disputeId}": {
+    get: {
+      summary: "Get a settlement dispute by ID (creator only)",
+      description: "Returns the full dispute detail. Only the user who created the dispute can access it. Viewing does not require Pro.",
+      tags: ["Settlement Disputes"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        { in: "path", name: "disputeId", required: true, schema: { type: "string" } },
+      ],
+      responses: {
+        200: {
+          description: "Dispute fetched successfully",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  message: { type: "string" },
+                  dispute: { type: "object" },
+                },
+              },
+            },
+          },
+        },
+        401: { description: "Missing or invalid bearer token" },
+        404: { description: "Dispute not found or user is not the creator" },
+        503: { description: "Database failure" },
+      },
+    },
+  },
+
+  "/api/settlement-disputes/{disputeId}/evidence/{evidenceId}/view-url": {
+    get: {
+      summary: "Get presigned view URL for dispute evidence (creator only)",
+      description: "Returns a temporary presigned GET URL for the evidence file. Only the creator can access. Viewing does not require Pro.",
+      tags: ["Settlement Disputes"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        { in: "path", name: "disputeId", required: true, schema: { type: "string" } },
+        { in: "path", name: "evidenceId", required: true, schema: { type: "string" } },
+      ],
+      responses: {
+        200: {
+          description: "Evidence view URL created successfully",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  message: { type: "string" },
+                  url: { type: "string" },
+                  expiresIn: { type: "integer" },
+                },
+              },
+            },
+          },
+        },
+        401: { description: "Missing or invalid bearer token" },
+        404: { description: "Dispute or evidence not found" },
+        503: { description: "S3 failure" },
+      },
+    },
+  },
+
+  // ─── Settlement Disputes — Admin APIs ─────────────────────────────────────
+
+  "/api/admin/settlement-disputes": {
+    get: {
+      summary: "Admin: list all settlement disputes",
+      tags: ["Admin — Settlement Disputes"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        { in: "query", name: "page", schema: { type: "integer", default: 1 } },
+        { in: "query", name: "limit", schema: { type: "integer", default: 20, maximum: 100 } },
+        {
+          in: "query",
+          name: "status",
+          schema: { type: "string", enum: ["pending", "resolved", "rejected"] },
+        },
+        { in: "query", name: "settlementId", schema: { type: "string" } },
+        { in: "query", name: "groupId", schema: { type: "string" } },
+        { in: "query", name: "createdByUserId", schema: { type: "string" } },
+      ],
+      responses: {
+        200: {
+          description: "Disputes fetched successfully",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  message: { type: "string" },
+                  disputes: { type: "array", items: { type: "object" } },
+                  pagination: {
+                    type: "object",
+                    properties: {
+                      page: { type: "integer" },
+                      limit: { type: "integer" },
+                      total: { type: "integer" },
+                      totalPages: { type: "integer" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        400: { description: "Invalid query parameter" },
+        401: { description: "Missing or invalid bearer token" },
+        403: { description: "User is not an admin" },
+        503: { description: "Database failure" },
+      },
+    },
+  },
+
+  "/api/admin/settlement-disputes/{disputeId}": {
+    get: {
+      summary: "Admin: get settlement dispute by ID",
+      tags: ["Admin — Settlement Disputes"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        { in: "path", name: "disputeId", required: true, schema: { type: "string" } },
+      ],
+      responses: {
+        200: {
+          description: "Dispute fetched successfully",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  message: { type: "string" },
+                  dispute: { type: "object" },
+                },
+              },
+            },
+          },
+        },
+        401: { description: "Missing or invalid bearer token" },
+        403: { description: "User is not an admin" },
+        404: { description: "Dispute not found" },
+        503: { description: "Database failure" },
+      },
+    },
+  },
+
+  "/api/admin/settlement-disputes/{disputeId}/status": {
+    patch: {
+      summary: "Admin: update settlement dispute status",
+      description: "Allowed transitions: pending → resolved, pending → rejected. adminNote is required.",
+      tags: ["Admin — Settlement Disputes"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        { in: "path", name: "disputeId", required: true, schema: { type: "string" } },
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: {
+              type: "object",
+              required: ["status", "adminNote"],
+              properties: {
+                status: {
+                  type: "string",
+                  enum: ["resolved", "rejected"],
+                  example: "resolved",
+                },
+                adminNote: {
+                  type: "string",
+                  maxLength: 1000,
+                  example: "The complaint was verified and handled by the administrator.",
+                },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Dispute status updated successfully",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  message: { type: "string" },
+                  dispute: { type: "object" },
+                },
+              },
+            },
+          },
+        },
+        400: { description: "Validation error (missing status, adminNote, or invalid target status)" },
+        401: { description: "Missing or invalid bearer token" },
+        403: { description: "User is not an admin" },
+        404: { description: "Dispute not found" },
+        409: { description: "Invalid status transition (e.g. dispute is already resolved or rejected)" },
+        503: { description: "Database failure" },
+      },
+    },
+  },
+
+  "/api/admin/settlement-disputes/{disputeId}/evidence/{evidenceId}/view-url": {
+    get: {
+      summary: "Admin: get presigned view URL for dispute evidence",
+      tags: ["Admin — Settlement Disputes"],
+      security: [{ bearerAuth: [] }],
+      parameters: [
+        { in: "path", name: "disputeId", required: true, schema: { type: "string" } },
+        { in: "path", name: "evidenceId", required: true, schema: { type: "string" } },
+      ],
+      responses: {
+        200: {
+          description: "Evidence view URL created successfully",
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  ok: { type: "boolean" },
+                  message: { type: "string" },
+                  url: { type: "string" },
+                  expiresIn: { type: "integer" },
+                },
+              },
+            },
+          },
+        },
+        401: { description: "Missing or invalid bearer token" },
+        403: { description: "User is not an admin" },
+        404: { description: "Dispute or evidence not found" },
+        503: { description: "S3 failure" },
+      },
+    },
+  },
 };
 
 export default swaggerSpec;
+

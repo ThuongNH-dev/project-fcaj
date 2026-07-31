@@ -43,6 +43,7 @@ export const env = {
   awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
   s3ReceiptsBucket: process.env.S3_RECEIPTS_BUCKET?.trim() || "",
   s3ReceiptsPrefix: process.env.S3_RECEIPTS_PREFIX?.trim() || "receipts/",
+  s3DisputesPrefix: process.env.S3_DISPUTES_PREFIX?.trim() || "settlement-disputes/",
   s3PresignExpiresSeconds:
     Number(process.env.S3_PRESIGN_EXPIRES_SECONDS) || 300,
   emailProvider,
