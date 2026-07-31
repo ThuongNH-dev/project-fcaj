@@ -242,7 +242,7 @@ export async function getMySettlementsHandler(req: Request, res: Response) {
  *       Only the debtor can mark a settlement as sent.
  *       This operation is idempotent — calling it again when already sent
  *       returns the settlement with `wasAlreadySent: true`.
- *       A payment_received notification is sent to the creditor if they have
+ *       A `payment_received` notification is sent to the creditor if they have
  *       opted in to paymentReceived notifications.
  *     tags:
  *       - Settlements
@@ -257,7 +257,7 @@ export async function getMySettlementsHandler(req: Request, res: Response) {
  *         description: Settlement ID.
  *     responses:
  *       200:
- *         description: Settlement marked as sent.
+ *         description: Settlement marked as sent (or was already sent).
  *         content:
  *           application/json:
  *             schema:
@@ -273,6 +273,8 @@ export async function getMySettlementsHandler(req: Request, res: Response) {
  *         description: Invalid settlementId.
  *       401:
  *         description: Unauthenticated.
+ *       403:
+ *         description: Forbidden – only the debtor of this settlement can mark it as sent.
  *       404:
  *         description: Settlement not found or not owned by debtor.
  *       503:
@@ -323,11 +325,11 @@ export async function markSettlementAsSentHandler(
       });
     }
 
-    // Only the creditor can mark as sent
-    if (existingSettlement.creditorUserId !== currentUser.id) {
+    // Only the debtor can mark as sent
+    if (existingSettlement.debtorUserId !== currentUser.id) {
       return res.status(403).json({
         ok: false,
-        message: "Only the creditor can mark this settlement as paid.",
+        message: "Only the debtor can mark this settlement as sent.",
       });
     }
 
@@ -448,7 +450,7 @@ async function tryCreatePaymentSentNotification(
       actorUserId: actor.id,
       type: "payment_received",
       title: "Payment sent",
-      message: `${actorName} confirmed receipt of ${formattedAmount} ${settlement.currency}.`,
+      message: `${actorName} marked ${formattedAmount} ${settlement.currency} as sent.`,
       groupId: settlement.groupId,
       expenseId: settlement.expenseId,
       settlementId,
