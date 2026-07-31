@@ -1,9 +1,24 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, DollarSign, TrendingUp, Users } from "lucide-react";
-import { useSearchParams } from "react-router";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  DollarSign,
+  ImagePlus,
+  TrendingUp,
+  Users,
+  X,
+} from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router";
 import { useStoredUser } from "../../auth";
 import { getExpenses, type Expense } from "../../expenses";
 import { getGroups, type Group } from "../../groups";
+import { getCurrentUserBilling, type CurrentUserBillingSummary } from "../../users";
+import {
+  createSettlementDispute,
+  uploadDisputeEvidence,
+  type DisputeEvidenceInput,
+  type SettlementDisputeReason,
+} from "../../settlement-disputes";
 import { AdminPagination } from "../../../app/admin/components/AdminPagination";
 import { useFeedback } from "../../../shared/providers/FeedbackProvider";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
@@ -22,6 +37,15 @@ import type {
   Settlement,
   SettlementPagination,
 } from "../models/settlements.types";
+
+const MAX_DISPUTE_EVIDENCE_COUNT = 3;
+
+const DISPUTE_REASON_OPTIONS: { value: SettlementDisputeReason; label: string }[] = [
+  { value: "payment_not_received", label: "Payment not received" },
+  { value: "incorrect_amount", label: "Incorrect amount" },
+  { value: "unauthorized_settlement", label: "Unauthorized settlement" },
+  { value: "other", label: "Other" },
+];
 
 const PAGE_LIMIT = 10;
 const SENT_TIMELINE_PAGE_LIMIT = 4;
@@ -117,8 +141,42 @@ export function SettlementPage() {
   const { t } = useLanguage();
   const { confirm, showToast } = useFeedback();
   const currentUser = useStoredUser();
+  const navigate = useNavigate();
+  const [billingSummary, setBillingSummary] = useState<CurrentUserBillingSummary | null>(
+    null,
+  );
+  const [disputeTargetSettlement, setDisputeTargetSettlement] =
+    useState<Settlement | null>(null);
+  const [disputeReason, setDisputeReason] =
+    useState<SettlementDisputeReason>("payment_not_received");
+  const [disputeDescription, setDisputeDescription] = useState("");
+  const [disputeFiles, setDisputeFiles] = useState<File[]>([]);
+  const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
+  const [disputedSettlementIds, setDisputedSettlementIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const disputeFileInputRef = useRef<HTMLInputElement>(null);
+  const isFreePlan = billingSummary?.profile.plan !== "pro";
   const focusedSettlementId = searchParams.get("settlementId");
   const focusedExpenseId = searchParams.get("expenseId");
+
+  useEffect(() => {
+    let isActive = true;
+
+    void getCurrentUserBilling()
+      .then((response) => {
+        if (isActive) {
+          setBillingSummary(response.billing ?? null);
+        }
+      })
+      .catch(() => {
+        // Billing summary is optional here; the dispute button simply stays gated.
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let isActive = true;
@@ -405,6 +463,17 @@ export function SettlementPage() {
     sentSettlements,
   ]);
 
+  const disputeFilePreviews = useMemo(
+    () => disputeFiles.map((file) => URL.createObjectURL(file)),
+    [disputeFiles],
+  );
+
+  useEffect(() => {
+    return () => {
+      disputeFilePreviews.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [disputeFilePreviews]);
+
   function getSettlementTitle(settlement: Settlement) {
     return (
       expensesById.get(settlement.expenseId)?.title ??
@@ -453,6 +522,124 @@ export function SettlementPage() {
       });
     } finally {
       setSendingSettlementId(null);
+    }
+  }
+
+  async function handleRequestDisputeUpgrade() {
+    const confirmed = await confirm({
+      title: "Settlement dispute needs Pro",
+      message:
+        "Free plan does not include settlement disputes. Upgrade to Pro to continue.",
+      confirmLabel: "Go to billing",
+      cancelLabel: "Not now",
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    navigate("/settings?tab=billing");
+  }
+
+  function handleOpenDisputeModal(settlement: Settlement) {
+    if (isFreePlan) {
+      void handleRequestDisputeUpgrade();
+      return;
+    }
+
+    setDisputeTargetSettlement(settlement);
+    setDisputeReason("payment_not_received");
+    setDisputeDescription("");
+    setDisputeFiles([]);
+  }
+
+  function handleCloseDisputeModal() {
+    if (isSubmittingDispute) {
+      return;
+    }
+
+    setDisputeTargetSettlement(null);
+  }
+
+  function handleDisputeFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(event.target.files ?? []);
+
+    event.target.value = "";
+
+    if (selected.length === 0) {
+      return;
+    }
+
+    setDisputeFiles((current) => {
+      const combined = [...current, ...selected];
+
+      if (combined.length > MAX_DISPUTE_EVIDENCE_COUNT) {
+        showToast({
+          variant: "error",
+          message: `You can attach up to ${MAX_DISPUTE_EVIDENCE_COUNT} images.`,
+        });
+      }
+
+      return combined.slice(0, MAX_DISPUTE_EVIDENCE_COUNT);
+    });
+  }
+
+  function handleRemoveDisputeFile(index: number) {
+    setDisputeFiles((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  async function handleSubmitDispute() {
+    if (!disputeTargetSettlement) {
+      return;
+    }
+
+    if (disputeDescription.trim().length < 10) {
+      showToast({
+        variant: "error",
+        message: "Description must be at least 10 characters.",
+      });
+      return;
+    }
+
+    try {
+      setIsSubmittingDispute(true);
+
+      const evidence: DisputeEvidenceInput[] = [];
+
+      for (const file of disputeFiles) {
+        const uploaded = await uploadDisputeEvidence({
+          file,
+          settlementId: disputeTargetSettlement.id,
+        });
+
+        evidence.push(uploaded);
+      }
+
+      const response = await createSettlementDispute({
+        settlementId: disputeTargetSettlement.id,
+        reason: disputeReason,
+        description: disputeDescription.trim(),
+        evidence,
+      });
+
+      setDisputedSettlementIds((current) => {
+        const next = new Set(current);
+        next.add(disputeTargetSettlement.id);
+        return next;
+      });
+
+      showToast({ variant: "success", message: response.message });
+      setDisputeTargetSettlement(null);
+    } catch (error) {
+      showToast({
+        variant: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to submit settlement dispute.",
+      });
+    } finally {
+      setIsSubmittingDispute(false);
     }
   }
 
@@ -718,6 +905,25 @@ export function SettlementPage() {
                             {isDebtor ? t.youOweLabel : t.youAreOwedLabel} |{" "}
                             {formatDateTime(settlement.sentAt ?? settlement.updatedAt)}
                           </p>
+                          {disputedSettlementIds.has(settlement.id) ? (
+                            <span
+                              className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-[#FEF3C7] px-2.5 py-1.5 text-xs text-[#92400E]"
+                              style={{ fontWeight: 600 }}
+                            >
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                              Dispute submitted
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenDisputeModal(settlement)}
+                              className="mt-3 flex items-center gap-1.5 rounded-lg border border-[#FCA5A5] px-2.5 py-1.5 text-xs text-[#B91C1C] transition-colors hover:bg-[#FEF2F2]"
+                              style={{ fontWeight: 600 }}
+                            >
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                              Dispute
+                            </button>
+                          )}
                         </div>
                       );
                     })}
@@ -760,6 +966,156 @@ export function SettlementPage() {
           </div>
         </div>
       </div>
+
+      {disputeTargetSettlement && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/35 backdrop-blur-sm"
+            onClick={handleCloseDisputeModal}
+          />
+          <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[1.75rem] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_64px_rgba(17,24,39,0.22)]">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
+                  Dispute settlement
+                </h3>
+                <p className="mt-1 text-sm text-[#6B7280]">
+                  {getSettlementTitle(disputeTargetSettlement)} ·{" "}
+                  {formatCurrency(
+                    disputeTargetSettlement.amount,
+                    disputeTargetSettlement.currency,
+                  )}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseDisputeModal}
+                disabled={isSubmittingDispute}
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-[#6B7280] transition-colors hover:bg-[#F3F4F6] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label
+                  className="mb-1.5 block text-sm text-[#374151]"
+                  style={{ fontWeight: 600 }}
+                >
+                  Reason
+                </label>
+                <select
+                  value={disputeReason}
+                  onChange={(event) =>
+                    setDisputeReason(event.target.value as SettlementDisputeReason)
+                  }
+                  disabled={isSubmittingDispute}
+                  className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {DISPUTE_REASON_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  className="mb-1.5 block text-sm text-[#374151]"
+                  style={{ fontWeight: 600 }}
+                >
+                  Description
+                </label>
+                <textarea
+                  value={disputeDescription}
+                  onChange={(event) => setDisputeDescription(event.target.value)}
+                  disabled={isSubmittingDispute}
+                  rows={4}
+                  maxLength={1000}
+                  placeholder="Explain what happened (at least 10 characters)"
+                  className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] disabled:cursor-not-allowed disabled:opacity-60"
+                />
+                <p className="mt-1 text-right text-xs text-[#9CA3AF]">
+                  {disputeDescription.length}/1000
+                </p>
+              </div>
+
+              <div>
+                <label
+                  className="mb-1.5 block text-sm text-[#374151]"
+                  style={{ fontWeight: 600 }}
+                >
+                  Evidence (up to {MAX_DISPUTE_EVIDENCE_COUNT} images)
+                </label>
+                <div className="flex flex-wrap gap-3">
+                  {disputeFiles.map((file, index) => (
+                    <div
+                      key={`${file.name}-${index}`}
+                      className="relative h-20 w-20 overflow-hidden rounded-xl border border-[#E5E7EB]"
+                    >
+                      <img
+                        src={disputeFilePreviews[index]}
+                        alt={file.name}
+                        className="h-full w-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveDisputeFile(index)}
+                        disabled={isSubmittingDispute}
+                        className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white disabled:cursor-not-allowed"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                  {disputeFiles.length < MAX_DISPUTE_EVIDENCE_COUNT && (
+                    <button
+                      type="button"
+                      onClick={() => disputeFileInputRef.current?.click()}
+                      disabled={isSubmittingDispute}
+                      className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-[#E5E7EB] text-[#9CA3AF] transition-colors hover:border-[#7EDDBA] hover:text-[#16A34A] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <ImagePlus className="h-5 w-5" />
+                      <span className="text-[10px]">Add</span>
+                    </button>
+                  )}
+                </div>
+                <input
+                  ref={disputeFileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  multiple
+                  className="hidden"
+                  onChange={handleDisputeFileChange}
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => void handleSubmitDispute()}
+                disabled={isSubmittingDispute}
+                className="rounded-xl bg-[#16A34A] px-5 py-2.5 text-sm text-white shadow-sm transition-colors hover:bg-[#15803D] disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ fontWeight: 600 }}
+              >
+                {isSubmittingDispute ? "Submitting..." : "Submit dispute"}
+              </button>
+              <button
+                type="button"
+                onClick={handleCloseDisputeModal}
+                disabled={isSubmittingDispute}
+                className="rounded-xl border border-[#E5E7EB] px-5 py-2.5 text-sm text-[#374151] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ fontWeight: 600 }}
+              >
+                {t.cancel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
