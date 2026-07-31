@@ -364,7 +364,7 @@ export interface MarkSentResult {
 
 export async function markSettlementAsSent(
   settlementId: string,
-  debtorUserId: string,
+  creditorUserId: string,
   notificationPending: boolean,
 ): Promise<MarkSentResult | null> {
   if (!MongoObjectId.isValid(settlementId)) {
@@ -378,7 +378,7 @@ export async function markSettlementAsSent(
   const result = await settlements.findOneAndUpdate(
     {
       _id: new MongoObjectId(settlementId),
-      debtorUserId,
+      creditorUserId,
       status: "pending",
     },
     {
@@ -405,7 +405,7 @@ export async function markSettlementAsSent(
   // If no update happened, check if the settlement exists and is already sent
   const existing = await settlements.findOne({
     _id: new MongoObjectId(settlementId),
-    debtorUserId,
+    creditorUserId,
   });
 
   if (!existing) {

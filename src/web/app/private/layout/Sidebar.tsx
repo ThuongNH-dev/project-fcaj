@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   LayoutDashboard,
@@ -33,6 +33,19 @@ export function Sidebar({ currentPath }: SidebarProps) {
   const navigate = useNavigate();
 
   const isAdminUser = user?.role === "admin";
+  const sidebarWidth = collapsed ? "4rem" : "15rem";
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    document.documentElement.style.setProperty("--sidebar-width", sidebarWidth);
+
+    return () => {
+      document.documentElement.style.removeProperty("--sidebar-width");
+    };
+  }, [sidebarWidth]);
 
   const fullNavItems = [
     { icon: LayoutDashboard, label: t.dashboard, path: "/dashboard" },
@@ -254,19 +267,13 @@ export function Sidebar({ currentPath }: SidebarProps) {
       ) : null}
 
       <div
-        className={`hidden lg:flex flex-col fixed left-0 top-0 h-full bg-white border-r border-[#E5E7EB] transition-all duration-200 z-30 ${
+        className={`hidden lg:flex flex-col h-screen sticky top-0 bg-white border-r border-[#E5E7EB] transition-all duration-200 z-30 ${
           collapsed ? "w-16" : "w-60"
         }`}
         style={{ boxShadow: "2px 0 10px rgba(17, 24, 39, 0.03)" }}
       >
         {sidebarContent}
       </div>
-
-      <div
-        className={`hidden lg:block flex-shrink-0 transition-all duration-200 ${
-          collapsed ? "w-16" : "w-60"
-        }`}
-      />
     </>
   );
 }

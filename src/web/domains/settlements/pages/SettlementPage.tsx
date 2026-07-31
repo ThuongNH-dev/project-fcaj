@@ -24,6 +24,7 @@ import type {
 } from "../models/settlements.types";
 
 const PAGE_LIMIT = 10;
+const SENT_TIMELINE_PAGE_LIMIT = 4;
 const SUMMARY_PAGE_LIMIT = 100;
 const EMPTY_PAGINATION: SettlementPagination = {
   page: 1,
@@ -208,7 +209,7 @@ export function SettlementPage() {
       setSentErrorMessage("");
       const response = await getMySettlements({
         page: sentPage,
-        limit: PAGE_LIMIT,
+        limit: SENT_TIMELINE_PAGE_LIMIT,
         status: "sent",
       });
 
@@ -458,6 +459,7 @@ export function SettlementPage() {
   function renderPendingSettlements(settlements: Settlement[]) {
     return settlements.map((settlement) => {
       const isDebtor = settlement.debtorUserId === currentUser?.id;
+      const isCreditor = settlement.creditorUserId === currentUser?.id;
       const counterpartyId = isDebtor
         ? settlement.creditorUserId
         : settlement.debtorUserId;
@@ -507,7 +509,7 @@ export function SettlementPage() {
             >
               {formatCurrency(settlement.amount, settlement.currency)}
             </p>
-            {isDebtor && settlement.status === "pending" ? (
+            {isCreditor && settlement.status === "pending" ? (
               <button
                 type="button"
                 onClick={() => void handleMarkAsSent(settlement)}
@@ -519,7 +521,7 @@ export function SettlementPage() {
                 }`}
                 style={{ fontWeight: 600 }}
               >
-                {isSending ? t.updating : t.markAsSent}
+                {isSending ? t.updating : t.markAsPaid}
               </button>
             ) : null}
           </div>
@@ -533,7 +535,7 @@ export function SettlementPage() {
     debtorSettlements.length > 0 || creditorSettlements.length > 0;
 
   return (
-    <div className="lg:pl-60 min-h-screen bg-[#F6FBF8]">
+    <div className="min-h-screen bg-[#F6FBF8]">
       <div className="max-w-7xl mx-auto px-6 py-8 pt-16 lg:pt-8">
         <div className="mb-8">
           <h1 className="text-[#111827]" style={{ fontSize: "1.5rem", fontWeight: 800 }}>

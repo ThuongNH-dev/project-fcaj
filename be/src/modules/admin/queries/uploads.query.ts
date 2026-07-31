@@ -7,7 +7,6 @@ export async function getAdminUploadRecords(): Promise<AdminUploadRecord[]> {
   const receipts = await getReceiptsCollection();
   const receiptDocuments = await receipts
     .find({})
-    .sort({ createdAt: -1 })
     .limit(100)
     .toArray();
 
@@ -27,16 +26,32 @@ export async function getAdminUploadRecords(): Promise<AdminUploadRecord[]> {
       ),
     ).filter((groupId) => MongoObjectId.isValid(groupId)),
     userIds: Array.from(
-      new Set(receiptDocuments.map((receiptDocument) => receiptDocument.uploadedByUserId)),
+      new Set(
+        receiptDocuments.flatMap((receiptDocument) =>
+          [receiptDocument.uploadedByUserId, receiptDocument.reviewedBy].filter(
+            (userId): userId is string => Boolean(userId),
+          ),
+        ),
+      ),
     ).filter((userId) => MongoObjectId.isValid(userId)),
   });
 
-  return receiptDocuments.map((receiptDocument: ReceiptUploadDocument) => {
+  const statusRank: Record<AdminUploadRecord["reviewStatus"], number> = {
+    pending: 0,
+    approved: 1,
+    rejected: 2,
+  };
+
+  return receiptDocuments
+    .map((receiptDocument: ReceiptUploadDocument) => {
     const uploadedBy =
       referenceMaps.usersById.get(receiptDocument.uploadedByUserId) ?? {
         email: "",
         name: "Unknown user",
       };
+    const reviewedBy = receiptDocument.reviewedBy
+      ? referenceMaps.usersById.get(receiptDocument.reviewedBy) ?? null
+      : null;
     const expense = receiptDocument.expenseId
       ? referenceMaps.expensesById.get(receiptDocument.expenseId)
       : null;
@@ -55,6 +70,10 @@ export async function getAdminUploadRecords(): Promise<AdminUploadRecord[]> {
       ocrStatus: receiptDocument.ocrStatus,
       originalFileName: receiptDocument.originalFileName,
       processingStatus: receiptDocument.processingStatus,
+      rejectionReason: receiptDocument.rejectionReason,
+      reviewedAt: receiptDocument.reviewedAt?.toISOString() ?? null,
+      reviewedBy: receiptDocument.reviewedBy,
+      reviewedByName: reviewedBy?.name ?? null,
       reviewStatus: receiptDocument.reviewStatus,
       sizeInBytes: receiptDocument.sizeInBytes,
       storagePath: receiptDocument.storagePath,
@@ -64,5 +83,17 @@ export async function getAdminUploadRecords(): Promise<AdminUploadRecord[]> {
       uploadedByName: uploadedBy.name,
       uploadedByUserId: receiptDocument.uploadedByUserId,
     };
-  });
+    })
+    .sort((left, right) => {
+      const statusDiff =
+        statusRank[left.reviewStatus] - statusRank[right.reviewStatus];
+
+      if (statusDiff !== 0) {
+        return statusDiff;
+      }
+
+      return (
+        new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+      );
+    });
 }

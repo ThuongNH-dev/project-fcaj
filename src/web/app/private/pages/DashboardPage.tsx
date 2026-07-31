@@ -483,8 +483,8 @@ export function DashboardPage() {
   ];
 
   return (
-    <div className="lg:pl-60 min-h-screen bg-[#F6FBF8]">
-      <div className="max-w-7xl mx-auto px-6 py-8 pt-16 lg:pt-8">
+    <div className="min-h-screen bg-[#F6FBF8]">
+      <div className="w-full px-6 py-8 pt-16 lg:pt-8">
         <div className="relative overflow-hidden rounded-3xl border border-[#E5E7EB] bg-gradient-to-br from-white via-white to-[#EAFBF3] px-6 py-6 sm:px-8 sm:py-7 mb-8">
           <div
             className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 rounded-full bg-[#7EDDBA]/25 blur-3xl"

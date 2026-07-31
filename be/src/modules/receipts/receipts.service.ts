@@ -377,6 +377,69 @@ export async function getReceiptUploadByIdForUser(
   return receiptDocument ? toPublicReceiptUpload(receiptDocument) : null;
 }
 
+export async function getReceiptUploadById(
+  receiptId: string,
+): Promise<PublicReceiptUpload | null> {
+  if (!MongoObjectId.isValid(receiptId)) {
+    return null;
+  }
+
+  const receipts = await getReceiptsCollection();
+  const receiptDocument = await receipts.findOne({
+    _id: new MongoObjectId(receiptId),
+  });
+
+  return receiptDocument ? toPublicReceiptUpload(receiptDocument) : null;
+}
+
+export async function reviewReceiptUploadById(input: {
+  receiptId: string;
+  reviewStatus: ReceiptReviewStatus;
+  reviewedBy: string;
+  rejectionReason?: string | null;
+}): Promise<PublicReceiptUpload | null> {
+  if (!MongoObjectId.isValid(input.receiptId)) {
+    return null;
+  }
+
+  const receipts = await getReceiptsCollection();
+  const reviewedAt = new Date();
+  const normalizedReviewStatus = normalizeReceiptReviewStatus(input.reviewStatus);
+  const normalizedRejectionReason = normalizeReceiptOptionalText(input.rejectionReason);
+  const nextProcessingStatus: ReceiptProcessingStatus =
+    normalizedReviewStatus === "approved"
+      ? "processed"
+      : normalizedReviewStatus === "rejected"
+        ? "failed"
+        : "pending";
+
+  const updateResult = await receipts.findOneAndUpdate(
+    { _id: new MongoObjectId(input.receiptId) },
+    {
+      $set: {
+        processingStatus: nextProcessingStatus,
+        rejectionReason:
+          normalizedReviewStatus === "rejected" ? normalizedRejectionReason : null,
+        reviewedAt,
+        reviewedBy: input.reviewedBy,
+        reviewStatus: normalizedReviewStatus,
+        updatedAt: reviewedAt,
+      },
+    },
+    { returnDocument: "after" },
+  );
+
+  if (!updateResult) {
+    return null;
+  }
+
+  const updatedReceipt = await receipts.findOne({
+    _id: new MongoObjectId(input.receiptId),
+  });
+
+  return updatedReceipt ? toPublicReceiptUpload(updatedReceipt) : null;
+}
+
 export function toPublicReceiptUpload(
   receiptUpload: ReceiptUploadDocument,
 ): PublicReceiptUpload {

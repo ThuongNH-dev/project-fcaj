@@ -14,6 +14,7 @@ import { uploadReceiptFile } from "../../receipts";
 import { useFeedback } from "../../../shared/providers/FeedbackProvider";
 import { AddExpenseDialog, type NewExpense } from "../components/AddExpenseDialog";
 import { createExpense, deleteExpense, getExpenses, updateExpense, type Expense } from "..";
+import { getReceipt, getReceiptViewUrl, type ReceiptUpload } from "../../receipts";
 import { formatCurrencyBreakdown } from "../../settlements/lib/settlement.utils";
 import { getCurrentUserBilling, type CurrentUserBillingSummary } from "../../users";
 import { AdminPagination } from "../../../app/admin/components/AdminPagination";
@@ -35,6 +36,12 @@ const catColors: Record<string, string> = {
 const statusStyles: Record<string, string> = {
   settled: "bg-[#D1FAE5] text-[#065f46]",
   pending: "bg-[#FEF3C7] text-[#92400e]",
+};
+
+const reviewStyles: Record<string, string> = {
+  approved: "bg-[#D1FAE5] text-[#065f46]",
+  pending: "bg-[#FEF3C7] text-[#92400e]",
+  rejected: "bg-[#FEE2E2] text-[#991b1b]",
 };
 
 function addCurrencyAmount(totals: Map<string, number>, currency: string, amount: number) {
@@ -59,6 +66,9 @@ export function ExpensesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [expenseToEdit, setExpenseToEdit] = useState<Expense | null>(null);
+  const [selectedReceiptUrl, setSelectedReceiptUrl] = useState("");
+  const [selectedReceiptTitle, setSelectedReceiptTitle] = useState("");
+  const [selectedReceiptMeta, setSelectedReceiptMeta] = useState<ReceiptUpload | null>(null);
   const { t } = useLanguage();
   const location = useLocation();
   const { confirm, showToast } = useFeedback();
@@ -358,8 +368,41 @@ export function ExpensesPage() {
     }
   };
 
+  const handleOpenReceipt = async (expense: Expense) => {
+    if (!expense.receiptId) {
+      return;
+    }
+
+    try {
+      const response = await getReceipt(expense.receiptId);
+      const receipt = response.receipt ?? null;
+      setSelectedReceiptMeta(receipt);
+      setSelectedReceiptTitle(receipt?.originalFileName ?? expense.title);
+
+      if (receipt?.reviewStatus === "rejected") {
+        setSelectedReceiptUrl("");
+        return;
+      }
+
+      const previewResponse = await getReceiptViewUrl(expense.receiptId);
+      setSelectedReceiptUrl(previewResponse.url ?? "");
+    } catch (error) {
+      setSelectedReceiptMeta(null);
+      showToast({
+        variant: "error",
+        message: error instanceof Error ? error.message : "Unable to open receipt.",
+      });
+    }
+  };
+
+  const handleCloseReceipt = () => {
+    setSelectedReceiptUrl("");
+    setSelectedReceiptTitle("");
+    setSelectedReceiptMeta(null);
+  };
+
   return (
-    <div className="lg:pl-60 min-h-screen bg-[#F6FBF8]">
+    <div className="min-h-screen bg-[#F6FBF8]">
       <div className="max-w-7xl mx-auto px-6 py-8 pt-16 lg:pt-8">
         <div className="flex items-center justify-between mb-8 gap-4 flex-wrap">
           <div>
@@ -479,7 +522,7 @@ export function ExpensesPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-[#F3F4F6]">
-                      {[t.expense, t.group, t.category, t.paidBy, "Total", t.yourShare, t.date, t.status].map((heading) => (
+                      {[t.expense, t.group, t.category, t.paidBy, "Total", t.yourShare, t.date, t.status, "Action"].map((heading) => (
                         <th
                           key={heading}
                           className="text-left px-5 py-3 text-xs text-[#9CA3AF] uppercase tracking-wider whitespace-nowrap"
@@ -559,49 +602,78 @@ export function ExpensesPage() {
                         {formatShortDate(expense.expenseDate)}
                       </td>
                       <td className="px-5 py-3.5">
-                        <span
-                          className={`text-xs px-2.5 py-1 rounded-full ${
-                            statusStyles[expense.settlementStatus] ||
-                            "bg-[#F3F4F6] text-[#6B7280]"
-                          }`}
-                          style={{ fontWeight: 500 }}
-                        >
-                          {toTitleCase(expense.settlementStatus)}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span
+                            className={`text-xs px-2.5 py-1 rounded-full ${
+                              statusStyles[expense.settlementStatus] ||
+                              "bg-[#F3F4F6] text-[#6B7280]"
+                            }`}
+                            style={{ fontWeight: 500 }}
+                          >
+                            {toTitleCase(expense.settlementStatus)}
+                          </span>
+                          {expense.receiptId ? (
+                            <span
+                              className={`text-xs px-2.5 py-1 rounded-full ${
+                                reviewStyles[expense.reviewStatus] ||
+                                "bg-[#F3F4F6] text-[#6B7280]"
+                              }`}
+                              style={{ fontWeight: 500 }}
+                            >
+                              {expense.reviewStatus === "approved"
+                                ? "Receipt approved"
+                                : expense.reviewStatus === "rejected"
+                                  ? "Receipt rejected"
+                                  : "Receipt pending"}
+                            </span>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="px-5 py-3.5 text-right">
-                        {expense.createdBy === currentUser?.id && (
-                          <div className="inline-flex items-center gap-2">
+                        <div className="flex flex-col items-end gap-2">
+                          {expense.receiptId && (
                             <button
                               type="button"
-                              onClick={() => setExpenseToEdit(expense)}
-                              disabled={isExpenseInBannedGroup(expense)}
-                              className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
-                                isExpenseInBannedGroup(expense)
-                                  ? "cursor-not-allowed border-[#E5E7EB] bg-[#F9FAFB] text-[#9CA3AF]"
-                                  : "border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#F9FAFB]"
-                              }`}
+                              onClick={() => void handleOpenReceipt(expense)}
+                              className="inline-flex h-9 w-24 items-center justify-center rounded-full border border-[#D1D5DB] px-3 text-xs text-[#111827] transition-colors hover:bg-[#F9FAFB]"
                               style={{ fontWeight: 600 }}
                             >
-                              <Pencil className="h-3.5 w-3.5" />
-                              Edit
+                              {t.view}
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => void handleDelete(expense)}
-                              disabled={isExpenseInBannedGroup(expense)}
-                              className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs transition-colors ${
-                                isExpenseInBannedGroup(expense)
-                                  ? "cursor-not-allowed border-[#E5E7EB] bg-[#F9FAFB] text-[#9CA3AF]"
-                                  : "border-[#FECACA] bg-[#FEF2F2] text-[#B91C1C] hover:bg-[#FEE2E2]"
-                              }`}
-                              style={{ fontWeight: 600 }}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              Delete
-                            </button>
-                          </div>
-                        )}
+                          )}
+                              {expense.createdBy === currentUser?.id && (
+                                <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() => setExpenseToEdit(expense)}
+                                disabled={isExpenseInBannedGroup(expense) || expense.reviewStatus !== "approved"}
+                                className={`inline-flex h-9 items-center gap-1 rounded-full border px-3 text-xs transition-colors ${
+                                  isExpenseInBannedGroup(expense) || expense.reviewStatus !== "approved"
+                                    ? "cursor-not-allowed border-[#E5E7EB] bg-[#F9FAFB] text-[#9CA3AF]"
+                                    : "border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#F9FAFB]"
+                                }`}
+                                style={{ fontWeight: 600 }}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleDelete(expense)}
+                                disabled={isExpenseInBannedGroup(expense)}
+                                className={`inline-flex h-9 items-center gap-1 rounded-full border px-3 text-xs transition-colors ${
+                                  isExpenseInBannedGroup(expense)
+                                    ? "cursor-not-allowed border-[#E5E7EB] bg-[#F9FAFB] text-[#9CA3AF]"
+                                    : "border-[#FECACA] bg-[#FEF2F2] text-[#B91C1C] hover:bg-[#FEE2E2]"
+                                }`}
+                                style={{ fontWeight: 600 }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
                     ))}
@@ -660,6 +732,43 @@ export function ExpensesPage() {
           onRequestReceiptUpgrade={handleRequestReceiptUpgrade}
         />,
         document.body,
+      )}
+      {(selectedReceiptUrl || selectedReceiptMeta) && (
+        <div className="fixed inset-0 z-[240] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/45" onClick={handleCloseReceipt} />
+          <div className="relative w-full max-w-5xl overflow-hidden rounded-[1.5rem] bg-white shadow-[0_24px_64px_rgba(17,24,39,0.22)]">
+            <div className="flex items-center justify-between border-b border-[#E5E7EB] px-5 py-4">
+              <div>
+                <p className="text-sm text-[#111827]" style={{ fontWeight: 700 }}>
+                  {selectedReceiptTitle}
+                </p>
+                <p className="text-xs text-[#6B7280]">Receipt preview</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseReceipt}
+                className="rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm text-[#374151]"
+                style={{ fontWeight: 600 }}
+              >
+                Close
+              </button>
+            </div>
+            {selectedReceiptMeta?.reviewStatus === "rejected" ? (
+              <div className="flex min-h-[55vh] items-center justify-center bg-[#F9FAFB] p-6">
+                <div className="max-w-2xl rounded-2xl border border-[#FECACA] bg-[#FFF1F2] px-6 py-5 text-center">
+                  <p className="text-base text-[#991b1b]" style={{ fontWeight: 800 }}>
+                    {t.billRejected}
+                  </p>
+                  <p className="mt-2 text-sm text-[#7F1D1D]">
+                    {t.rejectionReason}: {selectedReceiptMeta.rejectionReason?.trim() || "No reason provided."}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <iframe src={selectedReceiptUrl} title={selectedReceiptTitle} className="h-[75vh] w-full" />
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

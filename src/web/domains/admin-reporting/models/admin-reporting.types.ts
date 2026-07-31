@@ -119,6 +119,10 @@ export interface AdminUploadRecord {
   groupName: string | null;
   expenseId: string | null;
   expenseTitle: string | null;
+  rejectionReason: string | null;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+  reviewedByName: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -127,6 +131,23 @@ export interface AdminUploadsResponse {
   ok: boolean;
   message: string;
   uploads?: AdminUploadRecord[];
+}
+
+export interface ReviewAdminUploadPayload {
+  reviewStatus: "approved" | "rejected";
+  rejectionReason?: string | null;
+}
+
+export interface ReviewAdminUploadResponse {
+  ok: boolean;
+  message: string;
+}
+
+export interface AdminUploadViewUrlResponse {
+  ok: boolean;
+  message: string;
+  url?: string;
+  expiresIn?: number;
 }
 
 export interface AdminRejectedRecord {

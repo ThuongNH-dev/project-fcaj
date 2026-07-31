@@ -60,8 +60,17 @@ export interface AdminUploadRecord {
   groupName: string | null;
   expenseId: string | null;
   expenseTitle: string | null;
+  rejectionReason: string | null;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+  reviewedByName: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ReviewAdminUploadInput {
+  reviewStatus: "approved" | "rejected";
+  rejectionReason?: string | null;
 }
 
 export interface AdminRejectedRecord {

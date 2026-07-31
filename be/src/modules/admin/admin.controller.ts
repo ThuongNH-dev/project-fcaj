@@ -1,5 +1,11 @@
 import type { Request, Response } from "express";
 import { randomUUID } from "crypto";
+import { createReceiptFileAccessPresign } from "../receipts/receipts.storage.js";
+import {
+  getReceiptUploadById,
+  reviewReceiptUploadById,
+} from "../receipts/receipts.service.js";
+import { deleteReceiptObject } from "../receipts/receipts.storage.js";
 import {
   countUsersByRole,
   deleteUserById,
@@ -508,6 +514,135 @@ export async function getAdminUploadsHandler(_req: Request, res: Response) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to fetch admin uploads.";
+
+    return res.status(503).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function getAdminUploadViewUrlHandler(req: Request, res: Response) {
+  const receiptId =
+    typeof req.params.receiptId === "string" ? req.params.receiptId : "";
+  const download = req.query.download === "true";
+
+  try {
+    const receipt = await getReceiptUploadById(receiptId);
+
+    if (!receipt) {
+      return res.status(404).json({
+        ok: false,
+        message: "Receipt not found.",
+      });
+    }
+
+    const presignResult = await createReceiptFileAccessPresign({
+      objectKey: receipt.storagePath,
+      originalFileName: receipt.originalFileName,
+      mimeType: receipt.mimeType,
+      download,
+    });
+
+    return res.status(200).json({
+      ok: true,
+      message: "Admin receipt access URL created successfully.",
+      url: presignResult.url,
+      expiresIn: presignResult.expiresIn,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Unable to create admin receipt access URL.";
+
+    return res.status(503).json({
+      ok: false,
+      message,
+    });
+  }
+}
+
+export async function reviewAdminUploadHandler(req: Request, res: Response) {
+  const receiptId =
+    typeof req.params.receiptId === "string" ? req.params.receiptId : "";
+  const reviewStatus =
+    typeof req.body?.reviewStatus === "string" ? req.body.reviewStatus : "";
+  const rejectionReason =
+    typeof req.body?.rejectionReason === "string" ? req.body.rejectionReason : undefined;
+  const adminUserId = req.auth?.userId ?? null;
+
+  if (!adminUserId) {
+    return res.status(401).json({
+      ok: false,
+      message: "Authorization token is required.",
+    });
+  }
+
+  if (reviewStatus !== "approved" && reviewStatus !== "rejected") {
+    return res.status(400).json({
+      ok: false,
+      message: "Review status must be either approved or rejected.",
+    });
+  }
+
+  if (reviewStatus === "rejected" && !rejectionReason?.trim()) {
+    return res.status(400).json({
+      ok: false,
+      message: "Rejection reason is required when rejecting a receipt.",
+    });
+  }
+
+  try {
+    const existingReceipt = await getReceiptUploadById(receiptId);
+
+    if (!existingReceipt) {
+      return res.status(404).json({
+        ok: false,
+        message: "Receipt not found.",
+      });
+    }
+
+    if (existingReceipt.reviewStatus === "rejected") {
+      return res.status(409).json({
+        ok: false,
+        message: "Rejected receipts cannot be reviewed again.",
+      });
+    }
+
+    const receipt = await reviewReceiptUploadById({
+      receiptId,
+      rejectionReason,
+      reviewedBy: adminUserId,
+      reviewStatus,
+    });
+
+    if (!receipt) {
+      return res.status(404).json({
+        ok: false,
+        message: "Receipt not found.",
+      });
+    }
+
+    if (reviewStatus === "rejected") {
+      try {
+        await deleteReceiptObject(receipt.storagePath);
+      } catch {
+        // Keep the moderation decision even if storage cleanup fails.
+      }
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message:
+        reviewStatus === "approved"
+          ? "Receipt approved successfully."
+          : "Receipt rejected successfully.",
+      receipt,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to review admin upload.";
 
     return res.status(503).json({
       ok: false,

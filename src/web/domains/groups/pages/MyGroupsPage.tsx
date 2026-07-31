@@ -14,6 +14,8 @@ import { getExpenses, type Expense } from "../../expenses";
 import { GroupFormDialog } from "../components/GroupFormDialog";
 import { canManageGroup, deleteGroup, getGroups, type Group } from "..";
 import { formatCurrencyBreakdown } from "../../settlements/lib/settlement.utils";
+import { AdminPagination } from "../../../app/admin/components/AdminPagination";
+import { useAdminPagination } from "../../../app/admin/lib/admin.utils";
 
 type GroupStatus = "Active" | "Pending" | "Settled" | "Banned";
 
@@ -145,6 +147,13 @@ export function MyGroupsPage() {
     });
   }, [filter, groupExpenseSummaries, groups, search]);
 
+  const {
+    page: groupsPage,
+    pageItems: pagedGroups,
+    setPage: setGroupsPage,
+    totalPages: groupsTotalPages,
+  } = useAdminPagination(filteredGroups);
+
   const formatRelativeTime = (value: string) => {
     const now = Date.now();
     const timestamp = new Date(value).getTime();
@@ -225,7 +234,7 @@ export function MyGroupsPage() {
   };
 
   return (
-    <div className="lg:pl-60 min-h-screen bg-[#F6FBF8]">
+    <div className="min-h-screen bg-[#F6FBF8]">
       <div className="max-w-7xl mx-auto px-6 py-8 pt-16 lg:pt-8">
         <div className="flex items-center justify-between mb-8 gap-4 flex-wrap">
           <div>
@@ -297,8 +306,9 @@ export function MyGroupsPage() {
             </button>
           </div>
         ) : (
-          <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-5">
-            {filteredGroups.map((group) => {
+          <>
+            <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-5">
+              {pagedGroups.map((group) => {
               const summary = groupExpenseSummaries.get(group.id) ?? {
                 totalExpenses: new Map<string, number>(),
                 yourBalance: new Map<string, number>(),
@@ -434,8 +444,16 @@ export function MyGroupsPage() {
                   </button>
                 </article>
               );
-            })}
-          </div>
+              })}
+            </div>
+            <div className="mt-6">
+              <AdminPagination
+                page={groupsPage}
+                totalPages={groupsTotalPages}
+                onPageChange={setGroupsPage}
+              />
+            </div>
+          </>
         )}
 
         {createPortal(

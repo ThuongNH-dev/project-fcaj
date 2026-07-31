@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Upload, Search, FileText, Plus } from "lucide-react";
 import { useNavigate } from "react-router";
-import {
-  formatFileSize,
-  formatShortDate,
-} from "../../../shared/lib/formatters";
+import { formatFileSize, formatShortDate } from "../../../shared/lib/formatters";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
 import { getGroups, type Group } from "../../groups";
 import { useFeedback } from "../../../shared/providers/FeedbackProvider";
-import { getReceipts, uploadReceiptFile, type ReceiptUpload } from "..";
+import { getReceipts, getReceipt, uploadReceiptFile, type ReceiptUpload } from "..";
+import { getReceiptPublicUrl, getReceiptViewUrl } from "..";
 import { getCurrentUserBilling, type CurrentUserBillingSummary } from "../../users";
 
 const statusStyles: Record<string, string> = {
@@ -27,6 +25,9 @@ export function ReceiptsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [selectedReceipt, setSelectedReceipt] = useState<ReceiptUpload | null>(null);
+  const [previewUrl, setPreviewUrl] = useState("");
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const { t } = useLanguage();
   const { confirm, showToast } = useFeedback();
   const navigate = useNavigate();
@@ -66,6 +67,33 @@ export function ReceiptsPage() {
     void loadReceiptData();
   }, []);
 
+  async function handleOpenReceipt(receipt: ReceiptUpload) {
+    try {
+      const response = await getReceipt(receipt.id);
+      const receiptData = response.receipt ?? receipt;
+
+      setSelectedReceipt(receiptData);
+      setPreviewUrl("");
+      setIsPreviewLoading(true);
+      if (receiptData.reviewStatus === "rejected") {
+        return;
+      }
+
+      const previewResponse = await getReceiptViewUrl(receipt.id);
+      setPreviewUrl(previewResponse.url ?? getReceiptPublicUrl(receipt) ?? "");
+    } catch {
+      setPreviewUrl(getReceiptPublicUrl(receipt) ?? "");
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  }
+
+  function handleCloseReceiptPreview() {
+    setSelectedReceipt(null);
+    setPreviewUrl("");
+    setIsPreviewLoading(false);
+  }
+
   const groupsById = useMemo(
     () => new Map(groups.map((group) => [group.id, group.name])),
     [groups],
@@ -84,11 +112,11 @@ export function ReceiptsPage() {
   });
 
   const receiptStats = {
-    processed: receipts.filter((receipt) => receipt.processingStatus === "processed")
+    processed: receipts.filter((receipt) => receipt.reviewStatus === "approved")
       .length,
     pending: receipts.filter((receipt) => receipt.processingStatus === "pending")
       .length,
-    failed: receipts.filter((receipt) => receipt.processingStatus === "failed").length,
+    failed: receipts.filter((receipt) => receipt.reviewStatus === "rejected").length,
   };
 
   const handleUploadFile = async (file: File) => {
@@ -147,7 +175,7 @@ export function ReceiptsPage() {
   };
 
   return (
-    <div className="lg:pl-60 min-h-screen bg-[#F6FBF8]">
+    <div className="min-h-screen bg-[#F6FBF8]">
       <div className="max-w-7xl mx-auto px-6 py-8 pt-16 lg:pt-8">
         <div className="flex items-center justify-between mb-8 gap-4 flex-wrap">
           <div>
@@ -343,7 +371,7 @@ export function ReceiptsPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-[#F3F4F6]">
-                    {["File", "Group", "Type", "Size", "Status", "Uploaded"].map((heading) => (
+                    {["File", "Group", "Type", "Size", "Status", "Uploaded", "Action"].map((heading) => (
                       <th
                         key={heading}
                         className="text-left px-5 py-3 text-xs text-[#9CA3AF] uppercase tracking-wider whitespace-nowrap"
@@ -395,20 +423,38 @@ export function ReceiptsPage() {
                       <td className="px-5 py-3.5">
                         <span
                           className={`text-xs px-2.5 py-1 rounded-full ${
-                            statusStyles[receipt.processingStatus] ||
-                            "bg-[#F3F4F6] text-[#6B7280]"
+                            receipt.reviewStatus === "approved"
+                              ? "bg-[#D1FAE5] text-[#065f46]"
+                              : receipt.reviewStatus === "rejected"
+                                ? "bg-[#FEE2E2] text-[#991b1b]"
+                                : statusStyles[receipt.processingStatus] ||
+                                  "bg-[#F3F4F6] text-[#6B7280]"
                           }`}
                           style={{ fontWeight: 500 }}
                         >
-                          {receipt.processingStatus === "processed"
+                          {receipt.reviewStatus === "approved"
                             ? t.processed
-                            : receipt.processingStatus === "failed"
+                            : receipt.reviewStatus === "rejected"
                               ? t.failedErrors
-                              : t.pendingReview}
+                              : receipt.processingStatus === "processed"
+                                ? t.processed
+                                : receipt.processingStatus === "failed"
+                                  ? t.failedErrors
+                                  : t.pendingReview}
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-xs text-[#9CA3AF] whitespace-nowrap">
                         {formatShortDate(receipt.createdAt)}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <button
+                          type="button"
+                          onClick={() => void handleOpenReceipt(receipt)}
+                          className="rounded-xl border border-[#D1D5DB] px-3 py-2 text-xs text-[#111827] transition-colors hover:bg-[#F9FAFB]"
+                          style={{ fontWeight: 600 }}
+                        >
+                          {t.view}
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -417,6 +463,71 @@ export function ReceiptsPage() {
             </div>
           )}
         </div>
+
+      {selectedReceipt && (
+        <div className="fixed inset-0 z-[220] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/45 backdrop-blur-sm"
+            onClick={handleCloseReceiptPreview}
+          />
+          <div className="relative flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-[1.75rem] border border-[#E5E7EB] bg-white shadow-[0_24px_64px_rgba(17,24,39,0.22)]">
+            <div className="flex items-start justify-between gap-4 border-b border-[#F3F4F6] px-6 py-5">
+              <div className="min-w-0">
+                <h2 className="truncate text-lg text-[#111827]" style={{ fontWeight: 800 }}>
+                  {selectedReceipt.originalFileName}
+                </h2>
+                <p className="mt-1 text-sm text-[#6B7280]">
+                  {selectedReceipt.reviewStatus === "approved"
+                    ? "Approved"
+                    : selectedReceipt.reviewStatus === "rejected"
+                      ? "Rejected"
+                      : "Pending review"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseReceiptPreview}
+                className="rounded-xl border border-[#E5E7EB] px-3 py-2 text-sm text-[#374151] transition-colors hover:bg-[#F9FAFB]"
+                style={{ fontWeight: 600 }}
+              >
+                Close
+              </button>
+            </div>
+              <div className="min-h-[60vh] bg-[#F9FAFB] p-4">
+                <div className="flex h-full min-h-[55vh] items-center justify-center overflow-hidden rounded-2xl border border-[#E5E7EB] bg-white">
+                  {selectedReceipt.reviewStatus === "rejected" ? (
+                    <div className="max-w-2xl rounded-2xl border border-[#FECACA] bg-[#FFF1F2] px-6 py-5 text-center">
+                      <p className="text-base text-[#991b1b]" style={{ fontWeight: 800 }}>
+                        {t.billRejected}
+                      </p>
+                      <p className="mt-2 text-sm text-[#7F1D1D]">
+                        {t.rejectionReason}: {selectedReceipt.rejectionReason?.trim() || "No reason provided."}
+                      </p>
+                    </div>
+                  ) : isPreviewLoading ? (
+                    <div className="text-sm text-[#6B7280]">{t.loadingBillPreview}</div>
+                  ) : previewUrl ? (
+                    selectedReceipt.fileKind === "pdf" ? (
+                      <iframe
+                        src={previewUrl}
+                        title={selectedReceipt.originalFileName}
+                        className="h-[75vh] w-full"
+                      />
+                    ) : (
+                      <img
+                        src={previewUrl}
+                        alt={selectedReceipt.originalFileName}
+                        className="max-h-[75vh] w-auto max-w-full object-contain"
+                      />
+                    )
+                  ) : (
+                    <div className="text-sm text-[#6B7280]">{t.noPreviewAvailable}</div>
+                  )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );

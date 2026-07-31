@@ -318,35 +318,36 @@ export function AdminLayout() {
 
   return (
     <AdminRoute>
-      <div className="min-h-screen bg-[#F6FBF8] lg:pl-60">
+      <div className="min-h-screen bg-[#F6FBF8] lg:flex">
         <Sidebar currentPath={location.pathname} />
-        {isBanned ? (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-lg rounded-3xl border border-[#FECACA] bg-white p-6 shadow-2xl">
-              <div className="rounded-2xl bg-[#FEF2F2] px-4 py-3 text-center">
-                <p className="text-lg text-[#991B1B]" style={{ fontWeight: 800 }}>
-                  Your account has been banned
+        <main className="min-w-0 flex-1">
+          {isBanned ? (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+              <div className="w-full max-w-lg rounded-3xl border border-[#FECACA] bg-white p-6 shadow-2xl">
+                <div className="rounded-2xl bg-[#FEF2F2] px-4 py-3 text-center">
+                  <p className="text-lg text-[#991B1B]" style={{ fontWeight: 800 }}>
+                    Your account has been banned
+                  </p>
+                  <p className="mt-2 text-sm text-[#7F1D1D]">
+                    {banNotice?.reason || user?.bannedReason || "You can no longer use this account."}
+                  </p>
+                </div>
+                <p className="mt-4 text-sm text-[#6B7280]">
+                  Please log out and create a new account if you need to continue using the app.
                 </p>
-                <p className="mt-2 text-sm text-[#7F1D1D]">
-                  {banNotice?.reason || user?.bannedReason || "You can no longer use this account."}
-                </p>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#111827] px-4 py-3 text-sm text-white transition-colors hover:bg-[#1F2937]"
+                  style={{ fontWeight: 700 }}
+                >
+                  <LogOut className="h-4 w-4" />
+                  Logout
+                </button>
               </div>
-              <p className="mt-4 text-sm text-[#6B7280]">
-                Please log out and create a new account if you need to continue using the app.
-              </p>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#111827] px-4 py-3 text-sm text-white transition-colors hover:bg-[#1F2937]"
-                style={{ fontWeight: 700 }}
-              >
-                <LogOut className="h-4 w-4" />
-                Logout
-              </button>
             </div>
-          </div>
-        ) : null}
-        <div className="mx-auto max-w-7xl px-6 pb-8 pt-16 lg:pt-8">
+          ) : null}
+          <div className="mx-auto max-w-7xl px-6 pb-8 pt-16 lg:pt-8">
           <div className="relative overflow-hidden rounded-3xl border border-[#E5E7EB] bg-gradient-to-br from-white via-white to-[#FEF2F2] px-6 py-6 sm:px-8 sm:py-7 mb-8">
             <div
               className="pointer-events-none absolute -right-10 -top-16 h-56 w-56 rounded-full bg-[#FCA5A5]/25 blur-3xl"
@@ -503,7 +504,8 @@ export function AdminLayout() {
           </div>
 
           <Outlet context={{ isLoadingDashboard, refreshDashboard: loadDashboard, stats }} />
-        </div>
+          </div>
+        </main>
       </div>
     </AdminRoute>
   );
