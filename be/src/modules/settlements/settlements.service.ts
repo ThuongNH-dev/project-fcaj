@@ -326,30 +326,21 @@ export async function hasAnySentSettlement(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Cascade: mark all pending settlements as sent (creditor settle expense)
+// Check if any settlement is pending for an expense
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function cascadeSettleByExpenseId(
+export async function hasPendingSettlements(
   expenseId: string,
   session: ClientSession | null,
-): Promise<void> {
+): Promise<boolean> {
   const settlements = await getSettlementsCollection();
   const sessionOpt = session ? { session } : {};
-  const now = new Date();
-
-  await settlements.updateMany(
+  const doc = await settlements.findOne(
     { expenseId, status: "pending" },
-    {
-      $set: {
-        status: "sent",
-        sentAt: now,
-        sentSource: "creditor_settlement",
-        paymentNotificationStatus: "not_required",
-        updatedAt: now,
-      },
-    },
-    sessionOpt,
+    { ...sessionOpt, projection: { _id: 1 } },
   );
+
+  return doc !== null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -364,7 +355,7 @@ export interface MarkSentResult {
 
 export async function markSettlementAsSent(
   settlementId: string,
-  creditorUserId: string,
+  debtorUserId: string,
   notificationPending: boolean,
 ): Promise<MarkSentResult | null> {
   if (!MongoObjectId.isValid(settlementId)) {
@@ -378,7 +369,7 @@ export async function markSettlementAsSent(
   const result = await settlements.findOneAndUpdate(
     {
       _id: new MongoObjectId(settlementId),
-      creditorUserId,
+      debtorUserId,
       status: "pending",
     },
     {
@@ -402,14 +393,17 @@ export async function markSettlementAsSent(
     };
   }
 
-  // If no update happened, check if the settlement exists and is already sent
+  // Idempotent fallback: only return wasAlreadySent: true if the settlement
+  // actually exists AND is already in "sent" status for this debtor.
+  // If it is still "pending" or belongs to a different debtor, return null.
   const existing = await settlements.findOne({
     _id: new MongoObjectId(settlementId),
-    creditorUserId,
+    debtorUserId,
+    status: "sent",
   });
 
   if (!existing) {
-    // Not found or does not belong to this debtor
+    // Not found, belongs to a different debtor, or still pending
     return null;
   }
 

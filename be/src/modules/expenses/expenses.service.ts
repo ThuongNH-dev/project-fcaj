@@ -20,7 +20,7 @@ import {
   reconcileSettlements,
   deleteSettlementsByExpenseId,
   hasAnySentSettlement,
-  cascadeSettleByExpenseId,
+  hasPendingSettlements,
 } from "../settlements/settlements.service.js";
 import type {
   CreateExpenseInput,
@@ -730,10 +730,17 @@ export async function markExpenseAsSettled(
     let result: ExpenseDocument | null = null;
 
     await session.withTransaction(async () => {
-      // Cascade: mark all pending settlements as sent
-      await cascadeSettleByExpenseId(input.expenseId, session);
+      // Guard: all child settlements must already be in "sent" status.
+      // This check runs inside the transaction with the same session to
+      // ensure read-your-writes consistency.
+      const pending = await hasPendingSettlements(input.expenseId, session);
+      if (pending) {
+        throw new SettlementConflictError(
+          "Cannot settle this expense because some payments have not been marked as sent.",
+        );
+      }
 
-      // Then update expense status
+      // Update expense status
       result = await expenses.findOneAndUpdate(
         {
           _id: new MongoObjectId(input.expenseId),

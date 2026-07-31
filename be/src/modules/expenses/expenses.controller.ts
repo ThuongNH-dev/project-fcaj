@@ -374,6 +374,13 @@ export async function settleExpenseHandler(req: Request, res: Response) {
       expense,
     });
   } catch (error) {
+    if (error instanceof SettlementConflictError) {
+      return res.status(409).json({
+        ok: false,
+        message: error.message,
+      });
+    }
+
     const message =
       error instanceof Error ? error.message : "Unable to settle expense.";
 

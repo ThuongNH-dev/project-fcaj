@@ -1376,7 +1376,9 @@ swaggerSpec.paths = {
     patch: {
       summary: "Mark an expense as settled",
       description:
-        "Only the user identified by paidByUserId (the creditor) can mark the expense as settled. Group owners, admins, and debtors are not permitted regardless of their role.",
+        "Only the user identified by paidByUserId (the creditor) can mark the expense as settled. " +
+        "All child settlements must already be in 'sent' status (each debtor must have called Mark as sent first). " +
+        "Group owners, admins, and debtors are not permitted regardless of their role.",
       tags: ["Expenses"],
       security: [{ bearerAuth: [] }],
       parameters: [
@@ -1423,7 +1425,7 @@ swaggerSpec.paths = {
         },
         409: {
           description:
-            "Conflict – expense is already settled, or a concurrent update prevented the change",
+            "Conflict – expense is already settled, or one or more payments have not been marked as sent by the debtor yet.",
         },
         503: {
           description: "MongoDB or backend service failed",
