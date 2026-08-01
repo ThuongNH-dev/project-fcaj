@@ -19,6 +19,12 @@ function appendContextQuery(
 }
 
 export function getNotificationDestination(notification: AppNotification) {
+  if (notification.type === "settlement_dispute_created") {
+    return notification.disputeId
+      ? `/admin/settlement-disputes/${encodeURIComponent(notification.disputeId)}`
+      : "/admin";
+  }
+
   if (notification.type === "payment_received") {
     return appendContextQuery("/settlement", notification, [
       "settlementId",
