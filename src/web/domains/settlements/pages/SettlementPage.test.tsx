@@ -8,6 +8,7 @@ const {
   mockConfirm,
   mockGetExpenses,
   mockGetGroups,
+  mockGetMySettlementDisputes,
   mockGetMySettlements,
   mockMarkSettlementAsSent,
   mockShowToast,
@@ -15,6 +16,7 @@ const {
   mockConfirm: vi.fn(),
   mockGetExpenses: vi.fn(),
   mockGetGroups: vi.fn(),
+  mockGetMySettlementDisputes: vi.fn(),
   mockGetMySettlements: vi.fn(),
   mockMarkSettlementAsSent: vi.fn(),
   mockShowToast: vi.fn(),
@@ -38,6 +40,12 @@ vi.mock("../../expenses", () => ({
 
 vi.mock("../../groups", () => ({
   getGroups: mockGetGroups,
+}));
+
+vi.mock("../../settlement-disputes", () => ({
+  createSettlementDispute: vi.fn(),
+  getMySettlementDisputes: mockGetMySettlementDisputes,
+  uploadDisputeEvidence: vi.fn(),
 }));
 
 vi.mock("../../../shared/providers/FeedbackProvider", () => ({
@@ -153,6 +161,12 @@ describe("SettlementPage", () => {
       message: "Settlement marked as sent successfully.",
       settlement: { ...debtorSettlement, status: "sent" },
     });
+    mockGetMySettlementDisputes.mockResolvedValue({
+      ok: true,
+      message: "Settlement disputes fetched successfully.",
+      disputes: [],
+      pagination: { page: 1, limit: 100, total: 0, totalPages: 0 },
+    });
     mockGetMySettlements.mockImplementation(
       async (params: {
         page?: number;
@@ -206,7 +220,7 @@ describe("SettlementPage", () => {
       return {
         ok: true,
         message: "Settlement marked as sent successfully.",
-        settlement: { ...debtorSettlement, status: "sent" as const },
+        settlement: { ...creditorSettlement, status: "sent" as const },
       };
     });
     mockGetMySettlements.mockImplementation(
@@ -217,12 +231,14 @@ describe("SettlementPage", () => {
         status?: "pending" | "sent";
       }) => {
         if (params.status === "sent") {
-          return createResponse(wasMarkedAsSent ? [{ ...debtorSettlement, status: "sent" }] : []);
+          return createResponse(
+            wasMarkedAsSent ? [{ ...creditorSettlement, status: "sent" }] : [],
+          );
         }
         if (params.role === "creditor") {
-          return createResponse([creditorSettlement]);
+          return createResponse(wasMarkedAsSent ? [] : [creditorSettlement]);
         }
-        return createResponse(wasMarkedAsSent ? [] : [debtorSettlement]);
+        return createResponse([debtorSettlement]);
       },
     );
 
@@ -285,6 +301,44 @@ describe("SettlementPage", () => {
       });
     });
     expect(await screen.findByText("settlementsTitle #page-2")).toBeInTheDocument();
+  });
+
+  it("shows an existing dispute as viewable instead of offering a duplicate submission", async () => {
+    const sentSettlement = createSettlement({
+      id: "settlement-already-disputed",
+      status: "sent",
+      sentAt: "2026-07-22T10:00:00.000Z",
+    });
+    mockGetMySettlementDisputes.mockResolvedValue({
+      ok: true,
+      message: "Settlement disputes fetched successfully.",
+      disputes: [
+        {
+          id: "dispute-1",
+          settlementId: sentSettlement.id,
+          groupId: "group-1",
+          createdByUserId: "user-debtor",
+          againstUserId: "user-creditor",
+          reason: "payment_not_received",
+          description: "The recipient has not received the payment.",
+          evidence: [],
+          status: "pending",
+          adminNote: null,
+          handledByAdminId: null,
+          createdAt: "2026-07-22T11:00:00.000Z",
+          updatedAt: "2026-07-22T11:00:00.000Z",
+        },
+      ],
+      pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+    });
+    mockGetMySettlements.mockImplementation(async (params: { status?: string }) =>
+      params.status === "sent" ? createResponse([sentSettlement]) : createResponse([]),
+    );
+
+    renderPage();
+
+    expect(await screen.findByRole("button", { name: "View dispute" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Dispute" })).not.toBeInTheDocument();
   });
 
   it("loads and highlights a settlement targeted by notification context", async () => {

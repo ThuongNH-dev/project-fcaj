@@ -5,6 +5,7 @@ import { MyGroupsPage } from "../../../domains/groups/pages/MyGroupsPage";
 import { ReceiptsPage } from "../../../domains/receipts/pages/ReceiptsPage";
 import { SettingsPage } from "../../../domains/users/pages/SettingsPage";
 import { SettlementPage } from "../../../domains/settlements/pages/SettlementPage";
+import { SettlementDisputesPage } from "../../../domains/settlement-disputes/pages/SettlementDisputesPage";
 import { PrivateLayout } from "../layout/PrivateLayout";
 import { DashboardPage } from "../pages/DashboardPage";
 
@@ -17,6 +18,8 @@ export const privateRoutes: RouteObject[] = [
       { path: "/groups/:groupId", element: <GroupDetailPage /> },
       { path: "/expenses", element: <ExpensesPage /> },
       { path: "/settlement", element: <SettlementPage /> },
+      { path: "/settlement/disputes", element: <SettlementDisputesPage /> },
+      { path: "/settlement/disputes/:disputeId", element: <SettlementDisputesPage /> },
       { path: "/receipts", element: <ReceiptsPage /> },
       { path: "/settings", element: <SettingsPage /> },
       { path: "/profile", element: <Navigate to="/settings" replace /> },

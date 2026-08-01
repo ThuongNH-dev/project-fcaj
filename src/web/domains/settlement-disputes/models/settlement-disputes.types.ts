@@ -83,6 +83,10 @@ export interface GetMyDisputesParams {
   groupId?: string;
 }
 
+export interface GetAdminDisputesParams extends GetMyDisputesParams {
+  createdByUserId?: string;
+}
+
 export interface GetMyDisputesResponse {
   ok: boolean;
   message: string;
@@ -91,6 +95,17 @@ export interface GetMyDisputesResponse {
 }
 
 export interface GetDisputeResponse {
+  ok: boolean;
+  message: string;
+  dispute: SettlementDispute;
+}
+
+export interface UpdateAdminDisputeStatusPayload {
+  status: "resolved" | "rejected";
+  adminNote: string;
+}
+
+export interface UpdateAdminDisputeStatusResponse {
   ok: boolean;
   message: string;
   dispute: SettlementDispute;
