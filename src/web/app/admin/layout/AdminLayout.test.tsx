@@ -77,6 +77,7 @@ describe("AdminLayout", () => {
     expect(exportButton).toBeEnabled();
 
     fireEvent.click(exportButton);
+    fireEvent.click(await screen.findByRole("button", { name: "Csv" }));
 
     await waitFor(() => {
       expect(mockDownloadAdminUsersExport).toHaveBeenCalledTimes(1);
