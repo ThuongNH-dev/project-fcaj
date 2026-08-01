@@ -243,7 +243,8 @@ export async function getMySettlementsHandler(req: Request, res: Response) {
  *       This operation is idempotent — calling it again when already sent
  *       returns the settlement with `wasAlreadySent: true`.
  *       A `payment_received` notification is sent to the creditor if they have
- *       opted in to paymentReceived notifications.
+ *       opted in to paymentReceived notifications. The notification title and
+ *       message should describe that the debtor marked the payment as sent.
  *     tags:
  *       - Settlements
  *     security:
