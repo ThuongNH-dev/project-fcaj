@@ -782,8 +782,8 @@ export function SettlementPage() {
             >
               {formatCurrency(settlement.amount, settlement.currency)}
             </p>
-            {isDebtor && settlement.status === "pending" ? (
-              <div className="mt-3 flex flex-col items-end gap-2">
+            <div className="mt-3 flex flex-col items-end gap-2">
+              {isDebtor && settlement.status === "pending" ? (
                 <button
                   type="button"
                   onClick={() => void handleMarkAsSent(settlement)}
@@ -797,6 +797,10 @@ export function SettlementPage() {
                 >
                   {isSending ? t.updating : t.markAsSent}
                 </button>
+              ) : null}
+              {settlement.status === "pending" ||
+              (settlement.status === "sent" &&
+                expensesById.get(settlement.expenseId)?.settlementStatus === "pending") ? (
                 <button
                   type="button"
                   onClick={() => handleOpenDisputeModal(settlement)}
@@ -806,18 +810,8 @@ export function SettlementPage() {
                   <AlertTriangle className="h-3.5 w-3.5" />
                   Dispute
                 </button>
-              </div>
-            ) : settlement.status === "pending" ? (
-              <button
-                type="button"
-                onClick={() => handleOpenDisputeModal(settlement)}
-                className="mt-3 flex items-center gap-1.5 rounded-lg border border-[#FCA5A5] px-2.5 py-1.5 text-xs text-[#B91C1C] transition-colors hover:bg-[#FEF2F2]"
-                style={{ fontWeight: 600 }}
-              >
-                <AlertTriangle className="h-3.5 w-3.5" />
-                Dispute
-              </button>
-            ) : null}
+              ) : null}
+            </div>
           </div>
         </div>
       );
