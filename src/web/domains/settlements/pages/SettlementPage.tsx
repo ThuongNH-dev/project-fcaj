@@ -32,6 +32,7 @@ import {
   getMySettlements,
   markSettlementAsSent,
 } from "../api/settlements.api";
+import { settleExpense } from "../../expenses";
 import type {
   GetMySettlementsParams,
   Settlement,
@@ -239,7 +240,6 @@ export function SettlementPage() {
         page: creditorPage,
         limit: PAGE_LIMIT,
         role: "creditor",
-        status: "pending",
       });
 
       if (
@@ -294,8 +294,8 @@ export function SettlementPage() {
     try {
       setIsLoadingSummary(true);
       const [debtorItems, creditorItems, sentItems] = await Promise.all([
-        getAllSettlements({ role: "debtor", status: "pending" }),
-        getAllSettlements({ role: "creditor", status: "pending" }),
+        getAllSettlements({ role: "debtor" }),
+        getAllSettlements({ role: "creditor" }),
         getAllSettlements({ status: "sent" }),
       ]);
 
@@ -377,6 +377,27 @@ export function SettlementPage() {
     () => new Map(expenses.map((expense) => [expense.id, expense])),
     [expenses],
   );
+  const creditorPendingSettlements = useMemo(
+    () =>
+      summaryCreditorSettlements.filter(
+        (settlement) => expensesById.get(settlement.expenseId)?.settlementStatus === "pending",
+      ),
+    [expensesById, summaryCreditorSettlements],
+  );
+  const debtorPendingSettlements = useMemo(
+    () =>
+      summaryDebtorSettlements.filter(
+        (settlement) => expensesById.get(settlement.expenseId)?.settlementStatus === "pending",
+      ),
+    [expensesById, summaryDebtorSettlements],
+  );
+  const settledTimelineSettlements = useMemo(
+    () =>
+      sentSettlements.filter(
+        (settlement) => expensesById.get(settlement.expenseId)?.settlementStatus === "settled",
+      ),
+    [expensesById, sentSettlements],
+  );
   const memberNameById = useMemo(() => {
     const names = new Map<string, string>();
 
@@ -434,7 +455,7 @@ export function SettlementPage() {
   );
   const isFocusedSettlementInCurrentLists = Boolean(
     focusedSettlementId &&
-      [...debtorSettlements, ...creditorSettlements, ...sentSettlements].some(
+      [...debtorPendingSettlements, ...creditorPendingSettlements, ...settledTimelineSettlements].some(
         (settlement) => settlement.id === focusedSettlementId,
       ),
   );
@@ -457,10 +478,10 @@ export function SettlementPage() {
     return () => window.cancelAnimationFrame(frameId);
   }, [
     creditorSettlements,
-    debtorSettlements,
+    debtorPendingSettlements,
     focusedSettlement,
     focusedSettlementId,
-    sentSettlements,
+    settledTimelineSettlements,
   ]);
 
   const disputeFilePreviews = useMemo(
@@ -523,6 +544,67 @@ export function SettlementPage() {
     } finally {
       setSendingSettlementId(null);
     }
+  }
+
+  async function handleSettleExpenseFromSettlement(settlement: Settlement) {
+    const confirmed = await confirm({
+      title: "Chốt expense",
+      message: "Bạn xác nhận đã nhận đủ tiền từ tất cả mọi người?",
+      confirmLabel: "Chốt đã nhận đủ tiền",
+      cancelLabel: "Hủy",
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setSendingSettlementId(settlement.id);
+      const response = await getMySettlements({
+        expenseId: settlement.expenseId,
+        limit: 100,
+      });
+
+      if (!response.settlements.every((item) => item.status === "sent")) {
+        showToast({
+          variant: "error",
+          message: "Chỉ có thể chốt khi tất cả người nợ đã Mark as sent.",
+        });
+        return;
+      }
+
+      const settledResponse = await settleExpense(settlement.expenseId);
+      showToast({
+        variant: "success",
+        message: "Đã chốt nhận đủ tiền",
+      });
+      await Promise.all([loadCreditorSettlements(), loadSettlementSummaries()]);
+    } catch (error) {
+      showToast({
+        variant: "error",
+        message: error instanceof Error ? error.message : "Không thể chốt expense.",
+      });
+    } finally {
+      setSendingSettlementId(null);
+    }
+  }
+
+  async function handleSettleExpenseFromSettlementWithStatus(settlement: Settlement) {
+    const response = await getMySettlements({
+      expenseId: settlement.expenseId,
+      limit: 100,
+    });
+    const isReady = response.settlements.length > 0 && response.settlements.every((item) => item.status === "sent");
+
+    if (!isReady) {
+      showToast({
+        variant: "error",
+        message: "Chỉ có thể chốt khi tất cả người nợ đã Mark as sent.",
+      });
+      return;
+    }
+
+    await handleSettleExpenseFromSettlement(settlement);
   }
 
   async function handleRequestDisputeUpgrade() {
@@ -687,6 +769,10 @@ export function SettlementPage() {
             <p className="text-xs text-[#9CA3AF] mt-2">
               {formatDateTime(expense?.expenseDate ?? settlement.createdAt)}
             </p>
+            {settlement.status === "sent" &&
+            expensesById.get(settlement.expenseId)?.settlementStatus === "pending" ? (
+              <p className="mt-2 text-xs text-[#92400e]">Đang chờ xử lý</p>
+            ) : null}
           </div>
 
           <div className="text-right flex-shrink-0">
@@ -696,19 +782,40 @@ export function SettlementPage() {
             >
               {formatCurrency(settlement.amount, settlement.currency)}
             </p>
-            {isCreditor && settlement.status === "pending" ? (
+            {isDebtor && settlement.status === "pending" ? (
+              <div className="mt-3 flex flex-col items-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleMarkAsSent(settlement)}
+                  disabled={isSending || group?.isBanned === true}
+                  className={`rounded-xl px-3 py-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                    group?.isBanned
+                      ? "bg-[#D1D5DB] text-[#6B7280]"
+                      : "bg-[#16A34A] text-white hover:bg-[#15803D]"
+                  }`}
+                  style={{ fontWeight: 600 }}
+                >
+                  {isSending ? t.updating : t.markAsSent}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleOpenDisputeModal(settlement)}
+                  className="flex items-center gap-1.5 rounded-lg border border-[#FCA5A5] px-2.5 py-1.5 text-xs text-[#B91C1C] transition-colors hover:bg-[#FEF2F2]"
+                  style={{ fontWeight: 600 }}
+                >
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  Dispute
+                </button>
+              </div>
+            ) : settlement.status === "pending" ? (
               <button
                 type="button"
-                onClick={() => void handleMarkAsSent(settlement)}
-                disabled={isSending || group?.isBanned === true}
-                className={`mt-3 rounded-xl px-3 py-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                  group?.isBanned
-                    ? "bg-[#D1D5DB] text-[#6B7280]"
-                    : "bg-[#16A34A] text-white hover:bg-[#15803D]"
-                }`}
+                onClick={() => handleOpenDisputeModal(settlement)}
+                className="mt-3 flex items-center gap-1.5 rounded-lg border border-[#FCA5A5] px-2.5 py-1.5 text-xs text-[#B91C1C] transition-colors hover:bg-[#FEF2F2]"
                 style={{ fontWeight: 600 }}
               >
-                {isSending ? t.updating : t.markAsPaid}
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Dispute
               </button>
             ) : null}
           </div>
@@ -719,7 +826,7 @@ export function SettlementPage() {
 
   const pendingIsLoading = isLoadingDebtor || isLoadingCreditor;
   const hasPendingSettlements =
-    debtorSettlements.length > 0 || creditorSettlements.length > 0;
+    debtorPendingSettlements.length > 0 || creditorPendingSettlements.length > 0;
 
   return (
     <div className="min-h-screen bg-[#F6FBF8]">
@@ -813,13 +920,13 @@ export function SettlementPage() {
                 <div className="px-5 py-8 text-sm text-[#6B7280]">{t.pendingSettlements}...</div>
               ) : hasPendingSettlements ? (
                 <>
-                  {debtorSettlements.length > 0 ? (
+                  {debtorPendingSettlements.length > 0 ? (
                     <section aria-label={t.youOweLabel}>
                       <div className="bg-[#FFFBEB] px-5 py-2 text-xs font-bold text-[#92400E]">
                         {t.youOweLabel}
                       </div>
                       <div className="divide-y divide-[#F3F4F6]">
-                        {renderPendingSettlements(debtorSettlements)}
+                        {renderPendingSettlements(debtorPendingSettlements)}
                       </div>
                       <AdminPagination
                         page={debtorPagination.page}
@@ -829,13 +936,13 @@ export function SettlementPage() {
                     </section>
                   ) : null}
 
-                  {creditorSettlements.length > 0 ? (
+                  {creditorPendingSettlements.length > 0 ? (
                     <section aria-label={t.youAreOwedLabel}>
                       <div className="bg-[#F0FAF5] px-5 py-2 text-xs font-bold text-[#065F46]">
                         {t.youAreOwedLabel}
                       </div>
                       <div className="divide-y divide-[#F3F4F6]">
-                        {renderPendingSettlements(creditorSettlements)}
+                        {renderPendingSettlements(creditorPendingSettlements)}
                       </div>
                       <AdminPagination
                         page={creditorPagination.page}
@@ -867,10 +974,10 @@ export function SettlementPage() {
 
               {isLoadingSent ? (
                 <p className="text-[#9CA3AF] text-xs">{t.loadingSettlementActivity}</p>
-              ) : sentSettlements.length > 0 ? (
+              ) : settledTimelineSettlements.length > 0 ? (
                 <>
                   <div className="space-y-4">
-                    {sentSettlements.map((settlement) => {
+                    {settledTimelineSettlements.map((settlement) => {
                       const isDebtor = settlement.debtorUserId === currentUser?.id;
                       return (
                         <div

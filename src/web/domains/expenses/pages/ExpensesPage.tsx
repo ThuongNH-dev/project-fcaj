@@ -646,9 +646,9 @@ export function ExpensesPage() {
                               <button
                                 type="button"
                                 onClick={() => setExpenseToEdit(expense)}
-                                disabled={isExpenseInBannedGroup(expense) || expense.reviewStatus !== "approved"}
+                                disabled={isExpenseInBannedGroup(expense)}
                                 className={`inline-flex h-9 items-center gap-1 rounded-full border px-3 text-xs transition-colors ${
-                                  isExpenseInBannedGroup(expense) || expense.reviewStatus !== "approved"
+                                  isExpenseInBannedGroup(expense)
                                     ? "cursor-not-allowed border-[#E5E7EB] bg-[#F9FAFB] text-[#9CA3AF]"
                                     : "border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#F9FAFB]"
                                 }`}

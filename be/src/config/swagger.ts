@@ -2179,7 +2179,7 @@ swaggerSpec.paths = {
     patch: {
       summary: "Mark a settlement as sent (debtor payment sent)",
       description:
-        "Only the debtor of the settlement can call this endpoint. Transitions the settlement from pending to sent. Idempotent: if already sent, returns the current state without changes. Creates a payment_received notification for the creditor if their paymentReceived preference is enabled.",
+        "Only the debtor of the settlement can call this endpoint. Transitions the settlement from pending to sent. Idempotent: if already sent, returns the current state without changes. Creates a payment_received notification for the creditor if their paymentReceived preference is enabled. The notification content should be treated as a payment sent confirmation, not a receipt acknowledgement.",
       tags: ["Settlements"],
       security: [{ bearerAuth: [] }],
       parameters: [
