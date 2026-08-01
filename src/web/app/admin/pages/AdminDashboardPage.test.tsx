@@ -135,6 +135,7 @@ describe("AdminDashboardPage", () => {
 
     expect(await screen.findByText("User Management")).toBeInTheDocument();
     expect(screen.getByText("alex@example.com")).toBeInTheDocument();
+    fireEvent.click(screen.getByTitle("User Detail"));
     expect(await screen.findByText("Role Management")).toBeInTheDocument();
     expect(screen.getByText("Group Memberships")).toBeInTheDocument();
     expect(screen.getByText("Summer Trip")).toBeInTheDocument();
@@ -165,6 +166,7 @@ describe("AdminDashboardPage", () => {
 
     renderPage();
 
+    fireEvent.click(await screen.findByTitle("User Detail"));
     await screen.findByText("Role Management");
 
     fireEvent.click(screen.getByRole("button", { name: "Admin" }));
@@ -209,6 +211,7 @@ describe("AdminDashboardPage", () => {
 
     renderPage();
 
+    fireEvent.click(await screen.findByTitle("User Detail"));
     expect(await screen.findByRole("button", { name: "Delete user" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Admin" })).toBeDisabled();
     expect(screen.getByText("Your own admin role is protected from inline changes.")).toBeInTheDocument();
