@@ -15,6 +15,7 @@ import { getGroups, type Group } from "../../groups";
 import { getCurrentUserBilling, type CurrentUserBillingSummary } from "../../users";
 import {
   createSettlementDispute,
+  getMySettlementDisputes,
   uploadDisputeEvidence,
   type DisputeEvidenceInput,
   type SettlementDisputeReason,
@@ -40,6 +41,12 @@ import type {
 } from "../models/settlements.types";
 
 const MAX_DISPUTE_EVIDENCE_COUNT = 3;
+const MAX_DISPUTE_EVIDENCE_SIZE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_DISPUTE_EVIDENCE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
 
 const DISPUTE_REASON_OPTIONS: { value: SettlementDisputeReason; label: string }[] = [
   { value: "payment_not_received", label: "Payment not received" },
@@ -153,9 +160,9 @@ export function SettlementPage() {
   const [disputeDescription, setDisputeDescription] = useState("");
   const [disputeFiles, setDisputeFiles] = useState<File[]>([]);
   const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
-  const [disputedSettlementIds, setDisputedSettlementIds] = useState<Set<string>>(
-    new Set(),
-  );
+  const [disputeIdsBySettlementId, setDisputeIdsBySettlementId] = useState<
+    Map<string, string>
+  >(() => new Map());
   const disputeFileInputRef = useRef<HTMLInputElement>(null);
   const isFreePlan = billingSummary?.profile.plan !== "pro";
   const focusedSettlementId = searchParams.get("settlementId");
@@ -173,6 +180,39 @@ export function SettlementPage() {
       .catch(() => {
         // Billing summary is optional here; the dispute button simply stays gated.
       });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadExistingDisputes() {
+      try {
+        const firstPage = await getMySettlementDisputes({ page: 1, limit: 100 });
+        const remainingPages = await Promise.all(
+          Array.from(
+            { length: Math.max(0, firstPage.pagination.totalPages - 1) },
+            (_, index) => getMySettlementDisputes({ page: index + 2, limit: 100 }),
+          ),
+        );
+        const disputeIds = new Map<string, string>();
+
+        [firstPage, ...remainingPages]
+          .flatMap((response) => response.disputes)
+          .forEach((dispute) => disputeIds.set(dispute.settlementId, dispute.id));
+
+        if (isActive) {
+          setDisputeIdsBySettlementId(disputeIds);
+        }
+      } catch {
+        // The submit endpoint remains the source of truth if this optional status lookup fails.
+      }
+    }
+
+    void loadExistingDisputes();
 
     return () => {
       isActive = false;
@@ -534,6 +574,26 @@ export function SettlementPage() {
         loadSettlementSummaries(),
       ]);
 
+      setCreditorSettlements((current) =>
+        current.filter((item) => item.id !== settlement.id),
+      );
+      setSummaryCreditorSettlements((current) =>
+        current.filter((item) => item.id !== settlement.id),
+      );
+      setSentSettlements((current) => {
+        const withoutUpdatedSettlement = current.filter(
+          (item) => item.id !== settlement.id,
+        );
+        return [response.settlement, ...withoutUpdatedSettlement].slice(
+          0,
+          SENT_TIMELINE_PAGE_LIMIT,
+        );
+      });
+      setSummarySentSettlements((current) => [
+        response.settlement,
+        ...current.filter((item) => item.id !== settlement.id),
+      ]);
+
       showToast({ variant: "success", message: response.message });
     } catch (error) {
       showToast({
@@ -648,12 +708,26 @@ export function SettlementPage() {
 
     event.target.value = "";
 
-    if (selected.length === 0) {
+    const supportedFiles = selected.filter(
+      (file) =>
+        ALLOWED_DISPUTE_EVIDENCE_MIME_TYPES.has(file.type) &&
+        file.size > 0 &&
+        file.size <= MAX_DISPUTE_EVIDENCE_SIZE_BYTES,
+    );
+
+    if (supportedFiles.length !== selected.length) {
+      showToast({
+        variant: "error",
+        message: "Evidence must be a PNG, JPEG, or WebP image no larger than 5 MB.",
+      });
+    }
+
+    if (supportedFiles.length === 0) {
       return;
     }
 
     setDisputeFiles((current) => {
-      const combined = [...current, ...selected];
+      const combined = [...current, ...supportedFiles];
 
       if (combined.length > MAX_DISPUTE_EVIDENCE_COUNT) {
         showToast({
@@ -704,14 +778,15 @@ export function SettlementPage() {
         evidence,
       });
 
-      setDisputedSettlementIds((current) => {
-        const next = new Set(current);
-        next.add(disputeTargetSettlement.id);
+      setDisputeIdsBySettlementId((current) => {
+        const next = new Map(current);
+        next.set(disputeTargetSettlement.id, response.dispute.id);
         return next;
       });
 
       showToast({ variant: "success", message: response.message });
       setDisputeTargetSettlement(null);
+      navigate(`/settlement/disputes/${encodeURIComponent(response.dispute.id)}`);
     } catch (error) {
       showToast({
         variant: "error",
@@ -825,11 +900,21 @@ export function SettlementPage() {
   return (
     <div className="min-h-screen bg-[#F6FBF8]">
       <div className="max-w-7xl mx-auto px-6 py-8 pt-16 lg:pt-8">
-        <div className="mb-8">
-          <h1 className="text-[#111827]" style={{ fontSize: "1.5rem", fontWeight: 800 }}>
-            {t.settlementsTitle}
-          </h1>
-          <p className="text-[#6B7280] text-sm mt-0.5">{t.settlementsDesc}</p>
+        <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-[#111827]" style={{ fontSize: "1.5rem", fontWeight: 800 }}>
+              {t.settlementsTitle}
+            </h1>
+            <p className="text-[#6B7280] text-sm mt-0.5">{t.settlementsDesc}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate("/settlement/disputes")}
+            className="rounded-xl border border-[#E5E7EB] bg-white px-3.5 py-2 text-sm text-[#374151] transition-colors hover:bg-[#F9FAFB]"
+            style={{ fontWeight: 600 }}
+          >
+            My disputes
+          </button>
         </div>
 
         {errorMessages.map((message) => (
@@ -973,6 +1058,7 @@ export function SettlementPage() {
                   <div className="space-y-4">
                     {settledTimelineSettlements.map((settlement) => {
                       const isDebtor = settlement.debtorUserId === currentUser?.id;
+                      const disputeId = disputeIdsBySettlementId.get(settlement.id);
                       return (
                         <div
                           key={settlement.id}
@@ -1006,14 +1092,20 @@ export function SettlementPage() {
                             {isDebtor ? t.youOweLabel : t.youAreOwedLabel} |{" "}
                             {formatDateTime(settlement.sentAt ?? settlement.updatedAt)}
                           </p>
-                          {disputedSettlementIds.has(settlement.id) ? (
-                            <span
-                              className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-[#FEF3C7] px-2.5 py-1.5 text-xs text-[#92400E]"
+                          {disputeId ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                navigate(
+                                  `/settlement/disputes/${encodeURIComponent(disputeId)}`,
+                                )
+                              }
+                              className="mt-3 flex items-center gap-1.5 rounded-lg bg-[#FEF3C7] px-2.5 py-1.5 text-xs text-[#92400E] transition-colors hover:bg-[#FDE68A]"
                               style={{ fontWeight: 600 }}
                             >
                               <AlertTriangle className="h-3.5 w-3.5" />
-                              Dispute submitted
-                            </span>
+                              View dispute
+                            </button>
                           ) : (
                             <button
                               type="button"

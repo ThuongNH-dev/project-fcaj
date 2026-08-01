@@ -3,7 +3,8 @@ export type NotificationType =
   | "payment_received"
   | "settlement_reminder"
   | "group_invite"
-  | "product_update";
+  | "product_update"
+  | "settlement_dispute_created";
 
 export interface AppNotification {
   id: string;
@@ -15,6 +16,7 @@ export interface AppNotification {
   groupId: string | null;
   expenseId: string | null;
   settlementId: string | null;
+  disputeId: string | null;
   isRead: boolean;
   readAt: string | null;
   deduplicationKey: string | null;
