@@ -4,6 +4,7 @@ import {
   Clock3,
   HandCoins,
   ReceiptText,
+  Scale,
   RefreshCw,
   Sparkles,
   Trash2,
@@ -31,6 +32,7 @@ const NOTIFICATION_ICONS: Record<NotificationType, LucideIcon> = {
   settlement_reminder: Clock3,
   group_invite: UserPlus,
   product_update: Sparkles,
+  settlement_dispute_created: Scale,
 };
 
 interface NotificationsPopoverProps {

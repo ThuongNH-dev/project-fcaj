@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate, useParams } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import {
   ArrowLeft,
   Plus,
@@ -19,6 +19,7 @@ import {
   AddExpenseDialog,
   createExpense,
   getExpenses,
+  settleExpense,
   type Expense,
   type NewExpense,
 } from "../../expenses";
@@ -32,6 +33,11 @@ import {
   removeGroupMember,
   type Group,
 } from "..";
+import {
+  getMySettlements,
+  markSettlementAsSent,
+  type Settlement,
+} from "../../settlements";
 import {
   formatCurrency,
   formatShortDate,
@@ -84,6 +90,16 @@ export function GroupDetailPage() {
   const currentUser = useStoredUser();
   const navigate = useNavigate();
   const { groupId = null } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const focusedExpenseId = searchParams.get("expenseId");
+  const [focusedExpenseSettlements, setFocusedExpenseSettlements] = useState<Settlement[]>(
+    [],
+  );
+  const [isLoadingFocusedExpense, setIsLoadingFocusedExpense] = useState(false);
+  const [isMarkingSentSettlementId, setIsMarkingSentSettlementId] = useState<
+    string | null
+  >(null);
+  const [isSettlingExpense, setIsSettlingExpense] = useState(false);
 
   useEffect(() => {
     async function loadBilling() {
@@ -148,6 +164,46 @@ export function GroupDetailPage() {
     void loadExpensesForGroup();
   }, [groupId]);
 
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadFocusedExpenseSettlements() {
+      if (!focusedExpenseId) {
+        setFocusedExpenseSettlements([]);
+        setIsLoadingFocusedExpense(false);
+        return;
+      }
+
+      try {
+        setIsLoadingFocusedExpense(true);
+        const response = await getMySettlements({
+          expenseId: focusedExpenseId,
+          limit: 100,
+        });
+
+        if (!isActive) {
+          return;
+        }
+
+        setFocusedExpenseSettlements(response.settlements ?? []);
+      } catch {
+        if (isActive) {
+          setFocusedExpenseSettlements([]);
+        }
+      } finally {
+        if (isActive) {
+          setIsLoadingFocusedExpense(false);
+        }
+      }
+    }
+
+    void loadFocusedExpenseSettlements();
+
+    return () => {
+      isActive = false;
+    };
+  }, [focusedExpenseId]);
+
   const categories = useMemo(() => {
     const uniqueCategories = Array.from(
       new Set(expenses.map((expense) => toTitleCase(expense.category))),
@@ -205,6 +261,33 @@ export function GroupDetailPage() {
   youPaidByCurrency.forEach((paidAmount, currency) => {
     addCurrencyAmount(youAreOwedByCurrency, currency, paidAmount - (yourShareByCurrency.get(currency) ?? 0));
   });
+  const focusedExpense = useMemo(
+    () => expenses.find((expense) => expense.id === focusedExpenseId) ?? null,
+    [expenses, focusedExpenseId],
+  );
+  const currentUserIsFocusedExpenseCreditor =
+    focusedExpense?.paidByUserId === currentUser?.id;
+  const canMarkExpenseSettled =
+    Boolean(
+      focusedExpense &&
+        currentUserIsFocusedExpenseCreditor &&
+        focusedExpense.settlementStatus === "pending",
+    ) &&
+    focusedExpenseSettlements.length > 0 &&
+    focusedExpenseSettlements.every((settlement) => settlement.status === "sent");
+  const isExpenseSettlementReady =
+    focusedExpenseSettlements.length > 0 &&
+    focusedExpenseSettlements.every((settlement) => settlement.status === "sent");
+  const isFocusedExpenseSettled = focusedExpense?.settlementStatus === "settled";
+
+  const focusedExpenseProgress = useMemo(() => {
+    const total = focusedExpenseSettlements.length;
+    const sentCount = focusedExpenseSettlements.filter(
+      (settlement) => settlement.status === "sent",
+    ).length;
+
+    return { total, sentCount };
+  }, [focusedExpenseSettlements]);
 
   async function handleAddExpense(expense: NewExpense) {
     if (!group || !groupId || !expense.paidByUserId || !expense.participantShares) {
@@ -227,8 +310,8 @@ export function GroupDetailPage() {
           title: "Receipt upload needs Pro",
           message:
             "Free plan does not include receipt upload in groups. Upgrade to Pro to add a receipt to this expense.",
-          confirmLabel: "Go to billing",
-          cancelLabel: "Not now",
+          confirmLabel: "Ch?t ?? nh?n ?? ti?n",
+          cancelLabel: "H?y",
         });
 
         if (!confirmed) {
@@ -275,6 +358,93 @@ export function GroupDetailPage() {
       variant: "success",
       message: response.message,
     });
+  }
+
+  async function handleOpenExpenseDetail(expenseId: string) {
+    setSearchParams((current) => {
+      current.set("expenseId", expenseId);
+      return current;
+    });
+  }
+
+  async function handleCloseExpenseDetail() {
+    setSearchParams((current) => {
+      current.delete("expenseId");
+      return current;
+    });
+  }
+
+  async function handleMarkSettlementAsSent(settlementId: string) {
+    try {
+      setIsMarkingSentSettlementId(settlementId);
+      const response = await markSettlementAsSent(settlementId);
+      setFocusedExpenseSettlements((current) =>
+        current.map((settlement) =>
+          settlement.id === settlementId ? response.settlement : settlement,
+        ),
+      );
+      showToast({
+        variant: "success",
+        message: "Đã chốt nhận đủ tiền",
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Không thể cập nhật trạng thái gửi tiền.";
+
+      showToast({
+        variant: "error",
+        message,
+      });
+    } finally {
+      setIsMarkingSentSettlementId(null);
+    }
+  }
+
+  async function handleSettleFocusedExpense() {
+    if (!focusedExpense) {
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: "Ch?t expense",
+      message: "Bạn xác nhận đã nhận đủ tiền từ tất cả mọi người?",
+      confirmLabel: "Chốt đã nhận đủ tiền",
+      cancelLabel: "Hủy",
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setIsSettlingExpense(true);
+      const response = await settleExpense(focusedExpense.id);
+      setExpenses((current) =>
+        current.map((expense) =>
+          expense.id === focusedExpense.id
+            ? {
+                ...expense,
+                settlementStatus: "settled",
+                settledAt: response.expense?.settledAt ?? expense.settledAt,
+                settledBy: response.expense?.settledBy ?? expense.settledBy,
+              }
+            : expense,
+        ),
+      );
+      showToast({
+        variant: "success",
+        message: response.message,
+      });
+    } catch (error) {
+      showToast({
+        variant: "error",
+        message: error instanceof Error ? error.message : "Không thể chốt expense.",
+      });
+    } finally {
+      setIsSettlingExpense(false);
+    }
   }
 
   const handleOpenAddExpense = () => {
@@ -651,6 +821,9 @@ export function GroupDetailPage() {
                         <tr
                           key={expense.id}
                           className="border-b border-[#F9FAFB] hover:bg-[#FAFAFA] transition-colors"
+                          onClick={() => void handleOpenExpenseDetail(expense.id)}
+                          role="button"
+                          tabIndex={0}
                         >
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-2.5">
@@ -743,6 +916,137 @@ export function GroupDetailPage() {
           </div>
 
           <div className="space-y-5">
+            {focusedExpense ? (
+              <div className="bg-white rounded-2xl p-5 border border-[#E5E7EB]">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
+                      Expense detail
+                    </h3>
+                    <p className="mt-1 text-sm text-[#6B7280]">
+                      Settlement trạng thái theo từng người nợ.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleCloseExpenseDetail()}
+                    className="rounded-lg border border-[#E5E7EB] px-3 py-2 text-xs text-[#374151]"
+                  >
+                    Đóng
+                  </button>
+                </div>
+                <div className="mt-4 rounded-xl bg-[#F9FAFB] p-4">
+                  <p className="text-sm text-[#111827]" style={{ fontWeight: 700 }}>
+                    {focusedExpense.title}
+                  </p>
+                  <p className="mt-1 text-xs text-[#6B7280]">
+                    {formatCurrency(focusedExpense.amount, focusedExpense.currency)} ·{" "}
+                    {formatShortDate(focusedExpense.expenseDate)}
+                  </p>
+                </div>
+                {currentUserIsFocusedExpenseCreditor ? (
+                  <div className="mt-4">
+                    <div className="mb-2 flex items-center justify-between text-sm">
+                      <span className="text-[#374151]">
+                        {focusedExpenseProgress.sentCount}/{focusedExpenseProgress.total}{" "}
+                        người đã xác nhận gửi tiền
+                      </span>
+                      <span className="text-[#6B7280]">
+                        {focusedExpense.settlementStatus === "settled"
+                          ? "Settled"
+                          : "Pending"}
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {isLoadingFocusedExpense ? (
+                        <p className="text-sm text-[#6B7280]">Đang tải settlement...</p>
+                      ) : (
+                        focusedExpenseSettlements.map((settlement) => {
+                          const member = group?.members.find(
+                            (item) => item.id === settlement.debtorUserId,
+                          );
+                          const isSent = settlement.status === "sent";
+                          const isOwnSettlement =
+                            currentUser?.id === settlement.debtorUserId;
+
+                          return (
+                            <div
+                              key={settlement.id}
+                              className="flex items-center justify-between rounded-xl border border-[#E5E7EB] px-3 py-3"
+                            >
+                              <div>
+                                <p className="text-sm text-[#111827]" style={{ fontWeight: 600 }}>
+                                  {member?.name ?? settlement.debtorUserId}
+                                </p>
+                                <p className="text-xs text-[#6B7280]">
+                                  {formatCurrency(settlement.amount, settlement.currency)}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`rounded-full px-2.5 py-1 text-xs ${
+                                    isSent
+                                      ? "bg-[#D1FAE5] text-[#065f46]"
+                                      : "bg-[#FEF3C7] text-[#92400e]"
+                                  }`}
+                                >
+                                  {isSent ? "Sent" : "Pending"}
+                                </span>
+                                {isOwnSettlement && !isSent && focusedExpense.settlementStatus !== "settled" ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleMarkSettlementAsSent(settlement.id)}
+                                    disabled={isMarkingSentSettlementId === settlement.id}
+                                    className="rounded-lg bg-[#16A34A] px-3 py-2 text-xs text-white"
+                                  >
+                                    {isMarkingSentSettlementId === settlement.id
+                                      ? "Đang gửi..."
+                                      : "Mark as sent"}
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                    <div className="mt-4">
+                      {isFocusedExpenseSettled ? (
+                        <div className="inline-flex rounded-xl bg-[#ECFDF5] px-4 py-2.5 text-sm text-[#065F46]">
+                          Đã chốt nhận đủ tiền
+                        </div>
+                      ) : (
+                        <>
+                          {currentUserIsFocusedExpenseCreditor ? (
+                            <button
+                              type="button"
+                              onClick={() => void handleSettleFocusedExpense()}
+                              disabled={!canMarkExpenseSettled || isSettlingExpense}
+                              className={`rounded-xl px-4 py-2.5 text-sm text-white transition-colors ${
+                                canMarkExpenseSettled && !isSettlingExpense
+                                  ? "bg-[#111827] hover:bg-[#1F2937]"
+                                  : "cursor-not-allowed bg-[#111827]/40 opacity-70"
+                              }`}
+                            >
+                              {isSettlingExpense
+                                ? "Đang chốt..."
+                                : canMarkExpenseSettled
+                                  ? "Mark expense as settled / Chốt đã nhận đủ tiền"
+                                  : "Chưa đủ - Mark expense as settled / Chốt đã nhận đủ tiền"}
+                            </button>
+                          ) : null}
+                          {!isExpenseSettlementReady && focusedExpense.settlementStatus === "pending" ? (
+                            <p className="mt-2 text-xs text-[#92400e]">
+                              Chỉ có thể chốt khi tất cả người nợ đã Mark as sent.
+                            </p>
+                          ) : null}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             <div className="bg-white rounded-2xl p-5 border border-[#E5E7EB]">
               <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
                 <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>

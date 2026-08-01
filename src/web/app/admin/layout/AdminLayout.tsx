@@ -25,6 +25,7 @@ import { useFeedback } from "../../../shared/providers/FeedbackProvider";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
 import { Sidebar } from "../../private/layout/Sidebar";
 import { getAdminStatCards, getAdminTabs } from "../lib/admin.utils";
+import { AdminNotificationCenter } from "../components/AdminNotificationCenter";
 
 interface AdminLayoutContextValue {
   isLoadingDashboard: boolean;
@@ -379,7 +380,9 @@ export function AdminLayout() {
                   <p className="text-sm text-[#6B7280] mt-0.5">{t.adminDesc}</p>
                 </div>
               </div>
-              <div className="relative" ref={exportMenuRef}>
+              <div className="flex items-center gap-3">
+                <AdminNotificationCenter />
+                <div className="relative" ref={exportMenuRef}>
                 <button
                   type="button"
                   onClick={() => {
@@ -440,6 +443,7 @@ export function AdminLayout() {
                     </div>,
                     document.body,
                   )}
+                </div>
               </div>
             </div>
           </div>

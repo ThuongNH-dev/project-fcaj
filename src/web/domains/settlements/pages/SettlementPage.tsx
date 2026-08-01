@@ -1,9 +1,25 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, DollarSign, TrendingUp, Users } from "lucide-react";
-import { useSearchParams } from "react-router";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  DollarSign,
+  ImagePlus,
+  TrendingUp,
+  Users,
+  X,
+} from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router";
 import { useStoredUser } from "../../auth";
 import { getExpenses, type Expense } from "../../expenses";
 import { getGroups, type Group } from "../../groups";
+import { getCurrentUserBilling, type CurrentUserBillingSummary } from "../../users";
+import {
+  createSettlementDispute,
+  getMySettlementDisputes,
+  uploadDisputeEvidence,
+  type DisputeEvidenceInput,
+  type SettlementDisputeReason,
+} from "../../settlement-disputes";
 import { AdminPagination } from "../../../app/admin/components/AdminPagination";
 import { useFeedback } from "../../../shared/providers/FeedbackProvider";
 import { useLanguage } from "../../../shared/providers/LanguageProvider";
@@ -17,11 +33,27 @@ import {
   getMySettlements,
   markSettlementAsSent,
 } from "../api/settlements.api";
+import { settleExpense } from "../../expenses";
 import type {
   GetMySettlementsParams,
   Settlement,
   SettlementPagination,
 } from "../models/settlements.types";
+
+const MAX_DISPUTE_EVIDENCE_COUNT = 3;
+const MAX_DISPUTE_EVIDENCE_SIZE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_DISPUTE_EVIDENCE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+
+const DISPUTE_REASON_OPTIONS: { value: SettlementDisputeReason; label: string }[] = [
+  { value: "payment_not_received", label: "Payment not received" },
+  { value: "incorrect_amount", label: "Incorrect amount" },
+  { value: "unauthorized_settlement", label: "Unauthorized settlement" },
+  { value: "other", label: "Other" },
+];
 
 const PAGE_LIMIT = 10;
 const SENT_TIMELINE_PAGE_LIMIT = 4;
@@ -117,8 +149,75 @@ export function SettlementPage() {
   const { t } = useLanguage();
   const { confirm, showToast } = useFeedback();
   const currentUser = useStoredUser();
+  const navigate = useNavigate();
+  const [billingSummary, setBillingSummary] = useState<CurrentUserBillingSummary | null>(
+    null,
+  );
+  const [disputeTargetSettlement, setDisputeTargetSettlement] =
+    useState<Settlement | null>(null);
+  const [disputeReason, setDisputeReason] =
+    useState<SettlementDisputeReason>("payment_not_received");
+  const [disputeDescription, setDisputeDescription] = useState("");
+  const [disputeFiles, setDisputeFiles] = useState<File[]>([]);
+  const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
+  const [disputeIdsBySettlementId, setDisputeIdsBySettlementId] = useState<
+    Map<string, string>
+  >(() => new Map());
+  const disputeFileInputRef = useRef<HTMLInputElement>(null);
+  const isFreePlan = billingSummary?.profile.plan !== "pro";
   const focusedSettlementId = searchParams.get("settlementId");
   const focusedExpenseId = searchParams.get("expenseId");
+
+  useEffect(() => {
+    let isActive = true;
+
+    void getCurrentUserBilling()
+      .then((response) => {
+        if (isActive) {
+          setBillingSummary(response.billing ?? null);
+        }
+      })
+      .catch(() => {
+        // Billing summary is optional here; the dispute button simply stays gated.
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadExistingDisputes() {
+      try {
+        const firstPage = await getMySettlementDisputes({ page: 1, limit: 100 });
+        const remainingPages = await Promise.all(
+          Array.from(
+            { length: Math.max(0, firstPage.pagination.totalPages - 1) },
+            (_, index) => getMySettlementDisputes({ page: index + 2, limit: 100 }),
+          ),
+        );
+        const disputeIds = new Map<string, string>();
+
+        [firstPage, ...remainingPages]
+          .flatMap((response) => response.disputes)
+          .forEach((dispute) => disputeIds.set(dispute.settlementId, dispute.id));
+
+        if (isActive) {
+          setDisputeIdsBySettlementId(disputeIds);
+        }
+      } catch {
+        // The submit endpoint remains the source of truth if this optional status lookup fails.
+      }
+    }
+
+    void loadExistingDisputes();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let isActive = true;
@@ -181,7 +280,6 @@ export function SettlementPage() {
         page: creditorPage,
         limit: PAGE_LIMIT,
         role: "creditor",
-        status: "pending",
       });
 
       if (
@@ -236,8 +334,8 @@ export function SettlementPage() {
     try {
       setIsLoadingSummary(true);
       const [debtorItems, creditorItems, sentItems] = await Promise.all([
-        getAllSettlements({ role: "debtor", status: "pending" }),
-        getAllSettlements({ role: "creditor", status: "pending" }),
+        getAllSettlements({ role: "debtor" }),
+        getAllSettlements({ role: "creditor" }),
         getAllSettlements({ status: "sent" }),
       ]);
 
@@ -319,6 +417,27 @@ export function SettlementPage() {
     () => new Map(expenses.map((expense) => [expense.id, expense])),
     [expenses],
   );
+  const creditorPendingSettlements = useMemo(
+    () =>
+      summaryCreditorSettlements.filter(
+        (settlement) => expensesById.get(settlement.expenseId)?.settlementStatus === "pending",
+      ),
+    [expensesById, summaryCreditorSettlements],
+  );
+  const debtorPendingSettlements = useMemo(
+    () =>
+      summaryDebtorSettlements.filter(
+        (settlement) => expensesById.get(settlement.expenseId)?.settlementStatus === "pending",
+      ),
+    [expensesById, summaryDebtorSettlements],
+  );
+  const settledTimelineSettlements = useMemo(
+    () =>
+      sentSettlements.filter(
+        (settlement) => expensesById.get(settlement.expenseId)?.settlementStatus === "settled",
+      ),
+    [expensesById, sentSettlements],
+  );
   const memberNameById = useMemo(() => {
     const names = new Map<string, string>();
 
@@ -376,7 +495,7 @@ export function SettlementPage() {
   );
   const isFocusedSettlementInCurrentLists = Boolean(
     focusedSettlementId &&
-      [...debtorSettlements, ...creditorSettlements, ...sentSettlements].some(
+      [...debtorPendingSettlements, ...creditorPendingSettlements, ...settledTimelineSettlements].some(
         (settlement) => settlement.id === focusedSettlementId,
       ),
   );
@@ -399,11 +518,22 @@ export function SettlementPage() {
     return () => window.cancelAnimationFrame(frameId);
   }, [
     creditorSettlements,
-    debtorSettlements,
+    debtorPendingSettlements,
     focusedSettlement,
     focusedSettlementId,
-    sentSettlements,
+    settledTimelineSettlements,
   ]);
+
+  const disputeFilePreviews = useMemo(
+    () => disputeFiles.map((file) => URL.createObjectURL(file)),
+    [disputeFiles],
+  );
+
+  useEffect(() => {
+    return () => {
+      disputeFilePreviews.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [disputeFilePreviews]);
 
   function getSettlementTitle(settlement: Settlement) {
     return (
@@ -444,6 +574,26 @@ export function SettlementPage() {
         loadSettlementSummaries(),
       ]);
 
+      setCreditorSettlements((current) =>
+        current.filter((item) => item.id !== settlement.id),
+      );
+      setSummaryCreditorSettlements((current) =>
+        current.filter((item) => item.id !== settlement.id),
+      );
+      setSentSettlements((current) => {
+        const withoutUpdatedSettlement = current.filter(
+          (item) => item.id !== settlement.id,
+        );
+        return [response.settlement, ...withoutUpdatedSettlement].slice(
+          0,
+          SENT_TIMELINE_PAGE_LIMIT,
+        );
+      });
+      setSummarySentSettlements((current) => [
+        response.settlement,
+        ...current.filter((item) => item.id !== settlement.id),
+      ]);
+
       showToast({ variant: "success", message: response.message });
     } catch (error) {
       showToast({
@@ -453,6 +603,200 @@ export function SettlementPage() {
       });
     } finally {
       setSendingSettlementId(null);
+    }
+  }
+
+  async function handleSettleExpenseFromSettlement(settlement: Settlement) {
+    const confirmed = await confirm({
+      title: "Chốt expense",
+      message: "Bạn xác nhận đã nhận đủ tiền từ tất cả mọi người?",
+      confirmLabel: "Chốt đã nhận đủ tiền",
+      cancelLabel: "Hủy",
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setSendingSettlementId(settlement.id);
+      const response = await getMySettlements({
+        expenseId: settlement.expenseId,
+        limit: 100,
+      });
+
+      if (!response.settlements.every((item) => item.status === "sent")) {
+        showToast({
+          variant: "error",
+          message: "Chỉ có thể chốt khi tất cả người nợ đã Mark as sent.",
+        });
+        return;
+      }
+
+      const settledResponse = await settleExpense(settlement.expenseId);
+      showToast({
+        variant: "success",
+        message: "Đã chốt nhận đủ tiền",
+      });
+      await Promise.all([loadCreditorSettlements(), loadSettlementSummaries()]);
+    } catch (error) {
+      showToast({
+        variant: "error",
+        message: error instanceof Error ? error.message : "Không thể chốt expense.",
+      });
+    } finally {
+      setSendingSettlementId(null);
+    }
+  }
+
+  async function handleSettleExpenseFromSettlementWithStatus(settlement: Settlement) {
+    const response = await getMySettlements({
+      expenseId: settlement.expenseId,
+      limit: 100,
+    });
+    const isReady = response.settlements.length > 0 && response.settlements.every((item) => item.status === "sent");
+
+    if (!isReady) {
+      showToast({
+        variant: "error",
+        message: "Chỉ có thể chốt khi tất cả người nợ đã Mark as sent.",
+      });
+      return;
+    }
+
+    await handleSettleExpenseFromSettlement(settlement);
+  }
+
+  async function handleRequestDisputeUpgrade() {
+    const confirmed = await confirm({
+      title: "Settlement dispute needs Pro",
+      message:
+        "Free plan does not include settlement disputes. Upgrade to Pro to continue.",
+      confirmLabel: "Go to billing",
+      cancelLabel: "Not now",
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    navigate("/settings?tab=billing");
+  }
+
+  function handleOpenDisputeModal(settlement: Settlement) {
+    if (isFreePlan) {
+      void handleRequestDisputeUpgrade();
+      return;
+    }
+
+    setDisputeTargetSettlement(settlement);
+    setDisputeReason("payment_not_received");
+    setDisputeDescription("");
+    setDisputeFiles([]);
+  }
+
+  function handleCloseDisputeModal() {
+    if (isSubmittingDispute) {
+      return;
+    }
+
+    setDisputeTargetSettlement(null);
+  }
+
+  function handleDisputeFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(event.target.files ?? []);
+
+    event.target.value = "";
+
+    const supportedFiles = selected.filter(
+      (file) =>
+        ALLOWED_DISPUTE_EVIDENCE_MIME_TYPES.has(file.type) &&
+        file.size > 0 &&
+        file.size <= MAX_DISPUTE_EVIDENCE_SIZE_BYTES,
+    );
+
+    if (supportedFiles.length !== selected.length) {
+      showToast({
+        variant: "error",
+        message: "Evidence must be a PNG, JPEG, or WebP image no larger than 5 MB.",
+      });
+    }
+
+    if (supportedFiles.length === 0) {
+      return;
+    }
+
+    setDisputeFiles((current) => {
+      const combined = [...current, ...supportedFiles];
+
+      if (combined.length > MAX_DISPUTE_EVIDENCE_COUNT) {
+        showToast({
+          variant: "error",
+          message: `You can attach up to ${MAX_DISPUTE_EVIDENCE_COUNT} images.`,
+        });
+      }
+
+      return combined.slice(0, MAX_DISPUTE_EVIDENCE_COUNT);
+    });
+  }
+
+  function handleRemoveDisputeFile(index: number) {
+    setDisputeFiles((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  async function handleSubmitDispute() {
+    if (!disputeTargetSettlement) {
+      return;
+    }
+
+    if (disputeDescription.trim().length < 10) {
+      showToast({
+        variant: "error",
+        message: "Description must be at least 10 characters.",
+      });
+      return;
+    }
+
+    try {
+      setIsSubmittingDispute(true);
+
+      const evidence: DisputeEvidenceInput[] = [];
+
+      for (const file of disputeFiles) {
+        const uploaded = await uploadDisputeEvidence({
+          file,
+          settlementId: disputeTargetSettlement.id,
+        });
+
+        evidence.push(uploaded);
+      }
+
+      const response = await createSettlementDispute({
+        settlementId: disputeTargetSettlement.id,
+        reason: disputeReason,
+        description: disputeDescription.trim(),
+        evidence,
+      });
+
+      setDisputeIdsBySettlementId((current) => {
+        const next = new Map(current);
+        next.set(disputeTargetSettlement.id, response.dispute.id);
+        return next;
+      });
+
+      showToast({ variant: "success", message: response.message });
+      setDisputeTargetSettlement(null);
+      navigate(`/settlement/disputes/${encodeURIComponent(response.dispute.id)}`);
+    } catch (error) {
+      showToast({
+        variant: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to submit settlement dispute.",
+      });
+    } finally {
+      setIsSubmittingDispute(false);
     }
   }
 
@@ -500,6 +844,10 @@ export function SettlementPage() {
             <p className="text-xs text-[#9CA3AF] mt-2">
               {formatDateTime(expense?.expenseDate ?? settlement.createdAt)}
             </p>
+            {settlement.status === "sent" &&
+            expensesById.get(settlement.expenseId)?.settlementStatus === "pending" ? (
+              <p className="mt-2 text-xs text-[#92400e]">Đang chờ xử lý</p>
+            ) : null}
           </div>
 
           <div className="text-right flex-shrink-0">
@@ -509,21 +857,36 @@ export function SettlementPage() {
             >
               {formatCurrency(settlement.amount, settlement.currency)}
             </p>
-            {isCreditor && settlement.status === "pending" ? (
-              <button
-                type="button"
-                onClick={() => void handleMarkAsSent(settlement)}
-                disabled={isSending || group?.isBanned === true}
-                className={`mt-3 rounded-xl px-3 py-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                  group?.isBanned
-                    ? "bg-[#D1D5DB] text-[#6B7280]"
-                    : "bg-[#16A34A] text-white hover:bg-[#15803D]"
-                }`}
-                style={{ fontWeight: 600 }}
-              >
-                {isSending ? t.updating : t.markAsPaid}
-              </button>
-            ) : null}
+            <div className="mt-3 flex flex-col items-end gap-2">
+              {isDebtor && settlement.status === "pending" ? (
+                <button
+                  type="button"
+                  onClick={() => void handleMarkAsSent(settlement)}
+                  disabled={isSending || group?.isBanned === true}
+                  className={`rounded-xl px-3 py-2 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                    group?.isBanned
+                      ? "bg-[#D1D5DB] text-[#6B7280]"
+                      : "bg-[#16A34A] text-white hover:bg-[#15803D]"
+                  }`}
+                  style={{ fontWeight: 600 }}
+                >
+                  {isSending ? t.updating : t.markAsSent}
+                </button>
+              ) : null}
+              {settlement.status === "pending" ||
+              (settlement.status === "sent" &&
+                expensesById.get(settlement.expenseId)?.settlementStatus === "pending") ? (
+                <button
+                  type="button"
+                  onClick={() => handleOpenDisputeModal(settlement)}
+                  className="flex items-center gap-1.5 rounded-lg border border-[#FCA5A5] px-2.5 py-1.5 text-xs text-[#B91C1C] transition-colors hover:bg-[#FEF2F2]"
+                  style={{ fontWeight: 600 }}
+                >
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  Dispute
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
       );
@@ -532,16 +895,26 @@ export function SettlementPage() {
 
   const pendingIsLoading = isLoadingDebtor || isLoadingCreditor;
   const hasPendingSettlements =
-    debtorSettlements.length > 0 || creditorSettlements.length > 0;
+    debtorPendingSettlements.length > 0 || creditorPendingSettlements.length > 0;
 
   return (
     <div className="min-h-screen bg-[#F6FBF8]">
       <div className="max-w-7xl mx-auto px-6 py-8 pt-16 lg:pt-8">
-        <div className="mb-8">
-          <h1 className="text-[#111827]" style={{ fontSize: "1.5rem", fontWeight: 800 }}>
-            {t.settlementsTitle}
-          </h1>
-          <p className="text-[#6B7280] text-sm mt-0.5">{t.settlementsDesc}</p>
+        <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-[#111827]" style={{ fontSize: "1.5rem", fontWeight: 800 }}>
+              {t.settlementsTitle}
+            </h1>
+            <p className="text-[#6B7280] text-sm mt-0.5">{t.settlementsDesc}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate("/settlement/disputes")}
+            className="rounded-xl border border-[#E5E7EB] bg-white px-3.5 py-2 text-sm text-[#374151] transition-colors hover:bg-[#F9FAFB]"
+            style={{ fontWeight: 600 }}
+          >
+            My disputes
+          </button>
         </div>
 
         {errorMessages.map((message) => (
@@ -626,13 +999,13 @@ export function SettlementPage() {
                 <div className="px-5 py-8 text-sm text-[#6B7280]">{t.pendingSettlements}...</div>
               ) : hasPendingSettlements ? (
                 <>
-                  {debtorSettlements.length > 0 ? (
+                  {debtorPendingSettlements.length > 0 ? (
                     <section aria-label={t.youOweLabel}>
                       <div className="bg-[#FFFBEB] px-5 py-2 text-xs font-bold text-[#92400E]">
                         {t.youOweLabel}
                       </div>
                       <div className="divide-y divide-[#F3F4F6]">
-                        {renderPendingSettlements(debtorSettlements)}
+                        {renderPendingSettlements(debtorPendingSettlements)}
                       </div>
                       <AdminPagination
                         page={debtorPagination.page}
@@ -642,13 +1015,13 @@ export function SettlementPage() {
                     </section>
                   ) : null}
 
-                  {creditorSettlements.length > 0 ? (
+                  {creditorPendingSettlements.length > 0 ? (
                     <section aria-label={t.youAreOwedLabel}>
                       <div className="bg-[#F0FAF5] px-5 py-2 text-xs font-bold text-[#065F46]">
                         {t.youAreOwedLabel}
                       </div>
                       <div className="divide-y divide-[#F3F4F6]">
-                        {renderPendingSettlements(creditorSettlements)}
+                        {renderPendingSettlements(creditorPendingSettlements)}
                       </div>
                       <AdminPagination
                         page={creditorPagination.page}
@@ -680,11 +1053,12 @@ export function SettlementPage() {
 
               {isLoadingSent ? (
                 <p className="text-[#9CA3AF] text-xs">{t.loadingSettlementActivity}</p>
-              ) : sentSettlements.length > 0 ? (
+              ) : settledTimelineSettlements.length > 0 ? (
                 <>
                   <div className="space-y-4">
-                    {sentSettlements.map((settlement) => {
+                    {settledTimelineSettlements.map((settlement) => {
                       const isDebtor = settlement.debtorUserId === currentUser?.id;
+                      const disputeId = disputeIdsBySettlementId.get(settlement.id);
                       return (
                         <div
                           key={settlement.id}
@@ -718,6 +1092,31 @@ export function SettlementPage() {
                             {isDebtor ? t.youOweLabel : t.youAreOwedLabel} |{" "}
                             {formatDateTime(settlement.sentAt ?? settlement.updatedAt)}
                           </p>
+                          {disputeId ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                navigate(
+                                  `/settlement/disputes/${encodeURIComponent(disputeId)}`,
+                                )
+                              }
+                              className="mt-3 flex items-center gap-1.5 rounded-lg bg-[#FEF3C7] px-2.5 py-1.5 text-xs text-[#92400E] transition-colors hover:bg-[#FDE68A]"
+                              style={{ fontWeight: 600 }}
+                            >
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                              View dispute
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenDisputeModal(settlement)}
+                              className="mt-3 flex items-center gap-1.5 rounded-lg border border-[#FCA5A5] px-2.5 py-1.5 text-xs text-[#B91C1C] transition-colors hover:bg-[#FEF2F2]"
+                              style={{ fontWeight: 600 }}
+                            >
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                              Dispute
+                            </button>
+                          )}
                         </div>
                       );
                     })}
@@ -760,6 +1159,156 @@ export function SettlementPage() {
           </div>
         </div>
       </div>
+
+      {disputeTargetSettlement && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/35 backdrop-blur-sm"
+            onClick={handleCloseDisputeModal}
+          />
+          <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-[1.75rem] border border-[#E5E7EB] bg-white p-6 shadow-[0_24px_64px_rgba(17,24,39,0.22)]">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-[#111827]" style={{ fontWeight: 700 }}>
+                  Dispute settlement
+                </h3>
+                <p className="mt-1 text-sm text-[#6B7280]">
+                  {getSettlementTitle(disputeTargetSettlement)} ·{" "}
+                  {formatCurrency(
+                    disputeTargetSettlement.amount,
+                    disputeTargetSettlement.currency,
+                  )}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseDisputeModal}
+                disabled={isSubmittingDispute}
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-[#6B7280] transition-colors hover:bg-[#F3F4F6] hover:text-[#111827] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label
+                  className="mb-1.5 block text-sm text-[#374151]"
+                  style={{ fontWeight: 600 }}
+                >
+                  Reason
+                </label>
+                <select
+                  value={disputeReason}
+                  onChange={(event) =>
+                    setDisputeReason(event.target.value as SettlementDisputeReason)
+                  }
+                  disabled={isSubmittingDispute}
+                  className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {DISPUTE_REASON_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  className="mb-1.5 block text-sm text-[#374151]"
+                  style={{ fontWeight: 600 }}
+                >
+                  Description
+                </label>
+                <textarea
+                  value={disputeDescription}
+                  onChange={(event) => setDisputeDescription(event.target.value)}
+                  disabled={isSubmittingDispute}
+                  rows={4}
+                  maxLength={1000}
+                  placeholder="Explain what happened (at least 10 characters)"
+                  className="w-full rounded-xl border border-[#E5E7EB] bg-[#F9FAFB] px-4 py-3 text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#7EDDBA] disabled:cursor-not-allowed disabled:opacity-60"
+                />
+                <p className="mt-1 text-right text-xs text-[#9CA3AF]">
+                  {disputeDescription.length}/1000
+                </p>
+              </div>
+
+              <div>
+                <label
+                  className="mb-1.5 block text-sm text-[#374151]"
+                  style={{ fontWeight: 600 }}
+                >
+                  Evidence (up to {MAX_DISPUTE_EVIDENCE_COUNT} images)
+                </label>
+                <div className="flex flex-wrap gap-3">
+                  {disputeFiles.map((file, index) => (
+                    <div
+                      key={`${file.name}-${index}`}
+                      className="relative h-20 w-20 overflow-hidden rounded-xl border border-[#E5E7EB]"
+                    >
+                      <img
+                        src={disputeFilePreviews[index]}
+                        alt={file.name}
+                        className="h-full w-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveDisputeFile(index)}
+                        disabled={isSubmittingDispute}
+                        className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white disabled:cursor-not-allowed"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                  {disputeFiles.length < MAX_DISPUTE_EVIDENCE_COUNT && (
+                    <button
+                      type="button"
+                      onClick={() => disputeFileInputRef.current?.click()}
+                      disabled={isSubmittingDispute}
+                      className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-[#E5E7EB] text-[#9CA3AF] transition-colors hover:border-[#7EDDBA] hover:text-[#16A34A] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <ImagePlus className="h-5 w-5" />
+                      <span className="text-[10px]">Add</span>
+                    </button>
+                  )}
+                </div>
+                <input
+                  ref={disputeFileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  multiple
+                  className="hidden"
+                  onChange={handleDisputeFileChange}
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => void handleSubmitDispute()}
+                disabled={isSubmittingDispute}
+                className="rounded-xl bg-[#16A34A] px-5 py-2.5 text-sm text-white shadow-sm transition-colors hover:bg-[#15803D] disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ fontWeight: 600 }}
+              >
+                {isSubmittingDispute ? "Submitting..." : "Submit dispute"}
+              </button>
+              <button
+                type="button"
+                onClick={handleCloseDisputeModal}
+                disabled={isSubmittingDispute}
+                className="rounded-xl border border-[#E5E7EB] px-5 py-2.5 text-sm text-[#374151] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ fontWeight: 600 }}
+              >
+                {t.cancel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

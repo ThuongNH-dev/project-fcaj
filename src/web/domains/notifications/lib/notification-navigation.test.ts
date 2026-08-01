@@ -16,6 +16,7 @@ function createNotification(
     groupId: null,
     expenseId: null,
     settlementId: null,
+    disputeId: null,
     isRead: false,
     readAt: null,
     deduplicationKey: null,
@@ -71,5 +72,15 @@ describe("notification navigation", () => {
       ),
     ).toBe("/groups/group-1");
     expect(getNotificationDestination(createNotification("product_update"))).toBeNull();
+  });
+
+  it("deep-links a dispute notification to the admin dispute detail", () => {
+    expect(
+      getNotificationDestination(
+        createNotification("settlement_dispute_created", {
+          disputeId: "dispute/id",
+        }),
+      ),
+    ).toBe("/admin/settlement-disputes/dispute%2Fid");
   });
 });
