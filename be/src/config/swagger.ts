@@ -2361,7 +2361,7 @@ swaggerSpec.paths = {
         401: { description: "Missing or invalid bearer token" },
         403: { description: "User does not have an active Pro subscription" },
         404: { description: "Settlement not found or user is not debtor/creditor" },
-        409: { description: "Settlement is not sent, or user has already disputed this settlement" },
+        409: { description: "Settlement status is not eligible for dispute, or user has already disputed this settlement" },
         503: { description: "Database or S3 failure" },
       },
     },
@@ -2370,7 +2370,7 @@ swaggerSpec.paths = {
   "/api/settlement-disputes": {
     post: {
       summary: "Create a settlement dispute (Pro only)",
-      description: "Creates a dispute for a sent settlement. User must have an active Pro subscription. Evidence must be uploaded to S3 first via the presign endpoint.",
+      description: "Creates a dispute for a settlement with pending, sent, or done status. User must have an active Pro subscription. Evidence must be uploaded to S3 first via the presign endpoint.",
       tags: ["Settlement Disputes"],
       security: [{ bearerAuth: [] }],
       requestBody: {
@@ -2440,7 +2440,7 @@ swaggerSpec.paths = {
         401: { description: "Missing or invalid bearer token" },
         403: { description: "User does not have an active Pro subscription" },
         404: { description: "Settlement not found or user is not debtor/creditor" },
-        409: { description: "Duplicate dispute or settlement is not sent" },
+        409: { description: "Duplicate dispute or settlement status is not eligible for dispute" },
         503: { description: "Database or S3 failure" },
       },
     },
