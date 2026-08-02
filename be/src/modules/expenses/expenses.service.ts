@@ -777,6 +777,64 @@ export async function markExpenseAsSettled(
   }
 }
 
+/**
+ * Đồng bộ reviewStatus của Expense liên kết với Receipt sau khi Admin review.
+ *
+ * - Nếu Admin approve: cập nhật reviewStatus = "approved", xóa rejectionReason.
+ * - Nếu Admin reject: cập nhật reviewStatus = "rejected", lưu rejectionReason.
+ * - Tìm Expense bằng $or để xử lý cả hai chiều quan hệ:
+ *   (1) expense.receiptId === receiptId  (Expense lưu ref tới Receipt)
+ *   (2) expense._id     === expenseId    (Receipt lưu ref tới Expense)
+ * - Nếu không tìm thấy Expense thì trả về null — Receipt có thể tồn tại độc lập.
+ */
+export async function syncExpenseReviewStatus(input: {
+  receiptId: string;
+  expenseId?: string | null;
+  reviewStatus: "approved" | "rejected";
+  reviewedBy: string;
+  rejectionReason?: string | null;
+}): Promise<PublicExpense | null> {
+  const expenses = await getExpensesCollection();
+  const reviewedAt = new Date();
+
+  const updateFields =
+    input.reviewStatus === "approved"
+      ? {
+          reviewStatus: "approved" as const,
+          rejectionReason: null,
+          reviewedBy: input.reviewedBy,
+          reviewedAt,
+          updatedAt: reviewedAt,
+        }
+      : {
+          reviewStatus: "rejected" as const,
+          rejectionReason: input.rejectionReason ?? null,
+          reviewedBy: input.reviewedBy,
+          reviewedAt,
+          updatedAt: reviewedAt,
+        };
+
+  // Xây dựng $or filter để tìm Expense theo cả hai chiều quan hệ.
+  // Chiều 1: expense.receiptId = receiptId (Expense lưu ref tới Receipt)
+  // Chiều 2: expense._id = expenseId       (Receipt lưu ref tới Expense)
+  const filters: Record<string, unknown>[] = [
+    { receiptId: input.receiptId },
+  ];
+
+  if (input.expenseId && MongoObjectId.isValid(input.expenseId)) {
+    filters.push({ _id: new MongoObjectId(input.expenseId) });
+  }
+
+  const result = await expenses.findOneAndUpdate(
+    { $or: filters },
+    { $set: updateFields },
+    { returnDocument: "after" },
+  );
+
+  return result ? toPublicExpense(result) : null;
+}
+
+
 export function toPublicExpense(expense: ExpenseDocument): PublicExpense {
   if (!expense._id) {
     throw new Error("Expense document is missing an id.");
