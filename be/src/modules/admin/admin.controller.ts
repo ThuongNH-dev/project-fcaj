@@ -6,6 +6,7 @@ import {
   reviewReceiptUploadById,
 } from "../receipts/receipts.service.js";
 import { deleteReceiptObject } from "../receipts/receipts.storage.js";
+import { syncExpenseReviewStatus } from "../expenses/expenses.service.js";
 import {
   countUsersByRole,
   deleteUserById,
@@ -631,6 +632,20 @@ export async function reviewAdminUploadHandler(req: Request, res: Response) {
         // Keep the moderation decision even if storage cleanup fails.
       }
     }
+
+    // Đồng bộ trạng thái Expense liên kết với Receipt.
+    // Gọi không điều kiện vì Expense có thể lưu quan hệ theo một trong hai chiều:
+    //   (1) expense.receiptId = receiptId  — tìm được dù receipt.expenseId = null
+    //   (2) expense._id = receipt.expenseId — tìm được dù expense.receiptId = null
+    // Nếu không tìm thấy Expense (Receipt tồn tại độc lập), hàm trả về null — không throw lỗi.
+    await syncExpenseReviewStatus({
+      receiptId,
+      expenseId: receipt.expenseId,
+      reviewStatus,
+      reviewedBy: adminUserId,
+      rejectionReason: reviewStatus === "rejected" ? rejectionReason : null,
+    });
+
 
     return res.status(200).json({
       ok: true,
