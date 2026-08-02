@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { env } from "../../config/env.js";
 import { sendPasswordResetEmail } from "./auth.email.js";
 import { signAuthToken } from "./auth.token.js";
+import type { UserRole } from "./auth.types.js";
 import {
   loginOrRegisterWithGoogle,
   loginUser,
@@ -30,6 +31,7 @@ export async function registerUserHandler(req: Request, res: Response) {
     bio,
     avatarUrl,
     defaultCurrency,
+    role,
   } = req.body as {
     firstName?: string;
     lastName?: string;
@@ -38,6 +40,7 @@ export async function registerUserHandler(req: Request, res: Response) {
     bio?: string;
     avatarUrl?: string;
     defaultCurrency?: string;
+    role?: string;
   };
 
   if (!firstName?.trim() || !lastName?.trim() || !email?.trim() || !password) {
@@ -63,6 +66,7 @@ export async function registerUserHandler(req: Request, res: Response) {
       bio,
       avatarUrl,
       defaultCurrency,
+      role: role as UserRole | undefined,
     });
 
     return res.status(201).json({

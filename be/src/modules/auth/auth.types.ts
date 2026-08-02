@@ -34,6 +34,7 @@ export interface RegisterUserInput {
   bio?: string;
   avatarUrl?: string;
   defaultCurrency?: string;
+  role?: UserRole;
 }
 
 export interface LoginUserInput {

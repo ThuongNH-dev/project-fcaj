@@ -106,6 +106,8 @@ swaggerSpec.paths = {
                   example: "user",
                 },
               },
+              description:
+                'Set `role` to `admin` or `user` when creating the account.',
             },
           },
         },

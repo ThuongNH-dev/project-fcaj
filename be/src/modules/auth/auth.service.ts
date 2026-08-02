@@ -322,7 +322,7 @@ export async function registerUser(
   const normalizedDefaultCurrency = normalizeDefaultCurrency(
     input.defaultCurrency,
   );
-  const normalizedRole: UserDocument["role"] = "user";
+  const normalizedRole = input.role ? normalizeUserRole(input.role) : "user";
 
   const existingUser = await users.findOne({ email: normalizedEmail });
 
