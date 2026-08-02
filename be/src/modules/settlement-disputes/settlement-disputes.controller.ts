@@ -110,11 +110,13 @@ async function validateDisputeEligibility(
 
   const againstUserId = isDebtor ? creditorUserId : debtorUserId;
 
-  // Settlement must be sent
-  if (settlementStatus !== "sent") {
+  // Settlement must be pending, sent, or done
+  const disputableStatuses = ["pending", "sent", "done"];
+
+  if (!disputableStatuses.includes(settlementStatus)) {
     res.status(409).json({
       ok: false,
-      message: "Only sent settlements can be disputed.",
+      message: "Only pending, sent, or done settlements can be disputed.",
     });
     return null;
   }

@@ -1,7 +1,7 @@
 import type { ObjectId } from "mongodb";
 import type { SupportedCurrency } from "../auth/auth.types.js";
 
-export type SettlementStatus = "pending" | "sent";
+export type SettlementStatus = "pending" | "sent" | "done";
 /**
  * "debtor"              — debtor đã bấm Mark as sent (hành động hợp lệ duy nhất).
  * "creditor_settlement" — LEGACY: sinh ra từ cascadeSettleByExpenseId (đã xóa).
