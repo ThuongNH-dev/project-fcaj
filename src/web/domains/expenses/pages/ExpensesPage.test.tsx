@@ -45,7 +45,10 @@ vi.mock("..", () => ({
   updateExpense: vi.fn(),
 }));
 
-function createExpense(index: number): Expense {
+function createExpense(
+  index: number,
+  overrides: Partial<Expense> = {},
+): Expense {
   return {
     id: `expense-${index}`,
     groupId: "group-1",
@@ -70,6 +73,7 @@ function createExpense(index: number): Expense {
     reviewedAt: null,
     createdAt: "2026-07-20T10:00:00.000Z",
     updatedAt: "2026-07-20T10:00:00.000Z",
+    ...overrides,
   };
 }
 
@@ -98,6 +102,44 @@ describe("ExpensesPage notification deep-link", () => {
       ok: true,
       message: "Billing fetched.",
     });
+  });
+
+  it("maps refreshed review statuses, shows rejection reasons, and locks unapproved actions", async () => {
+    mockGetExpenses.mockResolvedValue({
+      ok: true,
+      message: "Expenses fetched after receipt review.",
+      expenses: [
+        createExpense(1, { reviewStatus: "pending" }),
+        createExpense(2, { reviewStatus: "approved" }),
+        createExpense(3, {
+          reviewStatus: "rejected",
+          rejectionReason: "Receipt image is unreadable.",
+        }),
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/expenses"]}>
+        <LanguageProvider>
+          <ExpensesPage />
+        </LanguageProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Receive Pending")).toBeInTheDocument();
+    expect(screen.getByText("Approved")).toBeInTheDocument();
+    expect(screen.getByText("Rejected")).toBeInTheDocument();
+    expect(screen.getByText("Reason: Receipt image is unreadable.")).toBeInTheDocument();
+
+    const editButtons = screen.getAllByRole("button", { name: "Edit" });
+    const deleteButtons = screen.getAllByRole("button", { name: "Delete" });
+
+    expect(editButtons[0]).toBeDisabled();
+    expect(editButtons[1]).toBeEnabled();
+    expect(editButtons[2]).toBeDisabled();
+    expect(deleteButtons[0]).toBeDisabled();
+    expect(deleteButtons[1]).toBeEnabled();
+    expect(deleteButtons[2]).toBeDisabled();
   });
 
   it("opens the page containing the targeted expense and highlights it", async () => {

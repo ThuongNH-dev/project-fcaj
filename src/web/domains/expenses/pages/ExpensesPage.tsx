@@ -38,11 +38,21 @@ const statusStyles: Record<string, string> = {
   pending: "bg-[#FEF3C7] text-[#92400e]",
 };
 
-const reviewStyles: Record<string, string> = {
+const reviewStyles: Record<Expense["reviewStatus"], string> = {
   approved: "bg-[#D1FAE5] text-[#065f46]",
   pending: "bg-[#FEF3C7] text-[#92400e]",
   rejected: "bg-[#FEE2E2] text-[#991b1b]",
 };
+
+const reviewLabels: Record<Expense["reviewStatus"], string> = {
+  pending: "Receive Pending",
+  approved: "Approved",
+  rejected: "Rejected",
+};
+
+function isExpenseApproved(expense: Expense) {
+  return expense.reviewStatus === "approved";
+}
 
 function addCurrencyAmount(totals: Map<string, number>, currency: string, amount: number) {
   totals.set(currency, Number(((totals.get(currency) ?? 0) + amount).toFixed(2)));
@@ -298,7 +308,20 @@ export function ExpensesPage() {
   };
 
   const handleUpdate = async (expense: NewExpense) => {
-    if (!expenseToEdit || !expense.paidByUserId || !expense.participantShares) {
+    if (!expenseToEdit) {
+      throw new Error("Expense details are incomplete.");
+    }
+
+    if (!isExpenseApproved(expenseToEdit)) {
+      showToast({
+        variant: "error",
+        message: "Only approved expenses can be edited.",
+      });
+      setExpenseToEdit(null);
+      return;
+    }
+
+    if (!expense.paidByUserId || !expense.participantShares) {
       throw new Error("Expense details are incomplete.");
     }
 
@@ -331,7 +354,15 @@ export function ExpensesPage() {
   };
 
   const handleDelete = async (expense: Expense) => {
-    if (isExpenseInBannedGroup(expense)) {
+    if (!isExpenseApproved(expense)) {
+      showToast({
+        variant: "error",
+        message: "Only approved expenses can be deleted.",
+      });
+      return;
+    }
+
+    if (isExpenseInBannedGroup(expense) || !isExpenseApproved(expense)) {
       showToast({
         variant: "error",
         message: "This group has been banned. Expense deletion is disabled.",
@@ -612,20 +643,18 @@ export function ExpensesPage() {
                           >
                             {toTitleCase(expense.settlementStatus)}
                           </span>
-                          {expense.receiptId ? (
-                            <span
-                              className={`text-xs px-2.5 py-1 rounded-full ${
-                                reviewStyles[expense.reviewStatus] ||
-                                "bg-[#F3F4F6] text-[#6B7280]"
-                              }`}
-                              style={{ fontWeight: 500 }}
-                            >
-                              {expense.reviewStatus === "approved"
-                                ? "Receipt approved"
-                                : expense.reviewStatus === "rejected"
-                                  ? "Receipt rejected"
-                                  : "Receipt pending"}
-                            </span>
+                          <span
+                            className={`text-xs px-2.5 py-1 rounded-full ${
+                              reviewStyles[expense.reviewStatus]
+                            }`}
+                            style={{ fontWeight: 500 }}
+                          >
+                            {reviewLabels[expense.reviewStatus]}
+                          </span>
+                          {expense.reviewStatus === "rejected" ? (
+                            <p className="w-full text-xs text-[#B91C1C]">
+                              {t.rejectionReason}: {expense.rejectionReason?.trim() || "No reason provided."}
+                            </p>
                           ) : null}
                         </div>
                       </td>
@@ -646,9 +675,9 @@ export function ExpensesPage() {
                               <button
                                 type="button"
                                 onClick={() => setExpenseToEdit(expense)}
-                                disabled={isExpenseInBannedGroup(expense)}
+                                disabled={isExpenseInBannedGroup(expense) || !isExpenseApproved(expense)}
                                 className={`inline-flex h-9 items-center gap-1 rounded-full border px-3 text-xs transition-colors ${
-                                  isExpenseInBannedGroup(expense)
+                                  isExpenseInBannedGroup(expense) || !isExpenseApproved(expense)
                                     ? "cursor-not-allowed border-[#E5E7EB] bg-[#F9FAFB] text-[#9CA3AF]"
                                     : "border-[#E5E7EB] bg-white text-[#374151] hover:bg-[#F9FAFB]"
                                 }`}
@@ -660,9 +689,9 @@ export function ExpensesPage() {
                               <button
                                 type="button"
                                 onClick={() => void handleDelete(expense)}
-                                disabled={isExpenseInBannedGroup(expense)}
+                                disabled={isExpenseInBannedGroup(expense) || !isExpenseApproved(expense)}
                                 className={`inline-flex h-9 items-center gap-1 rounded-full border px-3 text-xs transition-colors ${
-                                  isExpenseInBannedGroup(expense)
+                                  isExpenseInBannedGroup(expense) || !isExpenseApproved(expense)
                                     ? "cursor-not-allowed border-[#E5E7EB] bg-[#F9FAFB] text-[#9CA3AF]"
                                     : "border-[#FECACA] bg-[#FEF2F2] text-[#B91C1C] hover:bg-[#FEE2E2]"
                                 }`}
