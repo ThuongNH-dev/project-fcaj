@@ -97,6 +97,10 @@ export function AdminUploadsPage() {
   }
 
   async function handleApprove(upload: AdminUploadRecord) {
+    if (isReviewSubmitting) {
+      return;
+    }
+
     const confirmed = await confirm({
       title: "Approve this bill?",
       message: `Bill ${upload.originalFileName} will move out of pending review.`,
@@ -129,6 +133,10 @@ export function AdminUploadsPage() {
   }
 
   async function handleReject(upload: AdminUploadRecord) {
+    if (isReviewSubmitting) {
+      return;
+    }
+
     const trimmedReason = rejectReason.trim();
 
     if (!trimmedReason) {
