@@ -112,11 +112,11 @@ export function getSettlementStatusLabel(
 
 export function getUploadStatusLabel(upload: AdminUploadRecord, t: Translator) {
   if (upload.reviewStatus === "approved") {
-    return t.processed;
+    return "Approved";
   }
 
   if (upload.reviewStatus === "rejected") {
-    return t.failedErrors;
+    return "Rejected";
   }
 
   if (upload.processingStatus === "processed") {
