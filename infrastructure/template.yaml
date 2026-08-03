@@ -1,0 +1,623 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Splitly AWS infrastructure for Node.js + Express + TypeScript backend
+
+# =========================================================
+# PARAMETERS
+# =========================================================
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - test
+      - prod
+    Description: Deployment environment name
+
+  InstanceType:
+    Type: String
+    Default: t3.micro
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t2.micro
+    Description: EC2 instance type for the Splitly backend
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: Latest Amazon Linux 2023 x86_64 AMI from SSM Parameter Store
+
+  ReceiptBucketName:
+    Type: String
+    Default: splitly-s3
+    Description: Existing S3 bucket used to store receipts
+
+  ReceiptPrefix:
+    Type: String
+    Default: receipts/
+    Description: Object prefix used for receipt files
+
+  BackendPort:
+    Type: Number
+    Default: 5000
+    MinValue: 1
+    MaxValue: 65535
+    Description: Internal port used by the Node.js backend
+
+  AlarmEmail:
+    Type: String
+    Default: ''
+    Description: Optional email address that receives SNS alarm notifications
+
+  SecretArn:
+    Type: String
+    Default: ''
+    Description: Optional ARN of the Secrets Manager secret containing backend secrets
+
+  AllowBackendPortIngress:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Open the backend port directly to the internet when true
+
+# =========================================================
+# CONDITIONS
+# =========================================================
+Conditions:
+  HasAlarmEmail: !Not
+    - !Equals
+      - !Ref AlarmEmail
+      - ''
+
+  HasSecretArn: !Not
+    - !Equals
+      - !Ref SecretArn
+      - ''
+
+  AllowBackendPortIngressCondition: !Equals
+    - !Ref AllowBackendPortIngress
+    - 'true'
+
+# =========================================================
+# RESOURCES
+# =========================================================
+Resources:
+
+  # =======================================================
+  # NETWORK
+  # =======================================================
+  SplitlyVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub Splitly-${EnvironmentName}-VPC
+        - Key: Project
+          Value: Splitly
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  SplitlyInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub Splitly-${EnvironmentName}-IGW
+        - Key: Project
+          Value: Splitly
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  SplitlyVpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref SplitlyVpc
+      InternetGatewayId: !Ref SplitlyInternetGateway
+
+  SplitlyPublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SplitlyVpc
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ''
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub Splitly-${EnvironmentName}-Public-Subnet
+        - Key: Project
+          Value: Splitly
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  SplitlyRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SplitlyVpc
+      Tags:
+        - Key: Name
+          Value: !Sub Splitly-${EnvironmentName}-Public-RouteTable
+        - Key: Project
+          Value: Splitly
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  SplitlyDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn:
+      - SplitlyVpcGatewayAttachment
+    Properties:
+      RouteTableId: !Ref SplitlyRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref SplitlyInternetGateway
+
+  SplitlySubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SplitlyPublicSubnet
+      RouteTableId: !Ref SplitlyRouteTable
+
+  # =======================================================
+  # SECURITY
+  # =======================================================
+  SplitlyBackendSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for the Splitly backend EC2 instance
+      VpcId: !Ref SplitlyVpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: Public HTTP access through Nginx
+
+        - !If
+          - AllowBackendPortIngressCondition
+          - IpProtocol: tcp
+            FromPort: !Ref BackendPort
+            ToPort: !Ref BackendPort
+            CidrIp: 0.0.0.0/0
+            Description: Optional direct backend access
+          - !Ref AWS::NoValue
+
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Outbound access to AWS services, MongoDB Atlas, npm and GitHub
+
+      Tags:
+        - Key: Name
+          Value: !Sub Splitly-${EnvironmentName}-Backend-SG
+        - Key: Project
+          Value: Splitly
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # =======================================================
+  # IAM
+  # =======================================================
+  SplitlyEc2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+
+      Policies:
+        - PolicyName: !Sub Splitly-${EnvironmentName}-ReceiptBucketAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ReceiptBucketList
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !Sub arn:${AWS::Partition}:s3:::${ReceiptBucketName}
+                Condition:
+                  StringLike:
+                    s3:prefix:
+                      - !Sub ${ReceiptPrefix}*
+
+              - Sid: ReceiptObjectAccess
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:AbortMultipartUpload
+                  - s3:ListMultipartUploadParts
+                Resource: !Sub arn:${AWS::Partition}:s3:::${ReceiptBucketName}/${ReceiptPrefix}*
+
+        - PolicyName: !Sub Splitly-${EnvironmentName}-FrontendBucketAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: FrontendBucketList
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: arn:aws:s3:::splitly-fe
+
+              - Sid: FrontendBucketObjectAccess
+                Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: arn:aws:s3:::splitly-fe/*
+
+      Tags:
+        - Key: Name
+          Value: !Sub Splitly-${EnvironmentName}-Ec2Role
+        - Key: Project
+          Value: Splitly
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  SplitlySecretAccessPolicy:
+    Type: AWS::IAM::Policy
+    Condition: HasSecretArn
+    Properties:
+      PolicyName: !Sub Splitly-${EnvironmentName}-SecretAccess
+      Roles:
+        - !Ref SplitlyEc2Role
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: SecretRead
+            Effect: Allow
+            Action:
+              - secretsmanager:GetSecretValue
+              - secretsmanager:DescribeSecret
+            Resource: !Ref SecretArn
+
+  SplitlyEc2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref SplitlyEc2Role
+
+  # =======================================================
+  # MONITORING
+  # =======================================================
+  SplitlyBackendLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: !Sub /splitly/${EnvironmentName}/backend
+      RetentionInDays: 14
+
+  SplitlyAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub splitly-${EnvironmentName}-alerts
+      Tags:
+        - Key: Project
+          Value: Splitly
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  SplitlyAlertsSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlarmEmail
+    Properties:
+      TopicArn: !Ref SplitlyAlertsTopic
+      Protocol: email
+      Endpoint: !Ref AlarmEmail
+
+  # =======================================================
+  # COMPUTE
+  # =======================================================
+  SplitlyBackendInstance:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - SplitlyDefaultRoute
+      - SplitlySubnetRouteTableAssociation
+      - SplitlyBackendLogGroup
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: !Ref InstanceType
+      SubnetId: !Ref SplitlyPublicSubnet
+      SecurityGroupIds:
+        - !Ref SplitlyBackendSecurityGroup
+      IamInstanceProfile: !Ref SplitlyEc2InstanceProfile
+      Monitoring: true
+      SourceDestCheck: true
+
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: 8
+            DeleteOnTermination: true
+            Encrypted: true
+
+      MetadataOptions:
+        HttpTokens: required
+        HttpEndpoint: enabled
+        HttpPutResponseHopLimit: 1
+
+      Tags:
+        - Key: Name
+          Value: !Sub Splitly-${EnvironmentName}-Backend
+        - Key: Project
+          Value: Splitly
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euxo pipefail
+
+          exec > >(tee -a /var/log/splitly-user-data.log | logger -t splitly-user-data -s 2>/dev/console) 2>&1
+
+          dnf update -y
+          dnf install -y git nginx jq curl awscli amazon-cloudwatch-agent
+
+          if ! command -v node >/dev/null 2>&1; then
+            curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -
+            dnf install -y nodejs
+          fi
+
+          npm install -g pm2
+
+          mkdir -p \
+            /opt/splitly/backend \
+            /var/log/splitly \
+            /opt/aws/amazon-cloudwatch-agent/etc
+
+          touch /var/log/splitly/backend.log
+
+          chown -R ec2-user:ec2-user \
+            /opt/splitly \
+            /var/log/splitly
+
+          cat > /opt/splitly/.env.infrastructure <<'ENVFILE'
+          AWS_REGION=${AWS::Region}
+          S3_RECEIPTS_BUCKET=${ReceiptBucketName}
+          S3_RECEIPTS_PREFIX=${ReceiptPrefix}
+          PORT=${BackendPort}
+          NODE_ENV=${EnvironmentName}
+          ENVFILE
+
+          chown ec2-user:ec2-user /opt/splitly/.env.infrastructure
+          chmod 0644 /opt/splitly/.env.infrastructure
+
+          cat > /opt/splitly/README_DEPLOY.txt <<'READMEFILE'
+          Splitly backend deployment notes
+
+          1. Connect to this instance using AWS Systems Manager Session Manager.
+          2. Clone the backend repository into /opt/splitly/backend.
+          3. Copy or merge /opt/splitly/.env.infrastructure into the backend environment.
+          4. Run npm ci.
+          5. Run npm run build.
+          6. Start the backend with:
+             pm2 start dist/server.js \
+               --name splitly-api \
+               --output /var/log/splitly/backend.log \
+               --error /var/log/splitly/backend.log
+          7. Run pm2 startup and pm2 save for restart persistence.
+          8. The backend must listen on port 5000.
+          9. Do not store AWS access keys in the application .env file.
+          10. Read AWS Secrets Manager values at application startup by IAM role,
+              not by hard-coding secrets in UserData.
+          READMEFILE
+
+          chown ec2-user:ec2-user /opt/splitly/README_DEPLOY.txt
+          chmod 0644 /opt/splitly/README_DEPLOY.txt
+
+          if [ -n "${SecretArn}" ]; then
+            printf '%s\n' '${SecretArn}' > /opt/splitly/secret-arn
+            chown ec2-user:ec2-user /opt/splitly/secret-arn
+            chmod 0600 /opt/splitly/secret-arn
+          fi
+
+          cat > /etc/nginx/conf.d/splitly.conf <<'NGINXCONF'
+          server {
+            listen 80;
+            server_name _;
+
+            location / {
+              proxy_pass http://127.0.0.1:${BackendPort};
+              proxy_http_version 1.1;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+              proxy_set_header Upgrade $http_upgrade;
+              proxy_set_header Connection "upgrade";
+            }
+          }
+          NGINXCONF
+
+          cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'CWAGENT'
+          {
+            "logs": {
+              "logs_collected": {
+                "files": {
+                  "collect_list": [
+                    {
+                      "file_path": "/var/log/splitly-user-data.log",
+                      "log_group_name": "/splitly/${EnvironmentName}/backend",
+                      "log_stream_name": "{instance_id}/user-data"
+                    },
+                    {
+                      "file_path": "/var/log/nginx/access.log",
+                      "log_group_name": "/splitly/${EnvironmentName}/backend",
+                      "log_stream_name": "{instance_id}/nginx-access"
+                    },
+                    {
+                      "file_path": "/var/log/nginx/error.log",
+                      "log_group_name": "/splitly/${EnvironmentName}/backend",
+                      "log_stream_name": "{instance_id}/nginx-error"
+                    },
+                    {
+                      "file_path": "/var/log/splitly/backend.log",
+                      "log_group_name": "/splitly/${EnvironmentName}/backend",
+                      "log_stream_name": "{instance_id}/backend"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+          CWAGENT
+
+          systemctl enable nginx
+          nginx -t
+          systemctl restart nginx
+
+          /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+            -a fetch-config \
+            -m ec2 \
+            -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \
+            -s
+
+          systemctl enable amazon-cloudwatch-agent
+
+  SplitlyBackendEip:
+    Type: AWS::EC2::EIP
+    DependsOn:
+      - SplitlyVpcGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub Splitly-${EnvironmentName}-EIP
+        - Key: Project
+          Value: Splitly
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  SplitlyBackendEipAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId: !GetAtt SplitlyBackendEip.AllocationId
+      InstanceId: !Ref SplitlyBackendInstance
+
+  SplitlyHighCpuAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub splitly-${EnvironmentName}-high-cpu
+      AlarmDescription: !Sub CPU utilization is above 70 percent for Splitly ${EnvironmentName}
+      Namespace: AWS/EC2
+      MetricName: CPUUtilization
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: 70
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref SplitlyBackendInstance
+      AlarmActions:
+        - !Ref SplitlyAlertsTopic
+      OKActions:
+        - !Ref SplitlyAlertsTopic
+
+# =========================================================
+# OUTPUTS
+# =========================================================
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref SplitlyVpc
+
+  PublicSubnetId:
+    Description: Public subnet ID
+    Value: !Ref SplitlyPublicSubnet
+
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref SplitlyInternetGateway
+
+  RouteTableId:
+    Description: Public route table ID
+    Value: !Ref SplitlyRouteTable
+
+  SecurityGroupId:
+    Description: Backend security group ID
+    Value: !Ref SplitlyBackendSecurityGroup
+
+  EC2InstanceId:
+    Description: Backend EC2 instance ID
+    Value: !Ref SplitlyBackendInstance
+
+  EC2PrivateIp:
+    Description: Backend EC2 private IP address
+    Value: !GetAtt SplitlyBackendInstance.PrivateIp
+
+  ElasticIp:
+    Description: Backend Elastic IP address
+    Value: !Ref SplitlyBackendEip
+
+  BackendHttpUrl:
+    Description: Public HTTP URL through Nginx
+    Value: !Sub http://${SplitlyBackendEip}
+
+  SessionManagerCommand:
+    Description: AWS CLI command to connect using Session Manager
+    Value: !Sub >-
+      aws ssm start-session
+      --target ${SplitlyBackendInstance}
+      --region ${AWS::Region}
+
+  EC2RoleArn:
+    Description: EC2 IAM role ARN
+    Value: !GetAtt SplitlyEc2Role.Arn
+
+  LogGroupName:
+    Description: CloudWatch Logs log group name
+    Value: !Ref SplitlyBackendLogGroup
+
+  SNSTopicArn:
+    Description: SNS alert topic ARN
+    Value: !Ref SplitlyAlertsTopic
+
+  ReceiptBucketName:
+    Description: Existing receipt bucket name
+    Value: !Ref ReceiptBucketName
+
+  ReceiptPrefix:
+    Description: Receipt object prefix
+    Value: !Ref ReceiptPrefix
